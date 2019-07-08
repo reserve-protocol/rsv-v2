@@ -43,7 +43,7 @@ contract Manager is Ownable {
 
 
     // This allows the vault to net profit
-    uint256 public seigniorage;    // In BPS, e.g a 0.1% fee is equal to a seigniorage of 10. 
+    uint256 public seigniorage;    // In BPS, e.g seigniorage should be set to 10 to achieve a 0.1% spread
     
     // seigniorage
     event SegniorageChanged(uint256 oldVal, uint256 newVal);
@@ -155,8 +155,8 @@ contract Manager is Ownable {
             require(false, "collateral token missing from vault");
         }
 
-        delete weights[token];
         sumWeights -= weights[token];
+        delete weights[token];
 
         emit TokenRemoved(token);
     }
