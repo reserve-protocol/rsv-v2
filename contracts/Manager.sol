@@ -106,8 +106,8 @@ contract Manager is Ownable {
 
     // === Whitelisting ===
 
-    modifier onlyWhitelist(address role) {
-        require(whitelist[role], "unauthorized: not on whitelist");
+    modifier onlyWhitelist() {
+        require(whitelist[msg.sender], "unauthorized: not on whitelist");
         _;
     }
 
@@ -166,7 +166,7 @@ contract Manager is Ownable {
 
     // Issue mints RSV for tokens in a way that moves us closer toward
     // the target collateral backing ratio given by weights.
-    function issue(uint256 amount) external notPaused onlyWhitelist(msg.sender) {
+    function issue(uint256 amount) external notPaused onlyWhitelist {
         // Do checks
         uint256[] memory toBuy = collateralAmountsToBuy(amount);
         uint256 sum = 0;
@@ -214,7 +214,7 @@ contract Manager is Ownable {
 
     // === Redemption ===
 
-    function redeem(uint256 amount) external notPaused onlyWhitelist(msg.sender) {
+    function redeem(uint256 amount) external notPaused onlyWhitelist {
         // Do checks
         require(rsv.allowance(msg.sender, address(this)) >= amount, "please set allowance");
         require(rsv.balanceOf(msg.sender) >= amount, "insufficient rsv to redeem");
