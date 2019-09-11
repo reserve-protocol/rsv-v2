@@ -259,8 +259,8 @@ contract Manager is Ownable {
 
 
     // Rebalance function signatures
-    // function proposeRebalance(address[] tokenAddresses, uint256[] tokenWeights) public notPaused
-    // function acceptRebalance(address proposerAddress) external onlyOwner
+    // function proposeRebalance(address[] tokenAddresses, uint256[] tokenWeights) public notPaused returns(uint256)
+    // function acceptRebalance(uint256 nonce) external onlyOwner
     // Oh frick this can be frontrun can't it
 }
 
