@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.5.11;
 
 import "./zeppelin/contracts/ownership/Ownable.sol";
 import "./zeppelin/contracts/token/ERC20/SafeERC20.sol";
@@ -16,8 +16,8 @@ contract Vault is Ownable {
     address public manager;
 
     event ManagerTransferred(
-      address indexed previousManager,
-      address indexed newManager
+        address indexed previousManager,
+        address indexed newManager
     );
 
     event TokenWithdraw(address indexed token, uint256 indexed amount);
@@ -37,7 +37,7 @@ contract Vault is Ownable {
      * @param newManager The address to transfer manager control to.
      */
     function transferManager(address newManager) external onlyOwner {
-      _transferManager(newManager);
+        _transferManager(newManager);
     }
 
     /**
@@ -45,15 +45,17 @@ contract Vault is Ownable {
      * @param newManager The address to transfer manager control to.
      */
     function _transferManager(address newManager) internal {
-      require(newManager != address(0));
-      emit ManagerTransferred(manager, newManager);
-      manager = newManager;
+        require(newManager != address(0));
+        emit ManagerTransferred(manager, newManager);
+        manager = newManager;
     }
 
     function batchWithdrawTo(address[] tokens, uint256[] amounts, address to) external onlyManager {
         for (uint i = 0; i < tokens.length; i++) {
-          IERC20(tokens[i]).safeTransfer(to, amounts[i]);
-          emit TokenWithdraw(tokens[i], amounts[i]);
+            if (amounts[i] > 0) {
+                IERC20(tokens[i]).safeTransfer(to, amounts[i]);
+                emit TokenWithdraw(tokens[i], amounts[i]);
+            }
         }        
     }
 }

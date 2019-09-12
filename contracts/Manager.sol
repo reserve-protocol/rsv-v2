@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.5.11;
 
 import "./zeppelin/contracts/ownership/Ownable.sol";
 import "./zeppelin/contracts/token/ERC20/SafeERC20.sol";
@@ -23,72 +23,180 @@ interface IRSV {
 }
 
 
-
 contract Manager is Ownable {
     using SafeMath for uint256;
-    using SafeERC20 for IERC20;
 
+    uint256 constant BPS_MULTIPLIER = 10000;
+
+
+    // TYPES
+
+    struct Basket {
+        address[] tokens;
+        mapping(address => uint256) weights; // In BPS. A weight of 30% would be stored as 3000
+    }
+
+    struct Proposal {
+        uint256 id;
+        address proposer;
+        Basket basket;
+        bool closed;
+    }
+
+
+    // DATA
+
+    Basket public currentBasket;
     Vault public vault;
     IRSV public rsv;
 
+    // Proposals
+    mapping(uint256 => Proposal) public proposals;
+    uint256 public proposalsLength;
+
+    // No issuance, redemption, or rebalancing allowed while the Manager is paused.
+    // You CAN set the RSV and Vault addresses while paused. 
     bool public paused;
 
-    // This needs to stay small, but that should be fine.
+    // Used to control who can issue and redeem.
     mapping(address => bool) public whitelist;
+    bool public useWhitelist;
 
-    // Supported tokens and their weights in the basket.
-    address[] public collateralTokens;
-    mapping(address => uint256) public weights;
-    uint256 public sumWeights;
-
-
-    // This allows the vault to net profit
-    uint256 public seigniorage;    // In BPS, e.g seigniorage should be set to 10 to achieve a 0.1% spread
+    // The spread between issuance and redemption in BPS.
+    uint256 public seigniorage;    // 0.1% spread -> 10 BPS
     
-    // seigniorage
-    event SegniorageChanged(uint256 oldVal, uint256 newVal);
+
+    // EVENTS
+
+    // Seigniorage
+    event SegniorageUpdated(uint256 oldVal, uint256 newVal);
 
     // Pause events
     event Paused(address indexed account);
     event Unpaused(address indexed account);
 
-    // Vault management events
-    event TokenAdded(address indexed tokenAddr, uint256 indexed weight);
-    event TokenRemoved(address indexed tokenAddr);
+    // Basket events
+    event BasketProposed(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] weights, uint256 size);
+    event BasketAccepted(uint256 indexed id, address indexed proposer);
+    event BasketClosed(uint256 indexed id, address indexed proposer);
 
     // Whitelist events
-    event Whitelist(address indexed user);
+    event Whitelisted(address indexed user);
     event DeWhitelisted(address indexed user);
 
-    // Issuance/Redemption events
-    event Issuance(address indexed user, uint256 indexed amount, uint256[] breakdown);
-    event Redemption(address indexed user, uint256 indexed amount, uint256[] breakdown);
+    // RSV traded events
+    event Issuance(address indexed user, uint256 indexed amount);
+    event Redemption(address indexed user, uint256 indexed amount);
 
+
+    // === Constructor ===
 
     // Begins paused
-    constructor(address vaultAddr, address rsvAddress, uint256 _seigniorage) public {
+    constructor(address vaultAddr, address rsvAddress, uint256 seigniorage_) public {
         vault = Vault(vaultAddr);
         rsv = IRSV(rsvAddress);
         whitelist[msg.sender] = true;
-        seigniorage = _seigniorage;
+        seigniorage = seigniorage_;
         paused = true;
+        useWhitelist = true;
     }
 
-
-    // === seigniorage ===
-
-    function setSegniorage(uint256 _seigniorage) external onlyOwner {
-        emit SegniorageChanged(seigniorage, _seigniorage);
-        seigniorage = _seigniorage;
-    }
-
-
-    // === Pausing ===
+    // === Modifiers ===
 
     /// Modifies a function to run only when the contract is not paused.
     modifier notPaused() {
         require(!paused, "contract is paused");
         _;
+    }
+
+    /// Modifies a function to run only when the caller is on the whitelist, if it is enabled.
+    modifier onlyWhitelist() {
+        if (useWhitelist) require(whitelist[msg.sender], "unauthorized: not on whitelist");
+    }
+
+
+    // === Externals ===
+
+    /// Issue RSV to the caller and collect collateral tokens.
+    function issue(uint256 _amount) external notPaused onlyWhitelist {
+        // Do checks
+        uint256[] memory toBuy = _collateralAmountsToTrade(currentBasket.tokens, _amount, seigniorage);
+        uint256 sum = 0;
+        for (uint i = 0; i < collateralTokens.length; i++) {
+            require(SafeERC20(collateralTokens[i]).allowance(msg.sender, address(this)) >= toBuy[i], "please set allowance");
+            require(SafeERC20(collateralTokens[i]).balanceOf(msg.sender) >= toBuy[i], "insufficient balance");
+            sum += toBuy[i];
+        }
+
+        require(sum >= _amount, "there should be seigniorage");
+
+        // Intake collateral
+        for (uint j = 0; j < collateralTokens.length; j++) {
+            SafeERC20(collateralTokens[j]).safeTransferFrom(msg.sender, address(vault), toBuy[j]);
+        }
+
+        // Hand out RSV
+        rsv.mint(msg.sender, _amount);
+
+        emit Issuance(msg.sender, _amount, toBuy);
+    }
+
+    /// Burn RSV from the caller's account and compensate them with collateral tokens.
+    function redeem(uint256 _amount) external notPaused onlyWhitelist {
+        require(rsv.allowance(msg.sender, address(this)) >= _amount, "please set allowance");
+        require(rsv.balanceOf(msg.sender) >= _amount, "insufficient rsv to redeem");
+
+        uint256[] memory toSell = _collateralAmountsToTrade(currentBasket.tokens, _amount, 0);
+        uint256 sum = 0;
+        for (uint i = 0; i < collateralTokens.length; i++) {
+            sum += toSell[i];
+        }
+
+        require(sum <= _amount, "we shouldn't sell more than the redemption amount");
+
+        // Intake RSV
+        rsv.burnFrom(msg.sender, _amount);
+
+        // Hand out collateral
+        vault.batchWithdrawTo(collateralTokens, toSell, msg.sender);
+
+        emit Redemption(msg.sender, _amount, toSell);
+    }
+
+    /// Proposes a new basket. Returns and emits the proposal id. 
+    function proposeBasket(address[] _tokenAddresses, uint256[] _weights, uint256 _size) external returns(uint256)        {
+        Basket memory b = _createBasket(_tokenAddresses, _weights, _size); // Runs all necessary checks.
+
+        proposals.push(Proposal({
+            id: proposalsLength,
+            proposer: msg.sender,
+            basket: b,
+            closed: false
+        }));
+
+        emit BasketProposed(proposalsLength, msg.sender, _tokenAddresses, _weights, _size);
+        return ++proposalsLength;
+    }
+
+    /// Accepts a new basket if and only if the basket can be achieved by exchanging tokens with the proposer. 
+    function acceptBasket(uint256 _proposalID) external onlyOwner {
+        Basket memory b = proposals[_proposalID].basket;
+        require(b.tokens.length > 0, "proposal at proposalID does not contain a valid basket");
+
+        // Rebalance and set the new basket.
+        _rebalance(proposals[_proposalID].proposer, currentBasket, b);
+        currentBasket = b;
+        
+        // Double check everything went as planned.
+        _assertFullyCollateralized();
+
+        emit BasketAccepted(_proposalID, proposals[_proposalID].proposer);
+    }
+
+    /// Set the seigniorage, in BPS. 
+    function setSegniorage(uint256 _seigniorage) external onlyOwner {
+        emit SegniorageUpdated(seigniorage, _seigniorage);
+        seigniorage = _seigniorage;
     }
 
     /// Pause the contract.
@@ -103,164 +211,115 @@ contract Manager is Ownable {
         emit Unpaused(msg.sender);
     }
 
-
-    // === Whitelisting ===
-
-    modifier onlyWhitelist() {
-        require(whitelist[msg.sender], "unauthorized: not on whitelist");
-        _;
+    /// Add user to whitelist.
+    function whitelist(address _user) external onlyOwner {
+        whitelist[_user] = true;
+        emit Whitelist(_user);
     }
 
-    // Add user to whitelist.
-    function whitelist(address user) external onlyOwner {
-        whitelist[user] = true;
-        emit Whitelist(user);
-    }
-
-    // Remove user from whitelist.
-    function deWhitelist(address user) external onlyOwner {
-        whitelist[user] = false;
-        emit DeWhitelisted(user);
+    /// Remove user from whitelist.
+    function deWhitelist(address _user) external onlyOwner {
+        whitelist[_user] = false;
+        emit DeWhitelisted(_user);
     }
 
 
-    // === Vault Management ===
+    // === Internals ===
 
-    // Add collateral token to the vault.
-    function addCollateralToken(address token, uint256 weight) external onlyOwner {
-        uint sum = 0;
-        for (uint i = 0; i < collateralTokens.length; i++) {
-            require(collateralTokens[i] != token, "collateral token already in vault");
-            sum += weights[collateralTokens[i]];
+    function _collateralAmountsToTrade(address[] _tokens, uint256 rsvQuantity, uint256 seigniorage) internal pure returns(uint256[]) {
+        uint256[] memory amounts = new uint256[](_tokens.length);
+        uint256 adjustedQuantity = rsvQuantity.mul(seigniorage.add(BPS_MULTIPLIER)).div(BPS_MULTIPLIER);
+        uint256 sum;
+
+        for (uint i = 0; i < tokens.length; i++) {
+            amounts[i] = adjustedQuantity.mul(currentBasket.weights[_tokens[i]]).div(BPS_MULTIPLIER);
+            sum.add(amounts[i]);
         }
 
-        collateralTokens.push(token);
-        weights[token] = weight;
-        sum += weight;
-        sumWeights += weight;
-
-        emit TokenAdded(token, weight);
+        assert(sum == rsvQuantity);
+        return amounts;
     }
 
-    // Remove collateral token from the vault. 
-    function removeCollateralToken(address token) external onlyOwner {
-        for (uint i = 0; i < collateralTokens.length; i++) {
-            if (token == collateralTokens[i]) {
-                collateralTokens[i] = collateralTokens[collateralTokens.length - 1];
-                delete collateralTokens[collateralTokens.length - 1];
-                collateralTokens.length--;
-                break;
-            }
+    /// Create the basket struct and do validation.
+    function _createBasket(address[] _tokens, uint256[] _weights, uint256 _size) internal pure returns(Basket) {
+        require(_size > 0, "size must be greater than zero");
+        require(_size <= 1000, "size must be less than 1000"); // arbitrary max size
+        require(_size == _tokens.length, "number of tokens must be equal to basket size");
+        require(_size == _weights.length, "number of weights must be equal to basket size");
 
-            require(false, "collateral token missing from vault");
-        }
-
-        sumWeights -= weights[token];
-        delete weights[token];
-
-        emit TokenRemoved(token);
-    }
-
-
-    // === Issuance ===
-
-    // Issue mints RSV for tokens in a way that moves us closer toward
-    // the target collateral backing ratio given by weights.
-    function issue(uint256 amount) external notPaused onlyWhitelist {
-        // Do checks
-        uint256[] memory toBuy = collateralAmountsToBuy(amount);
+        mapping(address => uint256) memory weightsMap;
         uint256 sum = 0;
-        for (uint i = 0; i < collateralTokens.length; i++) {
-            require(IERC20(collateralTokens[i]).allowance(msg.sender, address(this)) >= toBuy[i], "please set allowance");
-            require(IERC20(collateralTokens[i]).balanceOf(msg.sender) >= toBuy[i], "insufficient balance");
-            sum += toBuy[i];
+        for (uint i = 0; i < _size; i++) {
+            weightsMap[_tokens[i]] = _weights[i];
+            sum.add(_weights[i]);
         }
 
-        require(sum > amount, "there should be seigniorage");
-
-        // Intake collateral
-        for (uint j = 0; j < collateralTokens.length; j++) {
-            IERC20(collateralTokens[j]).safeTransferFrom(msg.sender, address(vault), toBuy[j]);
-        }
-
-        // Hand out RSV
-        rsv.mint(msg.sender, amount);
-
-        emit Issuance(msg.sender, amount, toBuy);
+        require(sum == BPS_MULTIPLIER, "weights must be in BPS and sum to " + string(BPS_MULTIPLIER));
+        return memory Basket({
+            tokens: _tokens,
+            weights: weightsMap
+        });
     }
 
-    // Solidity is bad at returning dynamic arrays, so this design may not work. 
-    function collateralAmountsToBuy(uint256 amount) public view returns(uint256[]) {
-        // Calculate deficit collateral at new increased supply
-        uint256 deficitCollateral = 0;
-        uint256[] memory toBuy = new uint256[](collateralTokens.length);
-        for (uint i = 0; i < collateralTokens.length; i++) {
-            uint target = weights[collateralTokens[i]] * (rsv.totalSupply() + amount) / sumWeights; 
-            if (target - IERC20(collateralTokens[i]).balanceOf(address(vault)) > 0) {
-                toBuy[i] = target - IERC20(collateralTokens[i]).balanceOf(address(vault));
-                deficitCollateral += toBuy[i];
+    /// Rebalance ERC20s across the funder and Vault. 
+    function _rebalance(address funder, Basket _old, Basket _new) internal {
+        // Determine what quantities of tokens need to be transferred where. 
+        mapping(address => uint256) toDeposit = 
+            _calculateMissingQuantities(_old, _new);
+        mapping(address => uint256) toWithdraw = 
+            _calculateMissingQuantities(_new, _old);
+
+        // Transfer tokens from the funder to the Vault.
+        address token;
+        for (uint i = 0; i < _new.tokens.length; i++) {
+            token = _new.tokens[i]
+            if (toDeposit[token] > 0) {
+                require(
+                    SafeERC20(token).allowance(funder, address(this)) >= toDeposit[token], 
+                    "allowances insufficient"
+                );
+                SafeERC20(token).safeTransferFrom(
+                    funder, 
+                    address(vault), 
+                    toDeposit[token]
+                );
             }
         }
 
-        // Normalize to amount of RSV being sold
-        for (uint j = 0; j < collateralTokens.length; j++) {
-            toBuy[j] = toBuy[j] * amount / deficitCollateral;
-            toBuy[j] = toBuy[j] * (10000 + seigniorage) / 10000; // seigniorage
+        // Transfer tokens from the Vault to the funder.
+        uint256[] amounts;
+        for (uint i = 0; i < _old.tokens.length; i++) {
+            amounts.push(toWithdraw[_old.tokens[i]]);
         }
-
-        return toBuy;
+        vault.batchWithdrawTo(_old.tokens, amounts, funder);
     }
 
+    /// Calculate what quantities of tokens you would need to add to go from _old to _new.
+    function _calculateMissingQuantities(Basket _old, Basket _new) internal pure
+            returns (mapping(address => uint256)) {
+        address token;
+        uint256 diff;
+        mapping(address => uint256) memory quantities; // quantities that must be added to _old to get _new
 
-    // === Redemption ===
-
-    function redeem(uint256 amount) external notPaused onlyWhitelist {
-        // Do checks
-        require(rsv.allowance(msg.sender, address(this)) >= amount, "please set allowance");
-        require(rsv.balanceOf(msg.sender) >= amount, "insufficient rsv to redeem");
-
-        uint256[] memory toSell = collateralAmountsToSell(amount);
-        uint256 sum = 0;
-        for (uint i = 0; i < collateralTokens.length; i++) {
-            sum += toSell[i];
-        }
-
-        require(sum <= amount, "we shouldn't sell more than the redemption amount");
-
-        // Intake RSV
-        rsv.burnFrom(msg.sender, amount);
-
-        // Hand out collateral
-        vault.batchWithdrawTo(collateralTokens, toSell, msg.sender);
-
-        emit Redemption(msg.sender, amount, toSell);
-    }
-
-    // Solidity is bad at returning dynamic arrays, so this design may not work. 
-    function collateralAmountsToSell(uint256 amount) public view returns(uint256[]) {
-        // Calculate excess collateral at new reduced supply
-        uint256 excessCollateral = 0;
-        uint256[] memory toSell = new uint256[](collateralTokens.length);
-        for (uint i = 0; i < collateralTokens.length; i++) {
-            uint target = weights[collateralTokens[i]] * (rsv.totalSupply() - amount) / sumWeights; 
-            if (IERC20(collateralTokens[i]).balanceOf(address(vault)) - target > 0) {
-                toSell[i] = target - IERC20(collateralTokens[i]).balanceOf(address(vault));
-                excessCollateral += toSell[i];
+        for (uint i = 0; i < _new.tokens.length; i++) {
+            token = _new.tokens[i];
+            if (_new.weights[token] > _old.weights[token]) {
+                diff = _new.weights[token].sub(_old.weights[token]);
+                quantities[token] = rsv.totalSupply.mul(diff).div(BPS_MULTIPLIER);
             }
         }
 
-        // Normalize to amount of RSV being bought
-        for (uint j = 0; j < collateralTokens.length; j++) {
-            toSell[j] = toSell[j] * amount / excessCollateral;
-        }
-
-        return toSell;
+        return quantities;
     }
 
 
-    // Rebalance function signatures
-    // function proposeRebalance(address[] tokenAddresses, uint256[] tokenWeights) public notPaused returns(uint256)
-    // function acceptRebalance(uint256 nonce) external onlyOwner
-    // Oh frick this can be frontrun can't it
+    function _assertFullyCollateralized() internal pure {
+        address token;
+        uint256 expected;
+        for (uint i = 0; i < currentBasket.tokens.length; i++) {
+            token = currentBasket.tokens[i];
+            expected = rsv.totalSupply.mul(currentBasket.weights[token]).div(BPS_MULTIPLIER);
+            assert(SafeERC20(token).balanceOf(address(vault)) >= expected);
+        }
+    }
 }
-
