@@ -1,4 +1,4 @@
-pragma solidity ^0.5.11;
+pragma solidity ^0.5.8;
 
 import "./zeppelin/contracts/ownership/Ownable.sol";
 import "./zeppelin/contracts/token/ERC20/SafeERC20.sol";
@@ -50,7 +50,7 @@ contract Vault is Ownable {
         manager = newManager;
     }
 
-    function batchWithdrawTo(address[] tokens, uint256[] amounts, address to) external onlyManager {
+    function batchWithdrawTo(address[] calldata tokens, uint256[] calldata amounts, address to) external onlyManager {
         for (uint i = 0; i < tokens.length; i++) {
             if (amounts[i] > 0) {
                 IERC20(tokens[i]).safeTransfer(to, amounts[i]);
