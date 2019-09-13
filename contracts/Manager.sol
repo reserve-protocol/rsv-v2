@@ -150,7 +150,7 @@ contract Manager is Ownable, ReentrancyGuard {
         // Compensate with collateral tokens.
         vault.batchWithdrawTo(
             basket.getTokens(), 
-            _getAmountsForRedemption(_rsvQuantity), 
+            _getRedemptionAmounts(_rsvQuantity), 
             msg.sender
         );
 
@@ -330,7 +330,7 @@ contract Manager is Ownable, ReentrancyGuard {
     }
 
     /// Calculates the amounts a user would receive for redeeming a quantity of RSV.
-    function _getAmountsForRedemption(uint256 _rsvQuantity) internal view returns(uint256[] memory) {
+    function _getRedemptionAmounts(uint256 _rsvQuantity) internal view returns(uint256[] memory) {
         uint256[] memory amounts = new uint256[](basket.size());
         for (uint i = 0; i < basket.size(); i++) {
             amounts[i] = _rsvQuantity.mul(basket.amounts(i)).div(rsvDecimalsFactor);

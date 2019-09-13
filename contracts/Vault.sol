@@ -46,8 +46,8 @@ contract Vault is Ownable {
      */
     function _transferManager(address newManager) internal {
         require(newManager != address(0));
-        emit ManagerTransferred(manager, newManager);
         manager = newManager;
+        emit ManagerTransferred(manager, newManager);
     }
 
     function batchWithdrawTo(address[] calldata tokens, uint256[] calldata amounts, address to) external onlyManager {
