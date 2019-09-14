@@ -126,40 +126,20 @@ contract Manager is Ownable, ReentrancyGuard {
 
     // === Externals ===
 
-    /// Issue RSV to the caller and deposit collateral tokens in the Vault.
+    /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
     function issue(uint256 _rsvQuantity) external notPaused nonReentrant onlyWhitelist {
-        IERC20 token;
-        uint256[] memory amounts = _getIssuanceAmounts(_rsvQuantity);
+        _issue(_rsvQuantity);
+    }
 
-        // Intake collateral tokens.
-        for (uint i = 0; i < basket.size(); i++) {
-            token = IERC20(basket.tokens(i));
-            require(token.allowance(msg.sender, address(this)) >= amounts[i], "please set allowance");
-            require(token.balanceOf(msg.sender) >= amounts[i], "insufficient balance");
-            token.safeTransferFrom(msg.sender, address(vault), amounts[i]);
-        }
-
-        // Compensate with RSV.
-        rsv.mint(msg.sender, _rsvQuantity);
-
-        _assertFullyCollateralized();
-        emit Issuance(msg.sender, _rsvQuantity);
+    /// Issues the maximum amount of RSV to the caller based on their allowances.
+    function issueMaxFromAllowances() external notPaused nonReentrant onlyWhitelist {
+        uint256 maxRSV = _calculateMaxIssuable(msg.sender);
+        _issue(maxRSV);
     }
 
     /// Withdraw collateral tokens from the vault and redeem RSV. 
     function redeem(uint256 _rsvQuantity) external notPaused nonReentrant onlyWhitelist {
-        // Burn RSV tokens.
-        rsv.burnFrom(msg.sender, _rsvQuantity);
-
-        // Compensate with collateral tokens.
-        vault.batchWithdrawTo(
-            basket.getTokens(), 
-            _getRedemptionAmounts(_rsvQuantity), 
-            msg.sender
-        );
-
-        _assertFullyCollateralized();
-        emit Redemption(msg.sender, _rsvQuantity);
+        _redeem(_rsvQuantity);
     }
 
     /// Proposes a new basket. Returns and emits the proposal id. 
@@ -291,6 +271,42 @@ contract Manager is Ownable, ReentrancyGuard {
 
     // === Internals ===
 
+    /// Internal function for all issuances to go through.
+    function _issue(uint256 _rsvQuantity) internal {
+        IERC20 token;
+        uint256[] memory amounts = _getIssuanceAmounts(_rsvQuantity);
+
+        // Intake collateral tokens.
+        for (uint i = 0; i < basket.size(); i++) {
+            token = IERC20(basket.tokens(i));
+            require(token.allowance(msg.sender, address(this)) >= amounts[i], "please set allowance");
+            require(token.balanceOf(msg.sender) >= amounts[i], "insufficient balance");
+            token.safeTransferFrom(msg.sender, address(vault), amounts[i]);
+        }
+
+        // Compensate with RSV.
+        rsv.mint(msg.sender, _rsvQuantity);
+
+        _assertFullyCollateralized();
+        emit Issuance(msg.sender, _rsvQuantity);
+    }
+
+    /// Internal function for all redemptions to go through.
+    function _redeem(uint256 _rsvQuantity) internal {
+        // Burn RSV tokens.
+        rsv.burnFrom(msg.sender, _rsvQuantity);
+
+        // Compensate with collateral tokens.
+        vault.batchWithdrawTo(
+            basket.getTokens(), 
+            _getRedemptionAmounts(_rsvQuantity), 
+            msg.sender
+        );
+
+        _assertFullyCollateralized();
+        emit Redemption(msg.sender, _rsvQuantity);
+    }
+
     /// Rebalance ERC20s across the funder and Vault. 
     function _rebalance(Basket _newBasket) internal {
         // Transfer deficit amounts from funder to the Vault.
@@ -310,6 +326,11 @@ contract Manager is Ownable, ReentrancyGuard {
         // Transfer excess amounts from the Vault to the funder.
         uint256[] memory excesses = _getRebalanceAmounts(basket, _newBasket);
         vault.batchWithdrawTo(basket.getTokens(), excesses, _newBasket.proposer());
+    }
+
+    /// Calculates the maximum we could issue to an address based on their allowances.
+    function _calculateMaxIssuable(address funder) internal view returns(uint256) {
+        // TODO
     }
 
     /// Ensure that the Vault is fully collateralized. 
