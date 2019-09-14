@@ -36,7 +36,9 @@ contract Manager is Ownable, ReentrancyGuard {
 
     struct Proposal {
         uint256 id;
+        uint256 time;
         Basket b;
+        bool accepted;
         bool closed;
     }
 
@@ -51,6 +53,7 @@ contract Manager is Ownable, ReentrancyGuard {
     // Proposals
     mapping(uint256 => Proposal) public proposals;
     uint256 public proposalsLength;
+    uint256 public constant delay = 12 hours;
 
     // No issuance or redemption allowed while the Manager is paused.
     // You CAN accept a new basket and rebalance the vault while paused. 
@@ -71,6 +74,7 @@ contract Manager is Ownable, ReentrancyGuard {
     // Basket events
     event ProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] weights);
     event ProposalAccepted(uint256 indexed id, address indexed proposer);
+    event ProposalEnacted(uint256 indexed id, address indexed proposer);
     event ProposalCanceled(uint256 indexed id, address indexed proposer);
     event ProposalsCleared();
 
@@ -168,7 +172,9 @@ contract Manager is Ownable, ReentrancyGuard {
     {
         proposals[proposalsLength] = Proposal({
             id: proposalsLength,
+            time: 0, // this is meaningless but we're required to pass something here
             b: new Basket(msg.sender, _tokens, _amounts, _amountsSum),
+            accepted: false,
             closed: false
         });
 
@@ -176,18 +182,32 @@ contract Manager is Ownable, ReentrancyGuard {
         return ++proposalsLength;
     }
 
-    /// Accepts a proposal for a new basket and exchanges collateral tokens with the proposer.
+    /// Accepts a proposal for a new basket, beginning the 12-hour required delay.
     function acceptProposal(uint256 _proposalID) external nonReentrant onlyOwner {
         Basket b = proposals[_proposalID].b;
         require(proposalsLength > _proposalID, "proposals length is shorter than id");
         require(!proposals[_proposalID].closed, "proposal is closed");
         require(b.size() > 0, "proposal at proposalID does not contain a valid basket");
 
+        proposals[_proposalID].time = now + delay;
+        proposals[_proposalID].accepted = true;
+        emit ProposalAccepted(_proposalID, b.proposer());
+    }
+
+    /// Enacts a proposal by exchanging collateral tokens with the proposer.
+    function enactProposal(uint256 _proposalID) external nonReentrant onlyOwner {
+        Basket b = proposals[_proposalID].b;
+        require(proposalsLength > _proposalID, "proposals length is shorter than id");
+        require(!proposals[_proposalID].closed, "proposal is closed");
+        require(b.size() > 0, "proposal at proposalID does not contain a valid basket");
+        require(now > proposals[_proposalID].time, "delay for proposal active");
+        require(proposals[_proposalID].accepted, "proposal has not been accepted");
+
         _rebalance(b);
         _assertFullyCollateralized();
         
         basket = b;
-        emit ProposalAccepted(_proposalID, b.proposer());
+        emit ProposalEnacted(_proposalID, b.proposer());
     }
 
     // Cancels a proposal. 
