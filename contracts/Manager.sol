@@ -132,14 +132,20 @@ contract Manager is Ownable, ReentrancyGuard {
     }
 
     /// Issues the maximum amount of RSV to the caller based on their allowances.
-    function issueMaxFromAllowances() external notPaused nonReentrant onlyWhitelist {
-        uint256 maxRSV = _calculateMaxIssuable(msg.sender);
-        _issue(maxRSV);
+    function issueMax() external notPaused nonReentrant onlyWhitelist {
+        uint256 max = _calculateMaxIssuable(msg.sender);
+        _issue(max);
     }
 
-    /// Withdraw collateral tokens from the vault and redeem RSV. 
+    /// Redeem a quantity of RSV for collateral tokens. 
     function redeem(uint256 _rsvQuantity) external notPaused nonReentrant onlyWhitelist {
         _redeem(_rsvQuantity);
+    }
+
+    /// Redeem `allowance` of RSV from the caller's account. 
+    function redeemMax() external notPaused nonReentrant onlyWhitelist {
+        uint256 max = rsv.allowance(msg.sender, address(this));
+        _redeem(max);
     }
 
     /// Proposes a new basket. Returns and emits the proposal id. 
@@ -273,6 +279,8 @@ contract Manager is Ownable, ReentrancyGuard {
 
     /// Internal function for all issuances to go through.
     function _issue(uint256 _rsvQuantity) internal {
+        require(_rsvQuantity > 0, "cannot issue zero RSV");
+
         IERC20 token;
         uint256[] memory amounts = _getIssuanceAmounts(_rsvQuantity);
 
@@ -293,6 +301,8 @@ contract Manager is Ownable, ReentrancyGuard {
 
     /// Internal function for all redemptions to go through.
     function _redeem(uint256 _rsvQuantity) internal {
+        require(_rsvQuantity > 0, "cannot redeem zero RSV");
+
         // Burn RSV tokens.
         rsv.burnFrom(msg.sender, _rsvQuantity);
 
@@ -330,7 +340,13 @@ contract Manager is Ownable, ReentrancyGuard {
 
     /// Calculates the maximum we could issue to an address based on their allowances.
     function _calculateMaxIssuable(address funder) internal view returns(uint256) {
-        // TODO
+        uint256 minIssuable;
+        uint256 issuable;
+        for (uint i = 0; i < basket.size(); i ++) {
+            issuable = rsvDecimalsFactor.mul(IERC20(basket.tokens(i)).allowance(funder, address(this))).div(basket.amounts(i));
+            if (issuable < minIssuable) minIssuable = issuable;
+        }
+        return minIssuable;
     }
 
     /// Ensure that the Vault is fully collateralized. 
@@ -338,7 +354,7 @@ contract Manager is Ownable, ReentrancyGuard {
         address token;
         uint256 expected;
         for (uint i = 0; i < basket.size(); i++) {
-            expected = rsv.totalSupply().mul(basket.amounts(i)).div(BPS_FACTOR);
+            expected = rsv.totalSupply().mul(basket.amounts(i)).div(rsvDecimalsFactor);
             assert(IERC20(token).balanceOf(address(vault)) >= expected);
         }
     }
