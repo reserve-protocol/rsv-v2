@@ -161,7 +161,11 @@ contract Manager is Ownable, ReentrancyGuard {
         _redeem(max);
     }
 
-    /// Proposes an adjustment to the quantities of tokens in the Vault. 
+    /**
+     * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
+     * proposal does not change token addresses. Therefore, if you want to introduce a new token,
+     * first use the other proposal type. 
+     */ 
     function proposeQuantitiesAdjustment( 
         uint256[] calldata _amountsIn,
         uint256[] calldata _amountsOut
@@ -182,7 +186,14 @@ contract Manager is Ownable, ReentrancyGuard {
         return ++proposalsLength;
     }
 
-    /// Proposes a new basket defined by a list of tokens and their backing quantities. 
+    /// 
+    /**
+     * Proposes a new basket defined by a list of tokens and their backing quantities. 
+     * Importantly, this type of proposal means the balances that will be required from the 
+     * proposer at the time of execution are variable. If the supply of RSV changes significantly,
+     * then much more tokens could be required to execute the proposal. 
+     * 
+     */ 
     function proposeNewBasket(
         address[] calldata _tokens,
         uint256[] calldata _backing
