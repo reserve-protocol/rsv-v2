@@ -1,8 +1,8 @@
 pragma solidity ^0.5.8;
 
-import "./zeppelin/contracts/ownership/Ownable.sol";
 import "./zeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "./zeppelin/contracts/math/SafeMath.sol";
+import "./Ownable.sol";
 
 /**
 * The Vault contract has an owner who is able to set the manager. The manager is

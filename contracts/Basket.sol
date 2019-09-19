@@ -6,53 +6,61 @@ import "./zeppelin/contracts/token/ERC20/SafeERC20.sol";
 contract Basket {
     using SafeMath for uint256;
 
-    address public proposer;
+    uint256 public frontTokenDecimals;
     address[] public tokens;
-    uint256[] public amounts;
+    uint256[] public backing; // how much of each token is a single front token worth
     uint256 public size;
-    mapping(address => uint256) public amountMap;
+    mapping(address => uint256) public backingMap;
 
 
     constructor(
-        address _proposer, 
         address[] memory _tokens, 
-        uint256[] memory _amounts, 
-        uint256 _amountsSum
+        uint256[] memory _backing,
+        uint256 _frontTokenDecimals
     ) 
         public 
     {
-        require(_tokens.length == _amounts.length, "invalid basket");
+        require(_tokens.length == _backing.length, "invalid basket");
         require(_tokens.length > 0, "basket too small");
         require(_tokens.length <= 1000, "basket too big");
 
-        uint256 sum;
-        for (uint i = 0; i < _tokens.length; i++) {
-            sum += _amounts[i];
-            amountMap[_tokens[i]] = _amounts[i];
-        }
-        require(sum > 0, "basket cannot be empty");
-        require(sum == _amountsSum, "amounts must sum to the expected amount");
-
-        proposer = _proposer;
         tokens = _tokens;
-        amounts = _amounts;
+        backing = _backing;
+        frontTokenDecimals = _frontTokenDecimals;
     }
 
     function getTokens() external view returns(address[] memory) {
         return tokens;
     }
 
-    /// Calculates the excess amounts in this basket relative to some other basket.
-    function excessAmountsRelativeToOtherBasket(Basket _other) external view returns(uint256[] memory) {
-        uint256[] memory excess = new uint256[](size);
+    /// Calculates the quantities of tokens required to back `_frontTokenSupply`. 
+    function quantitiesRequired(uint256 _frontTokenSupply) external view returns(uint256[] memory) {
+        uint256[] memory tokenQuantities = new uint256[](size);
 
         for (uint i = 0; i < size; i++) {
-            if (amountMap[tokens[i]] > _other.amountMap(tokens[i])) {
-                excess[i] = amountMap[tokens[i]].sub(_other.amountMap(tokens[i]));
+            tokenQuantities[i] = _frontTokenSupply.mul(backing[i]).div(frontTokenDecimals);
+        }
+
+        return tokenQuantities;
+    }
+
+    /// Calculates what quantities of tokens are needed to reach `_other` at `_frontTokenSupply`.
+    function newQuantitiesRequired(uint256 _frontTokenSupply, Basket _other) external view returns(uint256[] memory) {
+        uint256[] memory required = new uint256[](size);
+
+        // Calculate required in terms of backing quantities, that is, per single front token. 
+        for (uint i = 0; i < size; i++) {
+            if (_other.backingMap(tokens[i]) > backingMap[tokens[i]]) {
+                required[i] = _other.backingMap(tokens[i]).sub(backingMap[tokens[i]]);
             }
         }
 
-        return excess;
-    }
+        // Multiply by `_frontTokenSupply` to get total quantities.
+        for (uint i = 0; i < size; i++) {
+            required[i] = 
+                _frontTokenSupply.mul(required[i]).div(frontTokenDecimals);
+        }
 
+        return required;
+    }
 }
