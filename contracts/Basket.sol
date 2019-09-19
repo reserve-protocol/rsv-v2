@@ -1,6 +1,6 @@
 pragma solidity ^0.5.8;
 
-import "../zeppelin/token/ERC20/SafeERC20.sol";
+import "./zeppelin/token/ERC20/SafeERC20.sol";
 
 /**
  * The Basket contract defines what an arbitrary "front-token" is backed by.
