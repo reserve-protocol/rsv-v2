@@ -1,9 +1,9 @@
 pragma solidity ^0.5.8;
 
-import "./zeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "./zeppelin/contracts/token/ERC20/IERC20.sol";
-import "./zeppelin/contracts/math/SafeMath.sol";
-import "./zeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./zeppelin/token/ERC20/SafeERC20.sol";
+import "./zeppelin/token/ERC20/IERC20.sol";
+import "./zeppelin/math/SafeMath.sol";
+import "./zeppelin/utils/ReentrancyGuard.sol";
 import "./Basket.sol";
 import "./Proposal.sol";
 import "./Vault.sol";
