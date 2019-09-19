@@ -26,7 +26,30 @@ interface IRSV {
     function burnFrom(address account, uint256 value) external;
 }
 
-
+/**
+ * The Manager contract is the point of contact between the Reserve ecosystem
+ * and the surrounding world. It manages the Issuance and Redemption of RSV,
+ * a decentralized stablecoin backed by a basket of tokens. 
+ *
+ * The Manager also implements a Proposal system to handle administration of
+ * changes to the backing of RSV. Anyone can propose a change to the backing.
+ * Once the `owner` approves the proposal, then after a pre-determined delay
+ * the proposal is eligible for execution by anyone. However, the funds to 
+ * execute the proposal must come from the proposer.
+ *
+ * There are two different ways to propose changes to the backing of RSV. 
+ * See: 
+ * - proposeQuantitiesAdjustment()
+ * - proposeNewBasket()
+ *
+ * In both cases, tokens are exchanged with the Vault and a new RSV backing is 
+ * set. You can think of the first type of proposal as being useful when you
+ * don't want to change the list of tokens that back RSV, but do want to change
+ * the quantities. The second type of proposal is more useful when you want to
+ * change the tokens in the basket. The downside of this proposal type is that
+ * it's difficult to know what capital will be required come execution of the
+ * proposal.  
+ */
 contract Manager is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
@@ -81,7 +104,7 @@ contract Manager is Ownable, ReentrancyGuard {
     event SeigniorageChanged(uint256 oldVal, uint256 newVal);
 
 
-    // === Constructor ===
+    // ============================ Constructor ===============================
 
     /// Begins paused.
     constructor(address vaultAddr, address rsvAddress, uint256 seigniorage_) public {
@@ -93,7 +116,7 @@ contract Manager is Ownable, ReentrancyGuard {
         useWhitelist = true;
     }
 
-    // === Modifiers ===
+    // ============================= Modifiers ================================
 
     /// Modifies a function to run only when the contract is not paused.
     modifier notPaused() {
@@ -114,7 +137,7 @@ contract Manager is Ownable, ReentrancyGuard {
     }
 
 
-    // === Externals ===
+    // ============================= Externals ================================
 
     /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
     function issue(uint256 _rsvQuantity) external notPaused nonReentrant onlyWhitelist {
@@ -224,7 +247,7 @@ contract Manager is Ownable, ReentrancyGuard {
         vault.batchWithdrawTo(tokens, proposal.getQuantitiesOut(), proposal.proposer());
 
         _assertFullyCollateralized();
-        proposal.finish();
+        proposal.complete();
     }
 
     /// Pause the contract.
@@ -302,7 +325,8 @@ contract Manager is Ownable, ReentrancyGuard {
         return _quantitiesRequiredToIssue(_rsvQuantity);
     }
 
-    // === Internals ===
+
+    // ============================= Internals ================================
 
     /// Internal function for all issuances to go through.
     function _issue(uint256 _rsvQuantity) internal {

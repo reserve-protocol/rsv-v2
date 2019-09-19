@@ -12,7 +12,6 @@ contract Vault is Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-    // Auth role
     address public manager;
 
     event ManagerTransferred(
@@ -20,42 +19,39 @@ contract Vault is Ownable {
         address indexed newManager
     );
 
-    event TokenWithdraw(address indexed token, uint256 indexed amount);
+    event BatchWithdrawal(address[] indexed tokens, uint256[] indexed quantities);
 
     constructor() public {
         // Initialize manager as msg.sender
         manager = msg.sender;
     }
 
+    /// Modifies a function to only run when the `manager` account calls it. 
     modifier onlyManager() {
         require(msg.sender == manager, "must be manager");
         _;
     }
 
-    /**
-     * @dev Allows the current owner to transfer control of the contract to a newManager.
-     * @param newManager The address to transfer manager control to.
-     */
-    function transferManager(address newManager) external onlyOwner {
-        _transferManager(newManager);
-    }
-
-    /**
-     * @dev Transfers the manager control to newManager.
-     * @param newManager The address to transfer manager control to.
-     */
-    function _transferManager(address newManager) internal {
+    /// Changes the manager account. 
+    function changeManager(address newManager) external onlyOwner {
         require(newManager != address(0));
         manager = newManager;
         emit ManagerTransferred(manager, newManager);
     }
 
-    function batchWithdrawTo(address[] calldata tokens, uint256[] calldata amounts, address to) external onlyManager {
+    /// Withdraws multiple tokens from the Vault and sends them to `to`. 
+    function batchWithdrawTo(
+        address[] calldata tokens, 
+        uint256[] calldata quantities, 
+        address to
+    ) 
+        external onlyManager 
+    {
         for (uint i = 0; i < tokens.length; i++) {
-            if (amounts[i] > 0) {
-                IERC20(tokens[i]).safeTransfer(to, amounts[i]);
-                emit TokenWithdraw(tokens[i], amounts[i]);
+            if (quantities[i] > 0) {
+                IERC20(tokens[i]).safeTransfer(to, quantities[i]);
             }
         }        
+        emit BatchWithdrawal(tokens, quantities);
     }
 }

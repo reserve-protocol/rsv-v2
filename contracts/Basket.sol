@@ -2,7 +2,12 @@ pragma solidity ^0.5.8;
 
 import "./zeppelin/contracts/token/ERC20/SafeERC20.sol";
 
-
+/**
+ * The Basket contract defines what an arbitrary "front-token" is backed by.
+ *
+ * Most importantly, the `backing` quantities correspond to quantities
+ * for a single front-token, NOT for a single atto-front-token. 
+*/
 contract Basket {
     using SafeMath for uint256;
 
