@@ -1,6 +1,7 @@
 pragma solidity ^0.5.8;
 
 import "../zeppelin/math/SafeMath.sol";
+import "../ownership/Ownable.sol";
 import "./ReserveEternalStorage.sol";
 
 /**
@@ -34,7 +35,7 @@ interface IERC20 {
  * Non-constant-sized data is held in ReserveEternalStorage,
  * to facilitate potential future upgrades.
  */
-contract Reserve is IERC20 {
+contract Reserve is IERC20, Ownable {
     using SafeMath for uint256;
 
 
@@ -49,24 +50,23 @@ contract Reserve is IERC20 {
     string public symbol = "RSV";
     uint8 public constant decimals = 18;
     uint256 public totalSupply;
+    uint256 public maxSupply;
 
     // Paused data
     bool public paused;
 
     // Auth roles
-    address public owner;
     address public minter;
     address public pauser;
     address public freezer;
-    address public nominatedOwner;
     address public feeRecipient;
 
     // Auth role change events
-    event OwnerChanged(address indexed newOwner);
     event MinterChanged(address indexed newMinter);
     event PauserChanged(address indexed newPauser);
     event FreezerChanged(address indexed newFreezer);
     event FeeRecipientChanged(address indexed newFeeRecipient);
+    event MaxSupplyChanged(uint256 indexed newMaxSupply);
 
     // Pause events
     event Paused(address indexed account);
@@ -113,7 +113,7 @@ contract Reserve is IERC20 {
 
     /// Modifies a function to only run if sent by `role` or the contract's `owner`.
     modifier onlyOwnerOr(address role) {
-        require(msg.sender == owner || msg.sender == role, "unauthorized: not role holder and not owner");
+        require(msg.sender == _owner || msg.sender == role, "unauthorized: not role holder and not owner");
         _;
     }
 
@@ -140,29 +140,6 @@ contract Reserve is IERC20 {
         emit FeeRecipientChanged(newFeeRecipient);
     }
 
-    /// Nominate a new `owner`.  We want to ensure that `owner` is always valid, so we don't
-    /// actually change `owner` to `nominatedOwner` until `nominatedOwner` calls `acceptOwnership`.
-    function nominateNewOwner(address nominee) external only(owner) {
-        nominatedOwner = nominee;
-    }
-
-    /// Accept nomination for ownership.
-    /// This completes the `nominateNewOwner` handshake.
-    function acceptOwnership() external onlyOwnerOr(nominatedOwner) {
-        if (msg.sender != owner) {
-            emit OwnerChanged(msg.sender);
-        }
-        owner = msg.sender;
-        nominatedOwner = address(0);
-    }
-
-    /// Set `owner` to 0.
-    /// Only do this to deliberately lock in the current permissions.
-    function renounceOwnership() external only(owner) {
-        owner = address(0);
-        emit OwnerChanged(owner);
-    }
-
     /// Make a different address own the EternalStorage contract.
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
@@ -173,6 +150,12 @@ contract Reserve is IERC20 {
     /// Change the contract that helps with transaction fee calculation. 
     function changeTxFeeHelper(address newTxFee) external only(owner) {
         txFee = ITXFee(newTxFee);
+    }
+
+    /// Change the maximum supply allowed.
+    function changeMaxSupply(uint256 newMaxSupply) external only(owner) {
+        maxSupply = newMaxSupply;
+        emit MaxSupplyChanged(newMaxSupply);
     }
 
     /// Change the name and ticker symbol of this token.
@@ -345,6 +328,7 @@ contract Reserve is IERC20 {
         require(account != address(0), "can't mint to address zero");
 
         totalSupply = totalSupply.add(value);
+        require(totalSupply < maxSupply, "max supply exceeded");
         data.addBalance(account, value);
         emit Transfer(address(0), account, value);
     }

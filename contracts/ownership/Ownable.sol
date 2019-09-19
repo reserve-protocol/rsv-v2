@@ -53,4 +53,12 @@ contract Ownable is Context {
         emit OwnershipTransferred(_owner, _nominatedOwner);
         _owner = _nominatedOwner;
     }
+
+    /** Set `_owner` to the 0 address.
+     * Only do this to deliberately lock in the current permissions.
+     */
+    function renounceOwnership() external onlyOwner {
+        emit OwnershipTransferred(_owner, address(0));
+        _owner = address(0);
+    }
 }

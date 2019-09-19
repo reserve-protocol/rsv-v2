@@ -1,10 +1,5 @@
 export REPO_DIR = $(shell pwd)
 
-abi/bindings: contracts/*.sol abi/generate.go compiler.json
-	npx sol-compiler
-	go run abi/generate.go
-	@echo "placeholder output file for 'make abi/bindings'" > abi/bindings
-
 test: 
 	go test ./tests
 
