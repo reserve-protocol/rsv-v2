@@ -5,7 +5,7 @@ abi/bindings: contracts/*.sol abi/generate.go compiler.json
 	go run abi/generate.go
 	@echo "placeholder output file for 'make abi/bindings'" > abi/bindings
 
-test: abi/bindings
+test: 
 	go test ./tests
 
 fmt:

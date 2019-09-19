@@ -1,9 +1,9 @@
 pragma solidity ^0.5.8;
 
-import "./zeppelin/token/ERC20/IERC20.sol";
-import "./zeppelin/token/ERC20/SafeERC20.sol";
+import "../zeppelin/token/ERC20/IERC20.sol";
+import "../zeppelin/token/ERC20/SafeERC20.sol";
+import "../ownership/Ownable.sol";
 import "./Basket.sol";
-import "./Ownable.sol";
 
 /**
  * A Proposal represents a suggestion to change the backing for RSV.

@@ -1,6 +1,6 @@
-pragma solidity ^0.5.4;
+pragma solidity ^0.5.8;
 
-import "./zeppelin/SafeMath.sol";
+import "../zeppelin/math/SafeMath.sol";
 
 /**
  * @title Eternal Storage for the Reserve Token

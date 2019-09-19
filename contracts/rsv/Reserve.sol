@@ -1,7 +1,6 @@
 pragma solidity ^0.5.8;
 
-import "./zeppelin/SafeMath.sol";
-
+import "../zeppelin/math/SafeMath.sol";
 import "./ReserveEternalStorage.sol";
 
 /**
@@ -45,9 +44,6 @@ contract Reserve is IERC20 {
     // TX Fee helper contract
     ITXFee public txFee;
 
-    // Fee recipient
-    address public feeRecipient;
-
     // Basic token data
     string public name = "Reserve";
     string public symbol = "RSV";
@@ -63,7 +59,7 @@ contract Reserve is IERC20 {
     address public pauser;
     address public freezer;
     address public nominatedOwner;
-
+    address public feeRecipient;
 
     // Auth role change events
     event OwnerChanged(address indexed newOwner);

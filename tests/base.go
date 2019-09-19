@@ -18,8 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/reserve-protocol/rsd/abi"
-	"github.com/reserve-protocol/rsd/soltools"
+	"github.com/reserve-protocol/rsv-beta/abi"
+	"github.com/reserve-protocol/rsv-beta/soltools"
 )
 
 type logParser interface {
@@ -39,9 +39,9 @@ type TestSuite struct {
 		bind.ContractBackend
 		TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	}
-	reserve               *abi.ReserveDollar
+	reserve               *abi.Reserve
 	reserveAddress        common.Address
-	eternalStorage        *abi.ReserveDollarEternalStorage
+	eternalStorage        *abi.ReserveEternalStorage
 	eternalStorageAddress common.Address
 
 	logParsers map[common.Address]logParser
@@ -168,10 +168,10 @@ func (s *TestSuite) createFastNode() {
 		backends.NewSimulatedBackend(
 			genesisAlloc,
 			// Block gas limit. Needs to be more than 7e6, which is about the cost
-			// of the ReserveDollarV2 constructor. But we still want it about the
+			// of the ReserveV2 constructor. But we still want it about the
 			// same order of magnitude as mainnet.
 			//
-			// The ReserveDollar constructor is edging close to the mainnet block limit.
+			// The Reserve constructor is edging close to the mainnet block limit.
 			// We'll probably stay under it without any problem. If not, we can split
 			// the Eternal Storage contract deployment into a different transaction.
 			8e6,
