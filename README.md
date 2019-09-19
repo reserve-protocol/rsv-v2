@@ -1,2 +1,2 @@
-# basket-protocol
-This is our basket RSV protocol implementation. It consists of a Manager that performs issuance and redemption of RSV for some number of collateral tokens against a Vault. It always tries to do so in a way that allows it to approach its ideal weighting of the basket. Regardless of the weighting, it *must* always maintain the invariant that the sum of the collateral tokens in the vault is at least the RSV supply. 
+# RSV Beta
+This is a simple RSV protocol implementation. 
