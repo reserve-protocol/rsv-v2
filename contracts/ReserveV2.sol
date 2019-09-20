@@ -11,7 +11,7 @@ contract ReserveV2 is Reserve {
         paused = true;
     }
 
-    function completeHandoff(address previousImplementation) external only(owner) {
+    function completeHandoff(address previousImplementation) external onlyOwner {
         Reserve previous = Reserve(previousImplementation);
         data = ReserveEternalStorage(previous.getEternalStorageAddress());
         previous.acceptOwnership();

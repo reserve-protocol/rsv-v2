@@ -1,5 +1,8 @@
 export REPO_DIR = $(shell pwd)
 
+abi: abi/generate.go
+	go run abi/generate.go
+
 test: 
 	go test ./tests
 

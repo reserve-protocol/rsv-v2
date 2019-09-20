@@ -1,7 +1,7 @@
 pragma solidity ^0.5.8;
 
-import "../zeppelin/math/SafeMath.sol";
-import "../ownership/Ownable.sol";
+import "./zeppelin/math/SafeMath.sol";
+import "./Ownable.sol";
 import "./ReserveEternalStorage.sol";
 
 /**
@@ -85,7 +85,6 @@ contract Reserve is IERC20, Ownable {
     constructor() public {
         data = new ReserveEternalStorage(msg.sender);
         txFee = ITXFee(address(0)); // I'm not sure if this will fail here or later. If it fails here, then we'll need a different design
-        owner = msg.sender;
         pauser = msg.sender;
         feeRecipient = msg.sender;
         // Other roles deliberately default to the zero address.
@@ -143,23 +142,23 @@ contract Reserve is IERC20, Ownable {
     /// Make a different address own the EternalStorage contract.
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
-    function transferEternalStorage(address newOwner) external only(owner) {
+    function transferEternalStorage(address newOwner) external onlyOwner {
         data.transferOwnership(newOwner);
     }
 
     /// Change the contract that helps with transaction fee calculation. 
-    function changeTxFeeHelper(address newTxFee) external only(owner) {
+    function changeTxFeeHelper(address newTxFee) external onlyOwner {
         txFee = ITXFee(newTxFee);
     }
 
     /// Change the maximum supply allowed.
-    function changeMaxSupply(uint256 newMaxSupply) external only(owner) {
+    function changeMaxSupply(uint256 newMaxSupply) external onlyOwner {
         maxSupply = newMaxSupply;
         emit MaxSupplyChanged(newMaxSupply);
     }
 
     /// Change the name and ticker symbol of this token.
-    function changeName(string calldata newName, string calldata newSymbol) external only(owner) {
+    function changeName(string calldata newName, string calldata newSymbol) external onlyOwner {
         name = newName;
         symbol = newSymbol;
         emit NameChanged(newName, newSymbol);
