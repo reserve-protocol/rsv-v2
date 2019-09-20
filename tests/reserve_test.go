@@ -68,7 +68,14 @@ func (s *ReserveSuite) TearDownSuite() {
 func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	// Re-deploy Reserve and store a handle to the Go binding and the contract address.
 	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
-	s.requireTx(tx, err)()
+
+	s.logParsers = map[common.Address]logParser{
+		reserveAddress: reserve,
+	}
+
+	s.requireTx(tx, err)(abi.ReserveOwnershipTransferred{
+		PreviousOwner: common.Address{}, NewOwner: s.account[0].address(),
+	})
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 
@@ -78,12 +85,9 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	s.eternalStorage, err = abi.NewReserveEternalStorage(s.eternalStorageAddress, s.node)
 	s.Require().NoError(err)
 
-	deployerAddress := s.account[0].address()
+	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
 
-	s.logParsers = map[common.Address]logParser{
-		s.reserveAddress:        s.reserve,
-		s.eternalStorageAddress: s.eternalStorage,
-	}
+	deployerAddress := s.account[0].address()
 
 	// Make the deployment account a minter, pauser, and freezer.
 	s.requireTx(s.reserve.ChangeMinter(s.signer, deployerAddress))(
@@ -1014,10 +1018,15 @@ func (s *ReserveSuite) TestUpgrade() {
 	// Deploy new contract.
 	newKey := s.account[2]
 	newTokenAddress, tx, newToken, err := abi.DeployReserveV2(signer(newKey), s.node)
-	s.requireTx(tx, err)()
+	s.logParsers[newTokenAddress] = newToken
+	s.requireTx(tx, err)(abi.ReserveV2OwnershipTransferred{
+		PreviousOwner: common.Address{}, NewOwner: s.account[2].address(),
+	})
 
 	// Make the switch.
-	s.requireTx(s.reserve.NominateNewOwner(s.signer, newTokenAddress))()
+	s.requireTx(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
+		PreviousOwner: s.account[0].address(), NewOwner: newTokenAddress,
+	})
 	s.requireTx(newToken.CompleteHandoff(signer(newKey), s.reserveAddress)) /*
 		not asserting events because there are a lot and we don't care much about them
 	*/
@@ -1037,7 +1046,6 @@ func (s *ReserveSuite) TestUpgrade() {
 
 	// New token should be functional.
 	assertBalance(recipient.address(), amount)
-	s.logParsers[newTokenAddress] = newToken
 	s.requireTx(newToken.ChangeMinter(signer(newKey), newKey.address()))(
 		abi.ReserveV2MinterChanged{NewMinter: newKey.address()},
 	)

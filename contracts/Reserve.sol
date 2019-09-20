@@ -87,6 +87,7 @@ contract Reserve is IERC20, Ownable {
         txFee = ITXFee(address(0)); // I'm not sure if this will fail here or later. If it fails here, then we'll need a different design
         pauser = msg.sender;
         feeRecipient = msg.sender;
+        maxSupply = 2 ** 256 - 1;
         // Other roles deliberately default to the zero address.
     }
 
