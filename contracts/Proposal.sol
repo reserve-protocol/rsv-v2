@@ -33,6 +33,7 @@ contract Proposal is Ownable {
     address[] public tokens;
     uint256[] public quantitiesIn; // token quantities to be added to the Vault
     uint256[] public quantitiesOut; // total quantities to be withdrawn from the Vault
+    
     enum Statuses { Created, Accepted, Closed, Completed }
     Statuses status;
 

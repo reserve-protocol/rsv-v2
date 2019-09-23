@@ -127,6 +127,12 @@ contract Reserve is IERC20, Ownable {
         data.transferOwnership(newOwner);
     }
 
+    /// Change the owner of Reserve. Only callable by current owner. 
+    function changeOwner(address newOwner) external onlyOwner {
+        emit OwnershipTransferred(_owner, newOwner);
+        _owner = newOwner;
+    }
+
     /// Change the contract that helps with transaction fee calculation. 
     function changeTxFeeHelper(address newTxFee) external onlyOwner {
         txFee = ITXFee(newTxFee);

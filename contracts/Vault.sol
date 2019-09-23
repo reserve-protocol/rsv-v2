@@ -32,6 +32,12 @@ contract Vault is Ownable {
         _;
     }
 
+    /// Change the owner of Reserve. Only callable by current owner. 
+    function changeOwner(address newOwner) external onlyOwner {
+        emit OwnershipTransferred(_owner, newOwner);
+        _owner = newOwner;
+    }
+
     /// Changes the manager account. 
     function changeManager(address newManager) external onlyOwner {
         require(newManager != address(0));
