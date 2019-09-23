@@ -102,8 +102,6 @@ contract Manager is Ownable {
 
     // Changes
     event OperatorChanged(address indexed account);
-    event RSVChanged(address indexed account);
-    event VaultChanged(address indexed account);
     event SeigniorageChanged(uint256 oldVal, uint256 newVal);
 
 
@@ -176,30 +174,30 @@ contract Manager is Ownable {
         _redeem(max);
     }
 
-    // /**
-    //  * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
-    //  * proposal does not change token addresses. Therefore, if you want to introduce a new token,
-    //  * first use the other proposal type. 
-    //  */ 
-    // function proposeQuantitiesAdjustment( 
-    //     uint256[] calldata _amountsIn,
-    //     uint256[] calldata _amountsOut
-    // ) 
-    //     external returns(uint256)
-    // {
-    //     require(_amountsIn.length == _amountsOut.length, "quantities mismatched");
+    /**
+     * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
+     * proposal does not change token addresses. Therefore, if you want to introduce a new token,
+     * first use the other proposal type. 
+     */ 
+    function proposeQuantitiesAdjustment( 
+        uint256[] calldata _amountsIn,
+        uint256[] calldata _amountsOut
+    ) 
+        external returns(uint256)
+    {
+        require(_amountsIn.length == _amountsOut.length, "quantities mismatched");
 
-    //     proposals[proposalsLength] = new Proposal(
-    //         proposalsLength,
-    //         _msgSender(),
-    //         basket.getTokens(),
-    //         _amountsIn,
-    //         _amountsOut,
-    //         Basket(0)
-    //     );
+        proposals[proposalsLength] = new Proposal(
+            proposalsLength,
+            _msgSender(),
+            basket.getTokens(),
+            _amountsIn,
+            _amountsOut,
+            Basket(0)
+        );
 
-    //     return ++proposalsLength;
-    // }
+        return ++proposalsLength;
+    }
 
     
     /**
@@ -253,21 +251,21 @@ contract Manager is Ownable {
     /// Executes a proposal by exchanging collateral tokens with the proposer.
     function executeProposal(uint256 _proposalID) external {
         require(proposalsLength > _proposalID, "proposals length < id");
-        Proposal proposal = proposals[_proposalID];
-        proposal.prepare(rsv.totalSupply(), address(vault), basket);
-        address[] memory tokens = proposal.getTokens();
-        uint256[] memory quantitiesIn = proposal.getQuantitiesIn();
+        (address[] memory tokens, uint256[] memory quantitiesIn, uint256[] memory quantitiesOut) =
+            proposals[_proposalID].complete(rsv.totalSupply(), address(vault), basket);
 
         // Proposer -> Vault
         for (uint i = 0; i < tokens.length; i++) {
-            IERC20(tokens[i]).safeTransferFrom(proposal.proposer(), address(vault), quantitiesIn[i]);
+            IERC20(tokens[i]).safeTransferFrom(
+                proposals[_proposalID].proposer(), 
+                address(vault), 
+                quantitiesIn[i]
+            );
         }
 
         // Vault -> Proposer
-        vault.batchWithdrawTo(tokens, proposal.getQuantitiesOut(), proposal.proposer());
-
+        vault.batchWithdrawTo(tokens, quantitiesOut, proposals[_proposalID].proposer());
         _assertFullyCollateralized();
-        proposal.complete();
     }
 
     /// Pause the contract.
@@ -314,12 +312,6 @@ contract Manager is Ownable {
     /// Get the tokens in the basket. 
     function basketTokens() external view returns (address[] memory) {
         return basket.getTokens();
-    }
-
-    /// Get requirements required for the proposal to be accepted, in terms of proposal tokens. 
-    function requirementsForProposal(uint256 _proposalID) external view returns(address[] memory, uint256[] memory) {
-        return (proposals[_proposalID].getTokens(), 
-            basket.newQuantitiesRequired(rsv.totalSupply(), proposals[_proposalID].basket()));
     }
 
     /// Get quantities required to issue a quantity of RSV, in terms of basket tokens.  

@@ -55,12 +55,8 @@ contract Proposal is Ownable {
         public 
     {
         require(_quantitiesIn.length == _quantitiesOut.length, "quantities mismatched");
-        id = _id;
-        proposer = _proposer;
-        tokens = _tokens;
-        quantitiesIn = _quantitiesIn;
-        quantitiesOut = _quantitiesOut;
-        basket = _basket;
+        (id, proposer, tokens, quantitiesIn, quantitiesOut, basket) = 
+            (_id, _proposer, _tokens, _quantitiesIn, _quantitiesOut, _basket);
         emit ProposalCreated(_id, _proposer, _tokens, _quantitiesIn, _quantitiesOut);
     }
 
@@ -79,8 +75,18 @@ contract Proposal is Ownable {
         emit ProposalClosed(id, proposer);
     }
 
-    /// Prepares a proposal for execution by ensuring that both `basket` and the `quantities` variables are set. 
-    function prepare(uint256 _rsvSupply, address _vaultAddr, Basket _prevBasket) external onlyOwner {
+    /// Moves a proposal from the Accepted to Completed state. 
+    function complete(
+        uint256 _rsvSupply, 
+        address _vaultAddr, 
+        Basket _prevBasket
+    ) 
+        external onlyOwner returns(address[] memory, uint256[] memory, uint256[] memory) 
+    {
+        require(!closed, "proposal already closed");
+        require(accepted, "proposal not accepted");
+        require(now > time, "wait to execute");
+
         if (basket == Basket(0)) {
             uint256[] memory newBacking = new uint256[](_prevBasket.size());
 
@@ -96,31 +102,8 @@ contract Proposal is Ownable {
         }
         quantitiesIn = _prevBasket.newQuantitiesRequired(_rsvSupply, basket);
         quantitiesOut = basket.newQuantitiesRequired(_rsvSupply, _prevBasket);
-    }
-
-    /// Moves a proposal from the Accepted to Completed state. 
-    function complete() external onlyOwner {
-        assert(basket != Basket(0));
-        require(!closed, "proposal already closed");
-        require(accepted, "proposal not accepted");
-        require(now > time, "wait to execute");
         closed = true;
         emit ProposalFinished(id, proposer);
+        return (tokens, quantitiesIn, quantitiesOut);
     }
-
-    /// Getter for `tokens`.
-    function getTokens() external view returns(address[] memory) {
-        return tokens;
-    }
-
-    /// Getter for `quantitiesIn`.
-    function getQuantitiesIn() external view returns(uint256[] memory) {
-        return quantitiesIn;
-    }
-
-    /// Getter for `quantitiesOut`.
-    function getQuantitiesOut() external view returns(uint256[] memory) {
-        return quantitiesOut;
-    }
-
 }
