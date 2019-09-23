@@ -81,11 +81,6 @@ contract Reserve is IERC20, Ownable {
         return address(data);
     }
 
-    /// Accessor for decimals.
-    function getDecimals() external pure returns(uint8) {
-        return decimals;
-    }
-
 
     // ==== Admin functions ====
 

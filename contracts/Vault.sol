@@ -22,13 +22,13 @@ contract Vault is Ownable {
     event BatchWithdrawal(address[] indexed tokens, uint256[] indexed quantities);
 
     constructor() public {
-        // Initialize manager as msg.sender
-        manager = msg.sender;
+        // Initialize manager as _msgSender()
+        manager = _msgSender();
     }
 
     /// Modifies a function to only run when the `manager` account calls it. 
     modifier onlyManager() {
-        require(msg.sender == manager, "must be manager");
+        require(_msgSender() == manager, "must be manager");
         _;
     }
 

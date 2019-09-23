@@ -11,7 +11,7 @@ import "./zeppelin/token/ERC20/SafeERC20.sol";
 contract Basket {
     using SafeMath for uint256;
 
-    uint256 public frontTokenDecimals;
+    uint8 public frontTokenDecimals;
     address[] public tokens;
     uint256[] public backing; // how much of each token is a single front token worth
     uint256 public size;
@@ -21,7 +21,7 @@ contract Basket {
     constructor(
         address[] memory _tokens, 
         uint256[] memory _backing,
-        uint256 _frontTokenDecimals
+        uint8 _frontTokenDecimals
     ) 
         public 
     {

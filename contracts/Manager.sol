@@ -3,11 +3,9 @@ pragma solidity ^0.5.8;
 import "./zeppelin/token/ERC20/SafeERC20.sol";
 import "./zeppelin/token/ERC20/IERC20.sol";
 import "./zeppelin/math/SafeMath.sol";
-import "./zeppelin/utils/ReentrancyGuard.sol";
 import "./Ownable.sol";
 import "./Basket.sol";
 import "./Proposal.sol";
-import "./Vault.sol";
 
 
 interface IRSV {
@@ -22,9 +20,13 @@ interface IRSV {
     event Approval(address indexed holder, address indexed spender, uint256 value);
 
     // RSV-specific functions
-    function getDecimals() external view returns(uint8);
-    function mint(address account, uint256 value) external;
-    function burnFrom(address account, uint256 value) external;
+    function mint(address, uint256) external;
+    function burnFrom(address, uint256) external;
+}
+
+interface IVault {
+    function changeManger(address) external;
+    function batchWithdrawTo(address[] calldata, uint256[] calldata, address) external;
 }
 
 /**
@@ -51,7 +53,7 @@ interface IRSV {
  * it's difficult to know what capital will be required come execution of the
  * proposal.  
  */
-contract Manager is Ownable, ReentrancyGuard {
+contract Manager is Ownable {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
@@ -64,8 +66,9 @@ contract Manager is Ownable, ReentrancyGuard {
     // DATA
 
     Basket public basket;
-    Vault public vault;
+    IVault public vault;
     IRSV public rsv;
+    uint8 public constant rsvDecimals = 18;
 
     // Proposals
     mapping(uint256 => Proposal) public proposals;
@@ -109,9 +112,9 @@ contract Manager is Ownable, ReentrancyGuard {
 
     /// Begins paused.
     constructor(address vaultAddr, address rsvAddress, uint256 seigniorage_) public {
-        vault = Vault(vaultAddr);
+        vault = IVault(vaultAddr);
         rsv = IRSV(rsvAddress);
-        whitelist[msg.sender] = true;
+        whitelist[_msgSender()] = true;
         seigniorage = seigniorage_;
         paused = true;
         useWhitelist = true;
@@ -127,67 +130,67 @@ contract Manager is Ownable, ReentrancyGuard {
 
     /// Modifies a function to run only when the caller is on the whitelist, if it is enabled.
     modifier onlyWhitelist() {
-        if (useWhitelist) require(whitelist[msg.sender], "unauthorized: not on whitelist");
+        if (useWhitelist) require(whitelist[_msgSender()], "unauthorized: not on whitelist");
         _;
     }
 
     /// Modifies a function to run only when the caller is the operator account. 
     modifier onlyOperator() {
-        require(msg.sender == operator, "unauthorized: operator only");
+        require(_msgSender() == operator, "unauthorized: operator only");
         _;
     }
 
 
-    // ============================= Externals ================================
+    // // ============================= Externals ================================
 
-    /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
-    function issue(uint256 _rsvQuantity) external notPaused nonReentrant onlyWhitelist {
-        _issue(_rsvQuantity);
-    }
+    // /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
+    // function issue(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+    //     _issue(_rsvQuantity);
+    // }
 
-    /// Issues the maximum amount of RSV to the caller based on their allowances.
-    function issueMax() external notPaused nonReentrant onlyWhitelist {
-        uint256 max = _calculateMaxIssuable(msg.sender);
-        _issue(max);
-    }
+    // /// Issues the maximum amount of RSV to the caller based on their allowances.
+    // function issueMax() external notPaused onlyWhitelist {
+    //     uint256 max = _calculateMaxIssuable(_msgSender());
+    //     _issue(max);
+    // }
 
-    /// Redeem a quantity of RSV for collateral tokens. 
-    function redeem(uint256 _rsvQuantity) external notPaused nonReentrant onlyWhitelist {
-        _redeem(_rsvQuantity);
-    }
+    // /// Redeem a quantity of RSV for collateral tokens. 
+    // function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+    //     _redeem(_rsvQuantity);
+    // }
 
-    /// Redeem `allowance` of RSV from the caller's account. 
-    function redeemMax() external notPaused nonReentrant onlyWhitelist {
-        uint256 max = rsv.allowance(msg.sender, address(this));
-        _redeem(max);
-    }
+    // /// Redeem `allowance` of RSV from the caller's account. 
+    // function redeemMax() external notPaused onlyWhitelist {
+    //     uint256 max = rsv.allowance(_msgSender(), address(this));
+    //     _redeem(max);
+    // }
 
-    /**
-     * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
-     * proposal does not change token addresses. Therefore, if you want to introduce a new token,
-     * first use the other proposal type. 
-     */ 
-    function proposeQuantitiesAdjustment( 
-        uint256[] calldata _amountsIn,
-        uint256[] calldata _amountsOut
-    ) 
-        external nonReentrant returns(uint256)
-    {
-        require(_amountsIn.length == _amountsOut.length, "quantities mismatched");
+    // /**
+    //  * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
+    //  * proposal does not change token addresses. Therefore, if you want to introduce a new token,
+    //  * first use the other proposal type. 
+    //  */ 
+    // function proposeQuantitiesAdjustment( 
+    //     uint256[] calldata _amountsIn,
+    //     uint256[] calldata _amountsOut
+    // ) 
+    //     external returns(uint256)
+    // {
+    //     require(_amountsIn.length == _amountsOut.length, "quantities mismatched");
 
-        proposals[proposalsLength] = new Proposal(
-            proposalsLength,
-            msg.sender,
-            basket.getTokens(),
-            _amountsIn,
-            _amountsOut,
-            Basket(0)
-        );
+    //     proposals[proposalsLength] = new Proposal(
+    //         proposalsLength,
+    //         _msgSender(),
+    //         basket.getTokens(),
+    //         _amountsIn,
+    //         _amountsOut,
+    //         Basket(0)
+    //     );
 
-        return ++proposalsLength;
-    }
+    //     return ++proposalsLength;
+    // }
 
-    /// 
+    
     /**
      * Proposes a new basket defined by a list of tokens and their backing quantities. 
      * Importantly, this type of proposal means the balances that will be required from the 
@@ -199,7 +202,7 @@ contract Manager is Ownable, ReentrancyGuard {
         address[] calldata _tokens,
         uint256[] calldata _backing
     )
-        external nonReentrant returns(uint256)
+        external returns(uint256)
     {
         require(_tokens.length == _backing.length, "tokens has mismatched quantities");
         require(_tokens.length > 0, "no tokens in basket");
@@ -208,36 +211,36 @@ contract Manager is Ownable, ReentrancyGuard {
 
         proposals[proposalsLength] = new Proposal(
             proposalsLength,
-            msg.sender,
+            _msgSender(),
             _tokens,
             quantitiesIn,
             quantitiesOut,
-            new Basket(_tokens, _backing, rsv.getDecimals())
+            new Basket(_tokens, _backing, rsvDecimals)
         );
 
         return ++proposalsLength;
     }
 
     /// Accepts a proposal for a new basket, beginning the required delay.
-    function acceptProposal(uint256 _proposalID) external nonReentrant onlyOperator {
+    function acceptProposal(uint256 _proposalID) external onlyOperator {
         require(proposalsLength > _proposalID, "proposals length is shorter than id");
         proposals[_proposalID].accept(now + delay);
     }
 
     // Cancels a proposal. This can be done anytime before it is enacted by any of:
     // 1. Proposer 2. Operator 3. Owner
-    function cancelProposal(uint256 _proposalID) external nonReentrant {
+    function cancelProposal(uint256 _proposalID) external {
         require(
-            msg.sender == proposals[_proposalID].proposer() ||
-            msg.sender == _owner ||
-            msg.sender == operator, 
+            _msgSender() == proposals[_proposalID].proposer() ||
+            _msgSender() == _owner ||
+            _msgSender() == operator, 
             "proposals can only be cancelled by the proposer, operator, or owner"
         );
         proposals[_proposalID].close();
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
-    function executeProposal(uint256 _proposalID) external nonReentrant {
+    function executeProposal(uint256 _proposalID) external {
         require(proposalsLength > _proposalID, "proposals length is shorter than id");
         Proposal proposal = proposals[_proposalID];
         proposal.prepare(rsv.totalSupply(), address(vault), basket);
@@ -265,14 +268,14 @@ contract Manager is Ownable, ReentrancyGuard {
     /// Pause the contract.
     function pause() external onlyOwner {
         paused = true;
-        emit Paused(msg.sender);
+        emit Paused(_msgSender());
     }
 
     /// Unpause the contract.
     function unpause() external onlyOwner {
         require(address(basket) != address(0), "can't unpause without a target basket");
         paused = false;
-        emit Unpaused(msg.sender);
+        emit Unpaused(_msgSender());
     }
 
     /// Add user to whitelist.
@@ -306,7 +309,7 @@ contract Manager is Ownable, ReentrancyGuard {
 
     // Set the Vault contract address. 
     function setVault(address _vault) external onlyOwner {
-        vault = Vault(_vault);
+        vault = IVault(_vault);
         emit VaultChanged(_vault);
     }
 
@@ -349,16 +352,16 @@ contract Manager is Ownable, ReentrancyGuard {
         IERC20 token;
         for (uint i = 0; i < basket.size(); i++) {
             token = IERC20(basket.tokens(i));
-            require(token.allowance(msg.sender, address(this)) >= quantities[i], "please set allowance");
-            require(token.balanceOf(msg.sender) >= quantities[i], "insufficient balance");
-            token.safeTransferFrom(msg.sender, address(vault), quantities[i]);
+            require(token.allowance(_msgSender(), address(this)) >= quantities[i], "please set allowance");
+            require(token.balanceOf(_msgSender()) >= quantities[i], "insufficient balance");
+            token.safeTransferFrom(_msgSender(), address(vault), quantities[i]);
         }
 
         // Compensate with RSV.
-        rsv.mint(msg.sender, _rsvQuantity);
+        rsv.mint(_msgSender(), _rsvQuantity);
 
         _assertFullyCollateralized();
-        emit Issuance(msg.sender, _rsvQuantity);
+        emit Issuance(_msgSender(), _rsvQuantity);
     }
 
     /// Internal function for all redemptions to go through.
@@ -366,17 +369,17 @@ contract Manager is Ownable, ReentrancyGuard {
         require(_rsvQuantity > 0, "cannot redeem zero RSV");
 
         // Burn RSV tokens.
-        rsv.burnFrom(msg.sender, _rsvQuantity);
+        rsv.burnFrom(_msgSender(), _rsvQuantity);
 
         // Compensate with collateral tokens.
         vault.batchWithdrawTo(
             basket.getTokens(), 
             basket.quantitiesRequired(_rsvQuantity), 
-            msg.sender
+            _msgSender()
         );
 
         _assertFullyCollateralized();
-        emit Redemption(msg.sender, _rsvQuantity);
+        emit Redemption(_msgSender(), _rsvQuantity);
     }
 
     /// Calculates the quantities of tokens required to issue `_rsvQuantity`. 
@@ -391,7 +394,7 @@ contract Manager is Ownable, ReentrancyGuard {
 
     /// Calculates the maximum we could issue to an address based on their allowances.
     function _calculateMaxIssuable(address funder) internal view returns(uint256) {
-        uint256 rsvDecimalsFactor = uint256(10) ** rsv.getDecimals();
+        uint256 rsvDecimalsFactor = uint256(10) ** rsvDecimals;
         uint256 allowance;
         uint256 balance;
         uint256 available;

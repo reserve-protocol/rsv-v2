@@ -8,8 +8,7 @@ import "./zeppelin/GSN/Context.sol";
  *
  * This module is used through inheritance by using the modifier `onlyOwner`.
  * 
- * There are two ways to change ownership: either by doing a 2-part nominate-accept pattern,
- * or by using `changeOwner` to do it in one step. 
+ * To change ownership, use a 2-part nominate-accept pattern.
  * 
  * This contract is loosely based off of (https://github.com/OpenZeppelin/openzeppelin-contracts/blob/6f8e672f3fcb93289fb559ecbef72b8fd1cd56e1/contracts/ownership/Ownable.sol) but additionally
  * requires new owners to accept ownership before the transition occurs. 
@@ -39,21 +38,11 @@ contract Ownable is Context {
     }
 
     /**
-     * @dev Changes the owner to `newOwner` in one step.
-     * Can only be called by the current owner.
-     */
-    function changeOwner(address newOwner) public onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        emit OwnershipTransferred(_owner, newOwner);
-        _owner = newOwner;
-    }
-
-    /**
      * @dev Nominates a new owner `newOwner`.
      * Requires a follow-up `acceptOwnership`. 
      * Can only be called by the current owner.
      */
-    function nominateNewOwner(address newOwner) public onlyOwner {
+    function nominateNewOwner(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Ownable: new owner is the zero address");
         emit NewOwnerNominated(_owner, newOwner);
         _nominatedOwner = newOwner;
@@ -62,7 +51,7 @@ contract Ownable is Context {
     /**
      * @dev Accepts ownership of the contract.
      */
-    function acceptOwnership() public {
+    function acceptOwnership() external {
         require(_nominatedOwner == _msgSender(), "Ownable: new owner is the zero address");
         emit OwnershipTransferred(_owner, _nominatedOwner);
         _owner = _nominatedOwner;
