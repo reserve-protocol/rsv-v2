@@ -93,18 +93,9 @@ contract Proposal is Ownable {
 
             basket = new Basket(tokens, newBacking, _prevBasket.frontTokenDecimals());
             assert(basket.size() == _prevBasket.size());
-
-            // Sanity checking
-            uint256[] memory expectedAmountsIn = _prevBasket.newQuantitiesRequired(_rsvSupply, basket);
-            uint256[] memory expectedAmountsOut = basket.newQuantitiesRequired(_rsvSupply, _prevBasket);
-            for (uint i = 0; i < basket.size(); i++) {
-                assert(expectedAmountsIn[i] == quantitiesIn[i]);
-                assert(expectedAmountsOut[i] == quantitiesOut[i]);
-            }
-        } else {
-            quantitiesIn = _prevBasket.newQuantitiesRequired(_rsvSupply, basket);
-            quantitiesOut = basket.newQuantitiesRequired(_rsvSupply, _prevBasket);
         }
+        quantitiesIn = _prevBasket.newQuantitiesRequired(_rsvSupply, basket);
+        quantitiesOut = basket.newQuantitiesRequired(_rsvSupply, _prevBasket);
     }
 
     /// Moves a proposal from the Accepted to Completed state. 

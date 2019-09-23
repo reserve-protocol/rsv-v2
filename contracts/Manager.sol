@@ -170,11 +170,11 @@ contract Manager is Ownable {
         _redeem(_rsvQuantity);
     }
 
-    // /// Redeem `allowance` of RSV from the caller's account. 
-    // function redeemMax() external notPaused onlyWhitelist {
-    //     uint256 max = rsv.allowance(_msgSender(), address(this));
-    //     _redeem(max);
-    // }
+    /// Redeem `allowance` of RSV from the caller's account. 
+    function redeemMax() external notPaused onlyWhitelist {
+        uint256 max = rsv.allowance(_msgSender(), address(this));
+        _redeem(max);
+    }
 
     // /**
     //  * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
