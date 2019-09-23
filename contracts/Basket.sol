@@ -26,7 +26,7 @@ contract Basket {
         public 
     {
         require(_tokens.length == _backing.length, "invalid basket");
-        require(_tokens.length > 0 && _tokens.length <= 1000, "basket bad length");
+        require(_tokens.length > 0 && _tokens.length <= 100, "basket bad length");
 
         tokens = _tokens;
         backing = _backing;
