@@ -33,8 +33,8 @@ contract Proposal is Ownable {
     address[] public tokens;
     uint256[] public quantitiesIn; // token quantities to be added to the Vault
     uint256[] public quantitiesOut; // total quantities to be withdrawn from the Vault
-    bool public accepted;
-    bool public closed;
+    enum Statuses { Created, Accepted, Closed, Completed }
+    Statuses status;
 
     Basket public basket;
 
@@ -57,21 +57,25 @@ contract Proposal is Ownable {
         require(_quantitiesIn.length == _quantitiesOut.length, "quantities mismatched");
         (id, proposer, tokens, quantitiesIn, quantitiesOut, basket) = 
             (_id, _proposer, _tokens, _quantitiesIn, _quantitiesOut, _basket);
+        status = Statuses.Created;
         emit ProposalCreated(_id, _proposer, _tokens, _quantitiesIn, _quantitiesOut);
+    }
+
+    function getStatus() external view returns (Statuses) {
+        return status;
     }
 
     /// Moves a proposal from the Created to Accepted state. 
     function accept(uint256 _time) external onlyOwner {
-        require(!accepted, "proposal already accepted");
+        require(status == Statuses.Created, "proposal not created");
         time = _time;
-        accepted = true;
         emit ProposalAccepted(id, proposer);
     }
 
     /// Closes a proposal if it has not been completed. 
     function close() external onlyOwner {
-        require(!closed, "proposal already closed");
-        closed = true;
+        require(status != Statuses.Completed);
+        status = Statuses.Closed;
         emit ProposalClosed(id, proposer);
     }
 
@@ -83,8 +87,7 @@ contract Proposal is Ownable {
     ) 
         external onlyOwner returns(address[] memory, uint256[] memory, uint256[] memory) 
     {
-        require(!closed, "proposal already closed");
-        require(accepted, "proposal not accepted");
+        require(status == Statuses.Accepted, "proposal must be accepted");
         require(now > time, "wait to execute");
 
         if (basket == Basket(0)) {
@@ -102,7 +105,7 @@ contract Proposal is Ownable {
         }
         quantitiesIn = _prevBasket.newQuantitiesRequired(_rsvSupply, basket);
         quantitiesOut = basket.newQuantitiesRequired(_rsvSupply, _prevBasket);
-        closed = true;
+        status = Statuses.Completed;
         emit ProposalFinished(id, proposer);
         return (tokens, quantitiesIn, quantitiesOut);
     }
