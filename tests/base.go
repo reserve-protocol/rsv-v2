@@ -43,9 +43,19 @@ type TestSuite struct {
 	reserveAddress        common.Address
 	eternalStorage        *abi.ReserveEternalStorage
 	eternalStorageAddress common.Address
+	manager               *abi.Manager
+	managerAddress        common.Address
+	vault                 *abi.Vault
+	vaultAddress          common.Address
+	proposals             []*abi.Proposal
+	proposalAddresses     []common.Address
+	baskets               []*abi.Basket
+	basketAdddresses      []common.Address
 
 	logParsers map[common.Address]logParser
 }
+
+var coverageEnabled = os.Getenv("COVERAGE_ENABLED") != ""
 
 // requireTx requires that a transaction is successfully mined and does
 // not revert. It also takes an extra error argument, and checks that the
@@ -237,4 +247,50 @@ type account struct {
 // address returns the address corresponding to `a.key`.
 func (a account) address() common.Address {
 	return crypto.PubkeyToAddress(a.key.PublicKey)
+}
+
+//////////////// Utility
+
+func maxUint256() *big.Int {
+	z := bigInt(1)
+	z = z.Lsh(z, 256)
+	z = z.Sub(z, bigInt(1))
+	return z
+}
+
+func maxUint160() *big.Int {
+	z := bigInt(1)
+	z = z.Lsh(z, 160)
+	z = z.Sub(z, bigInt(1))
+	return z
+}
+
+func minInt160AsUint160() *big.Int {
+	z := bigInt(1)
+	z = z.Lsh(z, 159)
+	return z
+}
+
+func bigInt(n uint32) *big.Int {
+	return big.NewInt(int64(n))
+}
+
+func zeroAddress() common.Address {
+	return common.BigToAddress(bigInt(0))
+}
+
+func mintingTransfer(to common.Address, value *big.Int) abi.ReserveTransfer {
+	return abi.ReserveTransfer{
+		From:  common.BigToAddress(bigInt(0)),
+		To:    to,
+		Value: value,
+	}
+}
+
+func burningTransfer(from common.Address, value *big.Int) abi.ReserveTransfer {
+	return abi.ReserveTransfer{
+		From:  from,
+		To:    common.BigToAddress(bigInt(0)),
+		Value: value,
+	}
 }
