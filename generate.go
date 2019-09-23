@@ -85,6 +85,7 @@ func main() {
 		check(err, "generating Go bindings")
 
 		// Write to .go file.
+		check(os.MkdirAll("abi", 0755), "creating abi directory")
 		name := outputGoFile(t.ContractName)
 		check(ioutil.WriteFile(name, []byte(code), 0644), "writing "+name)
 
