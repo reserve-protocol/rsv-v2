@@ -130,40 +130,40 @@ contract Manager is Ownable {
 
     /// Modifies a function to run only when the caller is on the whitelist, if it is enabled.
     modifier onlyWhitelist() {
-        if (useWhitelist) require(whitelist[_msgSender()], "unauthorized: not on whitelist");
+        if (useWhitelist) require(whitelist[_msgSender()], "not on whitelist");
         _;
     }
 
     /// Modifies a function to run only when the caller is the operator account. 
     modifier onlyOperator() {
-        require(_msgSender() == operator, "unauthorized: operator only");
+        require(_msgSender() == operator, "operator only");
         _;
     }
 
 
-    // // ============================= Externals ================================
+    // ============================= Externals ================================
 
-    // /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
-    // function issue(uint256 _rsvQuantity) external notPaused onlyWhitelist {
-    //     _issue(_rsvQuantity);
-    // }
+    /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
+    function issue(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+        _issue(_rsvQuantity);
+    }
 
-    // /// Issues the maximum amount of RSV to the caller based on their allowances.
-    // function issueMax() external notPaused onlyWhitelist {
-    //     uint256 max = _calculateMaxIssuable(_msgSender());
-    //     _issue(max);
-    // }
+    /// Issues the maximum amount of RSV to the caller based on their allowances.
+    function issueMax() external notPaused onlyWhitelist {
+        uint256 max = _calculateMaxIssuable(_msgSender());
+        _issue(max);
+    }
 
-    // /// Redeem a quantity of RSV for collateral tokens. 
-    // function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
-    //     _redeem(_rsvQuantity);
-    // }
+    /// Redeem a quantity of RSV for collateral tokens. 
+    function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+        _redeem(_rsvQuantity);
+    }
 
-    // /// Redeem `allowance` of RSV from the caller's account. 
-    // function redeemMax() external notPaused onlyWhitelist {
-    //     uint256 max = rsv.allowance(_msgSender(), address(this));
-    //     _redeem(max);
-    // }
+    /// Redeem `allowance` of RSV from the caller's account. 
+    function redeemMax() external notPaused onlyWhitelist {
+        uint256 max = rsv.allowance(_msgSender(), address(this));
+        _redeem(max);
+    }
 
     // /**
     //  * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
@@ -204,7 +204,7 @@ contract Manager is Ownable {
     )
         external returns(uint256)
     {
-        require(_tokens.length == _backing.length, "tokens has mismatched quantities");
+        require(_tokens.length == _backing.length, "mismatched token quantities");
         require(_tokens.length > 0, "no tokens in basket");
         uint256[] memory quantitiesIn;
         uint256[] memory quantitiesOut;
@@ -223,7 +223,7 @@ contract Manager is Ownable {
 
     /// Accepts a proposal for a new basket, beginning the required delay.
     function acceptProposal(uint256 _proposalID) external onlyOperator {
-        require(proposalsLength > _proposalID, "proposals length is shorter than id");
+        require(proposalsLength > _proposalID, "proposals length < id");
         proposals[_proposalID].accept(now + delay);
     }
 
@@ -234,14 +234,14 @@ contract Manager is Ownable {
             _msgSender() == proposals[_proposalID].proposer() ||
             _msgSender() == _owner ||
             _msgSender() == operator, 
-            "proposals can only be cancelled by the proposer, operator, or owner"
+            "cannot cancel"
         );
         proposals[_proposalID].close();
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
     function executeProposal(uint256 _proposalID) external {
-        require(proposalsLength > _proposalID, "proposals length is shorter than id");
+        require(proposalsLength > _proposalID, "proposals length < id");
         Proposal proposal = proposals[_proposalID];
         proposal.prepare(rsv.totalSupply(), address(vault), basket);
         address[] memory tokens = proposal.getTokens();
@@ -273,7 +273,7 @@ contract Manager is Ownable {
 
     /// Unpause the contract.
     function unpause() external onlyOwner {
-        require(address(basket) != address(0), "can't unpause without a target basket");
+        require(address(basket) != address(0), "basket required to unpause");
         paused = false;
         emit Unpaused(_msgSender());
     }
@@ -366,7 +366,7 @@ contract Manager is Ownable {
 
     /// Internal function for all redemptions to go through.
     function _redeem(uint256 _rsvQuantity) internal {
-        require(_rsvQuantity > 0, "cannot redeem zero RSV");
+        require(_rsvQuantity > 0, "cannot redeem 0 RSV");
 
         // Burn RSV tokens.
         rsv.burnFrom(_msgSender(), _rsvQuantity);

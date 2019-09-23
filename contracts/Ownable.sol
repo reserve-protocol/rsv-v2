@@ -33,7 +33,7 @@ contract Ownable is Context {
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() {
-        require(_msgSender() == _owner, "Ownable: caller is not the owner");
+        require(_msgSender() == _owner, "caller is not owner");
         _;
     }
 
@@ -43,7 +43,7 @@ contract Ownable is Context {
      * Can only be called by the current owner.
      */
     function nominateNewOwner(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        require(newOwner != address(0), "new owner is 0 address");
         emit NewOwnerNominated(_owner, newOwner);
         _nominatedOwner = newOwner;
     }
@@ -52,7 +52,7 @@ contract Ownable is Context {
      * @dev Accepts ownership of the contract.
      */
     function acceptOwnership() external {
-        require(_nominatedOwner == _msgSender(), "Ownable: new owner is the zero address");
+        require(_nominatedOwner == _msgSender(), "new owner is 0 address");
         emit OwnershipTransferred(_owner, _nominatedOwner);
         _owner = _nominatedOwner;
     }
