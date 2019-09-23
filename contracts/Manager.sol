@@ -94,8 +94,7 @@ contract Manager is Ownable {
     event Redemption(address indexed user, uint256 indexed amount);
 
     // Whitelist events
-    event Whitelisted(address indexed user);
-    event DeWhitelisted(address indexed user);
+    event WhitelistChanged(address indexed user, bool val);
 
     // Pause events
     event Paused(address indexed account);
@@ -148,22 +147,22 @@ contract Manager is Ownable {
         _issue(_rsvQuantity);
     }
 
-    /// Issues the maximum amount of RSV to the caller based on their allowances.
-    function issueMax() external notPaused onlyWhitelist {
-        uint256 max = _calculateMaxIssuable(_msgSender());
-        _issue(max);
-    }
+    // /// Issues the maximum amount of RSV to the caller based on their allowances.
+    // function issueMax() external notPaused onlyWhitelist {
+    //     uint256 max = _calculateMaxIssuable(_msgSender());
+    //     _issue(max);
+    // }
 
-    /// Redeem a quantity of RSV for collateral tokens. 
-    function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
-        _redeem(_rsvQuantity);
-    }
+    // /// Redeem a quantity of RSV for collateral tokens. 
+    // function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+    //     _redeem(_rsvQuantity);
+    // }
 
-    /// Redeem `allowance` of RSV from the caller's account. 
-    function redeemMax() external notPaused onlyWhitelist {
-        uint256 max = rsv.allowance(_msgSender(), address(this));
-        _redeem(max);
-    }
+    // /// Redeem `allowance` of RSV from the caller's account. 
+    // function redeemMax() external notPaused onlyWhitelist {
+    //     uint256 max = rsv.allowance(_msgSender(), address(this));
+    //     _redeem(max);
+    // }
 
     // /**
     //  * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
@@ -248,14 +247,8 @@ contract Manager is Ownable {
         uint256[] memory quantitiesIn = proposal.getQuantitiesIn();
 
         // Proposer -> Vault
-        IERC20 token;
         for (uint i = 0; i < tokens.length; i++) {
-            token = IERC20(tokens[i]);
-            require(
-                token.allowance(proposal.proposer(), address(this)) >= quantitiesIn[i], 
-                "allowances insufficient"
-            );
-            token.safeTransferFrom(proposal.proposer(), address(vault), quantitiesIn[i]);
+            IERC20(tokens[i]).safeTransferFrom(proposal.proposer(), address(vault), quantitiesIn[i]);
         }
 
         // Vault -> Proposer
@@ -278,16 +271,10 @@ contract Manager is Ownable {
         emit Unpaused(_msgSender());
     }
 
-    /// Add user to whitelist.
-    function whitelistAccount(address _user) external onlyOwner {
-        whitelist[_user] = true;
-        emit Whitelisted(_user);
-    }
-
-    /// Remove user from whitelist.
-    function deWhitelistAccount(address _user) external onlyOwner {
-        whitelist[_user] = false;
-        emit DeWhitelisted(_user);
+    /// Add or remove user from whitelist.
+    function changeWhitelist(address _user, bool _val) external onlyOwner {
+        whitelist[_user] = _val;
+        emit WhitelistChanged(_user, _val);
     }
 
     /// Set whether or not to apply the whitelist to Issuance and Redemption. 
@@ -299,18 +286,6 @@ contract Manager is Ownable {
     function setOperator(address _operator) external onlyOwner {
         operator = _operator;
         emit OperatorChanged(operator);
-    }
-
-    /// Set the RSV contract address. 
-    function setRSV(address _rsv) external onlyOwner {
-        rsv = IRSV(_rsv);
-        emit RSVChanged(_rsv);
-    }
-
-    // Set the Vault contract address. 
-    function setVault(address _vault) external onlyOwner {
-        vault = IVault(_vault);
-        emit VaultChanged(_vault);
     }
 
     /// Set the seigniorage, in BPS. 
@@ -349,12 +324,8 @@ contract Manager is Ownable {
         uint256[] memory quantities = _quantitiesRequiredToIssue(_rsvQuantity);
 
         // Intake collateral tokens.
-        IERC20 token;
         for (uint i = 0; i < basket.size(); i++) {
-            token = IERC20(basket.tokens(i));
-            require(token.allowance(_msgSender(), address(this)) >= quantities[i], "please set allowance");
-            require(token.balanceOf(_msgSender()) >= quantities[i], "insufficient balance");
-            token.safeTransferFrom(_msgSender(), address(vault), quantities[i]);
+            IERC20(basket.tokens(i)).safeTransferFrom(_msgSender(), address(vault), quantities[i]);
         }
 
         // Compensate with RSV.

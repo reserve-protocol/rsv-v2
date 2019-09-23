@@ -91,7 +91,7 @@ contract Proposal is Ownable {
                 newBacking[i] = newQuantity.mul(_prevBasket.frontTokenDecimals()).div(_rsvSupply);
             }
 
-            basket = new Basket(tokens, newBacking,_prevBasket.frontTokenDecimals());
+            basket = new Basket(tokens, newBacking, _prevBasket.frontTokenDecimals());
             assert(basket.size() == _prevBasket.size());
 
             // Sanity checking
