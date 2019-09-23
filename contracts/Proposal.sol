@@ -61,6 +61,7 @@ contract Proposal is Ownable {
         emit ProposalCreated(_id, _proposer, _tokens, _quantitiesIn, _quantitiesOut);
     }
 
+    /// Helper to read status from off-chain. 
     function getStatus() external view returns (Statuses) {
         return status;
     }
@@ -69,6 +70,7 @@ contract Proposal is Ownable {
     function accept(uint256 _time) external onlyOwner {
         require(status == Statuses.Created, "proposal not created");
         time = _time;
+        status = Statuses.Accepted;
         emit ProposalAccepted(id, proposer);
     }
 
@@ -80,6 +82,7 @@ contract Proposal is Ownable {
     }
 
     /// Moves a proposal from the Accepted to Completed state. 
+    /// Returns the tokens, quantitiesIn, and quantitiesOut, required to implement the proposal.
     function complete(
         uint256 _rsvSupply, 
         address _vaultAddr, 
