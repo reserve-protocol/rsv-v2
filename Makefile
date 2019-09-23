@@ -1,6 +1,6 @@
 export REPO_DIR = $(shell pwd)
 
-abi: generate.go contracts/*.sol
+contracts: generate.go contracts/*.sol
 	go run generate.go
 
 test: 
