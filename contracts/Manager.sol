@@ -123,20 +123,32 @@ contract Manager is Ownable {
 
     /// Modifies a function to run only when the contract is not paused.
     modifier notPaused() {
-        require(!paused, "contract is paused");
+        _notPaused();
         _;
     }
 
     /// Modifies a function to run only when the caller is on the whitelist, if it is enabled.
     modifier onlyWhitelist() {
-        if (useWhitelist) require(whitelist[_msgSender()], "not on whitelist");
+        _onlyWhitelist();
         _;
     }
 
     /// Modifies a function to run only when the caller is the operator account. 
     modifier onlyOperator() {
-        require(_msgSender() == operator, "operator only");
+        _onlyOperator();
         _;
+    }
+
+    function _notPaused() internal view {
+        require(!paused, "contract is paused");
+    }
+
+    function _onlyWhitelist() internal view {
+        if (useWhitelist) require(whitelist[_msgSender()], "not on whitelist");
+    }
+
+    function _onlyOperator() internal view {
+        require(_msgSender() == operator, "operator only");
     }
 
 
@@ -147,16 +159,16 @@ contract Manager is Ownable {
         _issue(_rsvQuantity);
     }
 
-    // /// Issues the maximum amount of RSV to the caller based on their allowances.
-    // function issueMax() external notPaused onlyWhitelist {
-    //     uint256 max = _calculateMaxIssuable(_msgSender());
-    //     _issue(max);
-    // }
+    /// Issues the maximum amount of RSV to the caller based on their allowances.
+    function issueMax() external notPaused onlyWhitelist {
+        uint256 max = _calculateMaxIssuable(_msgSender());
+        _issue(max);
+    }
 
-    // /// Redeem a quantity of RSV for collateral tokens. 
-    // function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
-    //     _redeem(_rsvQuantity);
-    // }
+    /// Redeem a quantity of RSV for collateral tokens. 
+    function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+        _redeem(_rsvQuantity);
+    }
 
     // /// Redeem `allowance` of RSV from the caller's account. 
     // function redeemMax() external notPaused onlyWhitelist {

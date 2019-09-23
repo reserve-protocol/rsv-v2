@@ -33,8 +33,12 @@ contract Ownable is Context {
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() {
-        require(_msgSender() == _owner, "caller is not owner");
+        _onlyOwner();
         _;
+    }
+
+    function _onlyOwner() internal view {
+        require(_msgSender() == _owner, "caller is not owner");
     }
 
     /**
