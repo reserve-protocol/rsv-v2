@@ -39,11 +39,6 @@ contract Proposal is Ownable {
 
     Basket public basket;
 
-    // Events
-    event ProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] quantitiesIn, uint256[] quantitiesOut);
-    event ProposalAccepted(uint256 indexed id, address indexed proposer);
-    event ProposalFinished(uint256 indexed id, address indexed proposer);
-    event ProposalClosed(uint256 indexed id, address indexed proposer);
 
     constructor(
         uint256 _id,
@@ -59,7 +54,6 @@ contract Proposal is Ownable {
         (id, proposer, tokens, quantitiesIn, quantitiesOut, basket) = 
             (_id, _proposer, _tokens, _quantitiesIn, _quantitiesOut, _basket);
         status = Statuses.Created;
-        emit ProposalCreated(_id, _proposer, _tokens, _quantitiesIn, _quantitiesOut);
     }
 
     /// Helper to read status from off-chain. 
@@ -72,14 +66,12 @@ contract Proposal is Ownable {
         require(status == Statuses.Created, "proposal not created");
         time = _time;
         status = Statuses.Accepted;
-        emit ProposalAccepted(id, proposer);
     }
 
     /// Closes a proposal if it has not been completed. 
     function close() external onlyOwner {
         require(status != Statuses.Completed);
         status = Statuses.Closed;
-        emit ProposalClosed(id, proposer);
     }
 
     /// Moves a proposal from the Accepted to Completed state. 
@@ -110,7 +102,6 @@ contract Proposal is Ownable {
         quantitiesIn = _prevBasket.newQuantitiesRequired(_rsvSupply, basket);
         quantitiesOut = basket.newQuantitiesRequired(_rsvSupply, _prevBasket);
         status = Statuses.Completed;
-        emit ProposalFinished(id, proposer);
         return (tokens, quantitiesIn, quantitiesOut);
     }
 }

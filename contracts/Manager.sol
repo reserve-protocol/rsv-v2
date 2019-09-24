@@ -104,6 +104,13 @@ contract Manager is Ownable {
     event OperatorChanged(address indexed account);
     event SeigniorageChanged(uint256 oldVal, uint256 newVal);
 
+    // Proposals
+    event NewBasketProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] backing);
+    event NewQuantityAdjustmentProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] quantitiesIn, uint256[] quantitiesOut);
+    event ProposalAccepted(uint256 indexed id, address indexed proposer);
+    event ProposalCanceled(uint256 indexed id, address indexed proposer, address indexed canceler);
+    event ProposalExecuted(uint256 indexed id, address indexed proposer, address indexed executor);
+
 
     // ============================ Constructor ===============================
 
@@ -196,6 +203,13 @@ contract Manager is Ownable {
             Basket(0)
         );
 
+        emit NewQuantityAdjustmentProposalCreated(
+            proposalsLength, 
+            _msgSender(), 
+            basket.getTokens(), 
+            _amountsIn, 
+            _amountsOut
+        );
         return ++proposalsLength;
     }
 
@@ -227,6 +241,7 @@ contract Manager is Ownable {
             new Basket(_tokens, _backing, rsvDecimals)
         );
 
+        emit NewBasketProposalCreated(proposalsLength, _msgSender(), _tokens, _backing);
         return ++proposalsLength;
     }
 
@@ -234,6 +249,7 @@ contract Manager is Ownable {
     function acceptProposal(uint256 _proposalID) external onlyOperator {
         require(proposalsLength > _proposalID, "proposals length < id");
         proposals[_proposalID].accept(now + delay);
+        emit ProposalAccepted(_proposalID, proposals[_proposalID].proposer());
     }
 
     // Cancels a proposal. This can be done anytime before it is enacted by any of:
@@ -246,6 +262,7 @@ contract Manager is Ownable {
             "cannot cancel"
         );
         proposals[_proposalID].close();
+        emit ProposalCanceled(_proposalID, proposals[_proposalID].proposer(), _msgSender());
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
@@ -266,6 +283,7 @@ contract Manager is Ownable {
         // Vault -> Proposer
         vault.batchWithdrawTo(tokens, quantitiesOut, proposals[_proposalID].proposer());
         _assertFullyCollateralized();
+        emit ProposalExecuted(_proposalID, proposals[_proposalID].proposer(), _msgSender());
     }
 
     /// Pause the contract.
