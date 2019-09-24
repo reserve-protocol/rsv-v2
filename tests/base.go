@@ -39,6 +39,7 @@ type TestSuite struct {
 		bind.ContractBackend
 		TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	}
+	owner                 common.Address
 	reserve               *abi.Reserve
 	reserveAddress        common.Address
 	eternalStorage        *abi.ReserveEternalStorage
@@ -109,22 +110,22 @@ func (s *TestSuite) _requireTxStatus(tx *types.Transaction, err error, status ui
 	return receipt
 }
 
-// assertBalance asserts that the Reserve Dollar balance of `address` is `amount`.
-func (s *TestSuite) assertBalance(address common.Address, amount *big.Int) {
+// assertRSVBalance asserts that the Reserve Dollar balance of `address` is `amount`.
+func (s *TestSuite) assertRSVBalance(address common.Address, amount *big.Int) {
 	balance, err := s.reserve.BalanceOf(nil, address)
 	s.NoError(err)
 	s.Equal(amount.String(), balance.String()) // assert.Equal can mis-compare big.Ints, so compare strings instead
 }
 
-// assertAllowance asserts that the allowance of Reserve Dollars that `owner` has given `spender` is `amount`.
-func (s *TestSuite) assertAllowance(owner, spender common.Address, amount *big.Int) {
+// assertRSVAllowance asserts that the allowance of Reserve Dollars that `owner` has given `spender` is `amount`.
+func (s *TestSuite) assertRSVAllowance(owner, spender common.Address, amount *big.Int) {
 	allowance, err := s.reserve.Allowance(nil, owner, spender)
 	s.NoError(err)
 	s.Equal(amount.String(), allowance.String())
 }
 
-// assertTotalSupply asserts that the total supply of Reserve Dollars is `amount`.
-func (s *TestSuite) assertTotalSupply(amount *big.Int) {
+// assertRSVTotalSupply asserts that the total supply of Reserve Dollars is `amount`.
+func (s *TestSuite) assertRSVTotalSupply(amount *big.Int) {
 	totalSupply, err := s.reserve.TotalSupply(nil)
 	s.NoError(err)
 	s.Equal(amount.String(), totalSupply.String())

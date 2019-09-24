@@ -61,6 +61,8 @@ func (s *ManagerSuite) TearDownSuite() {
 
 // BeforeTest runs before each test in the suite.
 func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
+	s.owner = s.account[0].address()
+
 	// Re-deploy Reserve and store a handle to the Go binding and the contract address.
 	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
 
@@ -69,7 +71,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	}
 
 	s.requireTx(tx, err)(abi.ReserveOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.account[0].address(),
+		PreviousOwner: zeroAddress(), NewOwner: s.owner,
 	})
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
@@ -87,7 +89,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 
 	s.logParsers[vaultAddress] = vault
 	s.requireTx(tx, err)(abi.VaultOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.account[0].address(),
+		PreviousOwner: zeroAddress(), NewOwner: s.owner,
 	})
 	s.vault = vault
 	s.vaultAddress = vaultAddress
@@ -99,7 +101,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 
 	s.logParsers[managerAddress] = manager
 	s.requireTx(tx, err)(abi.ManagerOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.account[0].address(),
+		PreviousOwner: zeroAddress(), NewOwner: s.owner,
 	})
 	s.manager = manager
 	s.managerAddress = managerAddress
@@ -115,12 +117,38 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 		abi.ReserveFreezerChanged{NewFreezer: managerAddress},
 	)
 	s.requireTx(s.reserve.ChangeOwner(s.signer, managerAddress))(abi.ReserveOwnershipTransferred{
-		PreviousOwner: s.account[0].address(), NewOwner: managerAddress,
+		PreviousOwner: s.owner, NewOwner: managerAddress,
 	})
 	s.requireTx(s.vault.ChangeOwner(s.signer, managerAddress))(abi.VaultOwnershipTransferred{
-		PreviousOwner: s.account[0].address(), NewOwner: managerAddress,
+		PreviousOwner: s.owner, NewOwner: managerAddress,
 	})
-
 }
 
 func (s *ManagerSuite) TestDeploy() {}
+
+// TestConstructor tests that the constructor sets initial state appropriately.
+func (s *ManagerSuite) TestConstructor() {
+	vaultAddr, err := s.manager.Vault(nil)
+	s.Require().NoError(err)
+	s.Equal(s.vaultAddress, vaultAddr)
+
+	rsvAddr, err := s.manager.Rsv(nil)
+	s.Require().NoError(err)
+	s.Equal(s.reserveAddress, rsvAddr)
+
+	whitelisted, err := s.manager.Whitelist(nil, s.owner)
+	s.Require().NoError(err)
+	s.Equal(true, whitelisted)
+
+	seigniorage, err := s.manager.Seigniorage(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(0).String(), seigniorage.String())
+
+	paused, err := s.manager.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
+
+	useWhitelist, err := s.manager.UseWhitelist(nil)
+	s.Require().NoError(err)
+	s.Equal(true, useWhitelist)
+}
