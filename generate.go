@@ -29,14 +29,15 @@ type target struct {
 }
 
 var targets = []target{
-	target{Filename: "contracts/Reserve.sol", ContractName: "Reserve", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
-	target{Filename: "contracts/ReserveV2.sol", ContractName: "ReserveV2", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
-	target{Filename: "contracts/ReserveEternalStorage.sol", ContractName: "ReserveEternalStorage", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
 	target{Filename: "contracts/Basket.sol", ContractName: "Basket", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/Manager.sol", ContractName: "Manager", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/Proposal.sol", ContractName: "Proposal", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/Vault.sol", ContractName: "Vault", SolcVersion: "0.5.8", OptimizeRuns: "1"},
-	target{Filename: "contracts/Ownable.sol", ContractName: "Ownable", SolcVersion: "0.5.8", OptimizeRuns: "1"},
+	target{Filename: "contracts/rsv/Reserve.sol", ContractName: "Reserve", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
+	target{Filename: "contracts/rsv/ReserveEternalStorage.sol", ContractName: "ReserveEternalStorage", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
+	target{Filename: "contracts/ownership/Ownable.sol", ContractName: "Ownable", SolcVersion: "0.5.8", OptimizeRuns: "1"},
+	target{Filename: "contracts/test/ReserveV2.sol", ContractName: "ReserveV2", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
+	target{Filename: "contracts/test/BasicERC20.sol", ContractName: "BasicERC20", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
 }
 
 func main() {
@@ -48,6 +49,7 @@ func main() {
 		Srcmap        string
 		SrcmapRuntime string `json:"srcmap-runtime"`
 	}
+	base := os.ExpandEnv(os.Getenv("REPO_DIR"))
 	for _, t := range targets {
 		var compilationResult struct {
 			Contracts  map[string]compiledOutput
@@ -60,7 +62,7 @@ func main() {
 			"solc",
 			append(
 				[]string{
-					"--allow-paths contracts",
+					"--allow-paths " + base + "/contracts",
 					"--optimize",
 					"--optimize-runs=" + t.OptimizeRuns,
 					"--combined-json=abi,bin,bin-runtime,srcmap,srcmap-runtime",

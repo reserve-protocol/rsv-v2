@@ -2,7 +2,7 @@ pragma solidity ^0.5.8;
 
 import "./zeppelin/token/ERC20/IERC20.sol";
 import "./zeppelin/token/ERC20/SafeERC20.sol";
-import "./Ownable.sol";
+import "./ownership/Ownable.sol";
 import "./Basket.sol";
 
 /**
@@ -33,7 +33,7 @@ contract Proposal is Ownable {
     address[] public tokens;
     uint256[] public quantitiesIn; // token quantities to be added to the Vault
     uint256[] public quantitiesOut; // total quantities to be withdrawn from the Vault
-    
+
     enum Statuses { Created, Accepted, Closed, Completed }
     Statuses status;
 

@@ -1,7 +1,7 @@
 pragma solidity ^0.5.8;
 
-import "./Reserve.sol";
-import "./ReserveEternalStorage.sol";
+import "../rsv/Reserve.sol";
+import "../rsv/ReserveEternalStorage.sol";
 
 /**
  * @dev A version of the Reserve Token for testing upgrades.
