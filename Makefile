@@ -1,5 +1,8 @@
 export REPO_DIR = $(shell pwd)
 
+clean:
+	rm -rf abi evm sol-coverage-evm
+
 contracts: generate.go contracts/*.sol
 	go run generate.go
 
