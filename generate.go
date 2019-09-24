@@ -21,6 +21,19 @@ func outputGoFile(contractName string) string {
 	return fmt.Sprintf("abi/%v.go", contractName)
 }
 
+const (
+	combinedJsonDir = "evm"
+	solCovDir       = "sol-coverage-evm"
+)
+
+func combinedJsonFilename(contractName string) string {
+	return fmt.Sprintf("%v/%v.json", combinedJsonDir, contractName)
+}
+
+func solCovFilename(contractName string) string {
+	return fmt.Sprintf("%v/%v.json", solCovDir, contractName)
+}
+
 type target struct {
 	Filename     string
 	ContractName string
@@ -40,6 +53,12 @@ var targets = []target{
 	target{Filename: "contracts/test/BasicERC20.sol", ContractName: "BasicERC20", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
 }
 
+/* TODO: This would be cleaner as a few separate tools, tied together by Make:
+   - compile combined-json files from .sol files. (That's just solc with the right args)
+   - produce Go bindings from combined-json files.
+   - convert combined-json files into sol-coverage format json files. (That's just JSON rewriting.)
+*/
+
 func main() {
 	// Compile.
 	type compiledOutput struct {
@@ -50,14 +69,22 @@ func main() {
 		SrcmapRuntime string `json:"srcmap-runtime"`
 	}
 	base := os.ExpandEnv(os.Getenv("REPO_DIR"))
+
 	for _, t := range targets {
 		var compilationResult struct {
 			Contracts  map[string]compiledOutput
 			SourceList []string
 		}
 
-		// Run solc.
-		stdout := new(bytes.Buffer)
+		// Output combined-json to evm/ directory.
+		check(os.MkdirAll(combinedJsonDir, 0755), "creating combined-json evm directory")
+		jsonName := combinedJsonFilename(t.ContractName)
+		combinedJson, err := os.Create(jsonName)
+		if err != nil {
+			log.Fatalf("generate.go: %v", err)
+		}
+
+		// Run solc, generate combined-json files.
 		cmd := exec.Command(
 			"solc",
 			append(
@@ -65,30 +92,39 @@ func main() {
 					"--allow-paths " + base + "/contracts",
 					"--optimize",
 					"--optimize-runs=" + t.OptimizeRuns,
-					"--combined-json=abi,bin,bin-runtime,srcmap,srcmap-runtime",
+					"--combined-json=abi,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc",
 				},
 				t.Filename,
 			)...,
 		)
 		cmd.Env = append(cmd.Env, "SOLC_VERSION="+t.SolcVersion)
 		cmd.Stdin = os.Stdin // solc doesn't need stdin to be set, but trailofbits' solc-select does
-		cmd.Stdout = stdout
+		cmd.Stdout = combinedJson
 		cmd.Stderr = os.Stderr
-		err := cmd.Run()
+
+		err = cmd.Run()
 		if err != nil {
-			log.Fatalf("%s\nsolc failed: %v\n", stdout.Bytes(), err)
+			log.Fatalf("solc failed to build %s: %v\n", jsonName, err)
 		}
 
-		// Parse the JSON output from solc.
-		check(json.NewDecoder(bytes.NewReader(stdout.Bytes())).Decode(&compilationResult), "parsing solc output\n"+stdout.String())
+		_, err = combinedJson.Seek(0, 0)
+		if err != nil {
+			log.Fatalf("Failed to return to beginning of %v: %v", jsonName, err)
+		}
+
+		// Parse the combined-json outputs from solc.
+		check(json.NewDecoder(combinedJson).Decode(&compilationResult), "parsing solc output in "+jsonName)
+		combinedJson.Close()
 
 		output := compilationResult.Contracts[t.Filename+":"+t.ContractName]
+
 		// Generate bindings.
+		check(os.MkdirAll("abi", 0755), "creating abi directory")
 		code, err := bind.Bind([]string{t.ContractName}, []string{output.ABI}, []string{output.Bin}, "abi", bind.LangGo)
 		check(err, "generating Go bindings")
 
 		// Write to .go file.
-		check(os.MkdirAll("abi", 0755), "creating abi directory")
+
 		name := outputGoFile(t.ContractName)
 		check(ioutil.WriteFile(name, []byte(code), 0644), "writing "+name)
 
@@ -186,8 +222,8 @@ func main() {
 			// sources records an ordering on source files.
 			// sol-compiler uses a different format from solc for this,
 			// so here we're converting from the former to the latter.
+			check(os.MkdirAll(solCovDir, 0755), "creating sol-coverage evm directory")
 
-			check(os.MkdirAll("artifacts", 0755), "creating artifacts directory")
 			// m is a helper for writing succinct json object literals
 			type m map[string]interface{}
 
@@ -217,7 +253,7 @@ func main() {
 			})
 			check(err, "json-encoding sol-compiler-style artifact")
 			check(
-				ioutil.WriteFile("artifacts/"+t.ContractName+".json", b, 0644),
+				ioutil.WriteFile(solCovFilename(t.ContractName), b, 0644),
 				"writing sol-compiler-style artifact",
 			)
 		}
