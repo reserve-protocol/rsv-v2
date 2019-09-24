@@ -70,7 +70,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 		reserveAddress: reserve,
 	}
 
-	s.requireTx(tx, err)(abi.ReserveOwnershipTransferred{
+	s.requireTxStrongly(tx, err)(abi.ReserveOwnershipTransferred{
 		PreviousOwner: zeroAddress(), NewOwner: s.owner,
 	})
 	s.reserve = reserve
@@ -88,7 +88,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	vaultAddress, tx, vault, err := abi.DeployVault(s.signer, s.node)
 
 	s.logParsers[vaultAddress] = vault
-	s.requireTx(tx, err)(abi.VaultOwnershipTransferred{
+	s.requireTxStrongly(tx, err)(abi.VaultOwnershipTransferred{
 		PreviousOwner: zeroAddress(), NewOwner: s.owner,
 	})
 	s.vault = vault
@@ -100,26 +100,26 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	)
 
 	s.logParsers[managerAddress] = manager
-	s.requireTx(tx, err)(abi.ManagerOwnershipTransferred{
+	s.requireTxStrongly(tx, err)(abi.ManagerOwnershipTransferred{
 		PreviousOwner: zeroAddress(), NewOwner: s.owner,
 	})
 	s.manager = manager
 	s.managerAddress = managerAddress
 
 	// Set all auths to Manager
-	s.requireTx(s.reserve.ChangeMinter(s.signer, managerAddress))(
+	s.requireTxStrongly(s.reserve.ChangeMinter(s.signer, managerAddress))(
 		abi.ReserveMinterChanged{NewMinter: managerAddress},
 	)
-	s.requireTx(s.reserve.ChangePauser(s.signer, managerAddress))(
+	s.requireTxStrongly(s.reserve.ChangePauser(s.signer, managerAddress))(
 		abi.ReservePauserChanged{NewPauser: managerAddress},
 	)
-	s.requireTx(s.reserve.ChangeFreezer(s.signer, managerAddress))(
+	s.requireTxStrongly(s.reserve.ChangeFreezer(s.signer, managerAddress))(
 		abi.ReserveFreezerChanged{NewFreezer: managerAddress},
 	)
-	s.requireTx(s.reserve.ChangeOwner(s.signer, managerAddress))(abi.ReserveOwnershipTransferred{
+	s.requireTxStrongly(s.reserve.ChangeOwner(s.signer, managerAddress))(abi.ReserveOwnershipTransferred{
 		PreviousOwner: s.owner, NewOwner: managerAddress,
 	})
-	s.requireTx(s.vault.ChangeOwner(s.signer, managerAddress))(abi.VaultOwnershipTransferred{
+	s.requireTxStrongly(s.vault.ChangeOwner(s.signer, managerAddress))(abi.VaultOwnershipTransferred{
 		PreviousOwner: s.owner, NewOwner: managerAddress,
 	})
 }

@@ -58,17 +58,17 @@ type TestSuite struct {
 
 var coverageEnabled = os.Getenv("COVERAGE_ENABLED") != ""
 
-// requireTx requires that a transaction is successfully mined and does
+// requireTxStrongly requires that a transaction is successfully mined and does
 // not revert. It also takes an extra error argument, and checks that the
 // error is nil. This signature allows the function to directly wrap our
 // abigen'd mutator calls.
 //
-// requireTx returns a closure that can be used to assert the list of events
+// requireTxStrongly returns a closure that can be used to assert the list of events
 // that were emitted during the transaction. This API is a bit weird -- it would
-// be more natural to pass the events in to the `requireTx` call itself -- but
+// be more natural to pass the events in to the `requireTxStrongly` call itself -- but
 // this is the cleanest way that is compatible with directly wrapping the abigen'd
 // calls, without using intermediate placeholder variables in calling code.
-func (s *TestSuite) requireTx(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
+func (s *TestSuite) requireTxStrongly(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
 	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
 
 	// return a closure that can take a varargs list of events,
@@ -88,7 +88,21 @@ func (s *TestSuite) requireTx(tx *types.Transaction, err error) func(assertEvent
 	}
 }
 
-// requireTxFails is like requireTx, but it requires that the transaction either
+// requireTxWeakly is like requireTxStrongly but does not parse events for correctness.
+// LogParsers are keyed by contract address. Contracts that deploy other contracts
+// instrumentally will end up emitting events that cannot be parsed without making assumption
+// In these cases, instead use requireTxWeakly to simply do a comparison of event counts.
+func (s *TestSuite) requireTxWeakly(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
+	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
+
+	// return a closure that can take a varargs list of events,
+	// and assert that the transaction generates those events.
+	return func(assertEvent ...fmt.Stringer) {
+		s.Equal(len(assertEvent), len(receipt.Logs), "did not get the expected number of events")
+	}
+}
+
+// requireTxFails is like requireTxStrongly, but it requires that the transaction either
 // reverts or is not successfully made in the first place due to gas estimation
 // failing.
 func (s *TestSuite) requireTxFails(tx *types.Transaction, err error) {
