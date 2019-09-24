@@ -164,22 +164,22 @@ contract Manager is Ownable {
         _issue(_rsvQuantity);
     }
 
-    /// Issues the maximum amount of RSV to the caller based on their allowances.
-    function issueMax() external notPaused onlyWhitelist {
-        uint256 max = _calculateMaxIssuable(_msgSender());
-        _issue(max);
-    }
+    // /// Issues the maximum amount of RSV to the caller based on their allowances.
+    // function issueMax() external notPaused onlyWhitelist {
+    //     uint256 max = _calculateMaxIssuable(_msgSender());
+    //     _issue(max);
+    // }
 
     /// Redeem a quantity of RSV for collateral tokens. 
     function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
         _redeem(_rsvQuantity);
     }
 
-    /// Redeem `allowance` of RSV from the caller's account. 
-    function redeemMax() external notPaused onlyWhitelist {
-        uint256 max = rsv.allowance(_msgSender(), address(this));
-        _redeem(max);
-    }
+    // /// Redeem `allowance` of RSV from the caller's account. 
+    // function redeemMax() external notPaused onlyWhitelist {
+    //     uint256 max = rsv.allowance(_msgSender(), address(this));
+    //     _redeem(max);
+    // }
 
     /**
      * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
@@ -327,11 +327,6 @@ contract Manager is Ownable {
         emit ProposalsCleared();
     }
 
-    /// Get the tokens in the basket. 
-    function basketTokens() external view returns (address[] memory) {
-        return basket.getTokens();
-    }
-
     /// Get quantities required to issue a quantity of RSV, in terms of basket tokens.  
     function toIssue(uint256 _rsvQuantity) external view returns (uint256[] memory) {
         return _quantitiesRequiredToIssue(_rsvQuantity);
@@ -385,26 +380,26 @@ contract Manager is Ownable {
         }
     }
 
-    /// Calculates the maximum we could issue to an address based on their allowances.
-    function _calculateMaxIssuable(address funder) internal view returns(uint256) {
-        uint256 rsvDecimalsFactor = uint256(10) ** rsvDecimals;
-        uint256 allowance;
-        uint256 balance;
-        uint256 available;
-        uint256 issuable;
-        uint256 minIssuable;
+    // /// Calculates the maximum we could issue to an address based on their allowances.
+    // function _calculateMaxIssuable(address funder) internal view returns(uint256) {
+    //     uint256 rsvDecimalsFactor = uint256(10) ** rsvDecimals;
+    //     uint256 allowance;
+    //     uint256 balance;
+    //     uint256 available;
+    //     uint256 issuable;
+    //     uint256 minIssuable;
 
-        for (uint i = 0; i < basket.size(); i ++) {
-            allowance = IERC20(basket.tokens(i)).allowance(funder, address(this));
-            balance = IERC20(basket.tokens(i)).balanceOf(funder);
-            available = allowance;
-            if (balance < available) available = balance;
+    //     for (uint i = 0; i < basket.size(); i ++) {
+    //         allowance = IERC20(basket.tokens(i)).allowance(funder, address(this));
+    //         balance = IERC20(basket.tokens(i)).balanceOf(funder);
+    //         available = allowance;
+    //         if (balance < available) available = balance;
 
-            issuable = rsvDecimalsFactor.mul(available).div(basket.backing(i));
-            if (issuable < minIssuable) minIssuable = issuable;
-        }
-        return minIssuable;
-    }
+    //         issuable = rsvDecimalsFactor.mul(available).div(basket.backing(i));
+    //         if (issuable < minIssuable) minIssuable = issuable;
+    //     }
+    //     return minIssuable;
+    // }
 
     /// Ensure that the Vault is fully collateralized. 
     function _assertFullyCollateralized() internal view {
