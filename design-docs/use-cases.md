@@ -40,7 +40,7 @@ When in doubt, state each of these as: "A {user} can {act} in order to {satisfy 
 
 ## Economics of Issuance and Redemption
 1. The manager maintains which tokens are in the basket, and the basket weight for each.
-    - These values can only be changed by the owner.
+    - These values can only be changed with permission from the owner.
 
 2. At all times, for every basket asset, (the vault's balance of that asset) >= (RSV supply) times (that asset's basket weight).
 
@@ -80,7 +80,6 @@ Upon deployment:
 - The deploying account is Owner.
 - RSV and the Manager are paused.
 - RSV balance is zero.
-- 
 
 ## Pausing and Upgrading
 
