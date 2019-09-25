@@ -19,7 +19,7 @@ contract Vault is Ownable {
         address indexed newManager
     );
 
-    event BatchWithdrawal(address[] indexed tokens, uint256[] indexed quantities);
+    event BatchWithdrawal(address[] tokens, uint256[] quantities, address indexed to);
 
     constructor() public {
         // Initialize manager as _msgSender()
@@ -53,6 +53,6 @@ contract Vault is Ownable {
                 IERC20(tokens[i]).safeTransfer(to, quantities[i]);
             }
         }        
-        emit BatchWithdrawal(tokens, quantities);
+        emit BatchWithdrawal(tokens, quantities, to);
     }
 }
