@@ -37,6 +37,7 @@ contract Proposal is Ownable {
     enum Statuses { Created, Accepted, Closed, Completed }
     Statuses status;
 
+    uint256[] basketBacking;
     Basket public basket;
 
 
@@ -87,21 +88,33 @@ contract Proposal is Ownable {
         require(now > time, "wait to execute");
 
         if (basket == Basket(0)) {
-            uint256[] memory newBacking = new uint256[](_prevBasket.size());
-
             uint256 newQuantity;
-            for (uint i = 0; i < _prevBasket.size(); i++) {
+            for (uint i = 0; i < tokens.length; i++) {
                 newQuantity = IERC20(tokens[i]).balanceOf(_vaultAddr) + quantitiesIn[i] - quantitiesOut[i];
                 require(newQuantity >= 0, "proposal removes too many tokens");
-                newBacking[i] = newQuantity.mul(_prevBasket.frontTokenDecimals()).div(_rsvSupply);
+                basketBacking.push(newQuantity.mul(_prevBasket.frontTokenDecimals()).div(_rsvSupply));
             }
 
-            basket = new Basket(tokens, newBacking, _prevBasket.frontTokenDecimals());
-            assert(basket.size() == _prevBasket.size());
+            // Carry over any tokens from previous basket
+            for (uint j = 0; j < _prevBasket.size(); j++) {
+                if (!_has(tokens, _prevBasket.tokens(j))) {
+                    tokens.push(_prevBasket.tokens(j));
+                    basketBacking.push(_prevBasket.backing(j));
+                }
+            }
+
+            basket = new Basket(tokens, basketBacking, _prevBasket.frontTokenDecimals());
         }
         quantitiesIn = _prevBasket.newQuantitiesRequired(_rsvSupply, basket);
         quantitiesOut = basket.newQuantitiesRequired(_rsvSupply, _prevBasket);
         status = Statuses.Completed;
         return (tokens, quantitiesIn, quantitiesOut);
+    }
+
+    function _has(address[] memory _addrArray, address _addr) internal pure returns(bool) {
+        for (uint i = 0; i < _addrArray.length; i++) {
+            if (_addrArray[i] == _addr) return true;
+        }
+        return false;
     }
 }

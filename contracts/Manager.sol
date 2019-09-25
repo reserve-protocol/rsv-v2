@@ -186,7 +186,8 @@ contract Manager is Ownable {
      * proposal does not change token addresses. Therefore, if you want to introduce a new token,
      * first use the other proposal type. 
      */ 
-    function proposeQuantitiesAdjustment( 
+    function proposeQuantitiesAdjustment(
+        address[] calldata _tokens,
         uint256[] calldata _amountsIn,
         uint256[] calldata _amountsOut
     ) 
@@ -197,7 +198,7 @@ contract Manager is Ownable {
         proposals[proposalsLength] = new Proposal(
             proposalsLength,
             _msgSender(),
-            basket.getTokens(),
+            _tokens,
             _amountsIn,
             _amountsOut,
             Basket(0)
@@ -206,7 +207,7 @@ contract Manager is Ownable {
         emit NewQuantityAdjustmentProposalCreated(
             proposalsLength, 
             _msgSender(), 
-            basket.getTokens(), 
+            _tokens,
             _amountsIn, 
             _amountsOut
         );
@@ -283,6 +284,7 @@ contract Manager is Ownable {
         // Vault -> Proposer
         vault.batchWithdrawTo(tokens, quantitiesOut, proposals[_proposalID].proposer());
         _assertFullyCollateralized();
+        basket = proposals[_proposalID].basket();
         emit ProposalExecuted(_proposalID, proposals[_proposalID].proposer(), _msgSender());
     }
 
