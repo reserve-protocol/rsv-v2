@@ -98,7 +98,7 @@ contract Manager is Ownable {
     event Unpaused(address indexed account);
 
     // Changes
-    event OperatorChanged(address indexed account);
+    event OperatorChanged(address indexed oldAccount, address indexed newAccount);
     event SeigniorageChanged(uint256 oldVal, uint256 newVal);
     event WhitelistChanged(address indexed user, bool val);
     event DelayChanged(uint256 oldVal, uint256 newVal);
@@ -322,7 +322,7 @@ contract Manager is Ownable {
     }
 
     /// Add or remove user from whitelist.
-    function changeWhitelist(address _user, bool _val) external onlyOwner {
+    function setWhitelist(address _user, bool _val) external onlyOwner {
         whitelist[_user] = _val;
         emit WhitelistChanged(_user, _val);
     }
@@ -334,8 +334,8 @@ contract Manager is Ownable {
 
     /// Set the operator
     function setOperator(address _operator) external onlyOwner {
+        emit OperatorChanged(operator, _operator);
         operator = _operator;
-        emit OperatorChanged(operator);
     }
 
     /// Set the seigniorage, in BPS. 
