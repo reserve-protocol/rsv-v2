@@ -207,6 +207,7 @@ contract Manager is Ownable {
     ) 
         external returns(uint256)
     {
+        require(_tokens.length == _amountsIn.length, "token quantities mismatched");
         require(_amountsIn.length == _amountsOut.length, "quantities mismatched");
 
         proposals[proposalsLength] = new Proposal(
