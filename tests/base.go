@@ -39,7 +39,7 @@ type TestSuite struct {
 		bind.ContractBackend
 		TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	}
-	owner                 common.Address
+	owner                 account
 	reserve               *abi.Reserve
 	reserveAddress        common.Address
 	eternalStorage        *abi.ReserveEternalStorage

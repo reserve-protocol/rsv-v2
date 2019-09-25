@@ -36,8 +36,8 @@ contract Vault is Ownable {
     /// Changes the manager account. 
     function changeManager(address newManager) external onlyOwner {
         require(newManager != address(0));
-        manager = newManager;
         emit ManagerTransferred(manager, newManager);
+        manager = newManager;
     }
 
     /// Withdraws multiple tokens from the Vault and sends them to `to`. 
