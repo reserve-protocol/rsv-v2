@@ -288,8 +288,8 @@ contract Manager is Ownable {
 
         // Vault -> Proposer
         vault.batchWithdrawTo(tokens, quantitiesOut, proposals[_proposalID].proposer());
-        _assertFullyCollateralized();
         basket = proposals[_proposalID].basket();
+        _assertFullyCollateralized();
         emit ProposalExecuted(_proposalID, proposals[_proposalID].proposer(), _msgSender());
     }
 
