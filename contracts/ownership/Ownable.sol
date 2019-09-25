@@ -57,6 +57,7 @@ contract Ownable is Context {
      */
     function acceptOwnership() external {
         require(_nominatedOwner == _msgSender() || _owner == _msgSender(), "unauthorized");
+        require(_nominatedOwner != address(0), "cannot accept for 0 address");
         emit OwnershipTransferred(_owner, _nominatedOwner);
         _owner = _nominatedOwner;
     }
