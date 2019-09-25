@@ -157,6 +157,18 @@ contract Manager is Ownable {
     }
 
 
+    // ============================= Public ==================================
+
+    /// Ensure that the Vault is fully collateralized. 
+    function isFullyCollateralized() public view returns(bool) {
+        uint256[] memory expected = basket.quantitiesRequired(rsv.totalSupply());
+        for (uint i = 0; i < basket.getSize(); i++) {
+            if (IERC20(basket.tokens(i)).balanceOf(address(vault)) < expected[i])
+                return false;
+        }
+        return true;
+    }
+
     // ============================= Externals ================================
 
     /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
@@ -289,7 +301,7 @@ contract Manager is Ownable {
         // Vault -> Proposer
         vault.batchWithdrawTo(tokens, quantitiesOut, proposals[_proposalID].proposer());
         basket = proposals[_proposalID].basket();
-        _assertFullyCollateralized();
+        assert(isFullyCollateralized());
         emit ProposalExecuted(_proposalID, proposals[_proposalID].proposer(), _msgSender());
     }
 
@@ -355,7 +367,7 @@ contract Manager is Ownable {
         // Compensate with RSV.
         rsv.mint(_msgSender(), _rsvQuantity);
 
-        _assertFullyCollateralized();
+        assert(isFullyCollateralized());
         emit Issuance(_msgSender(), _rsvQuantity);
     }
 
@@ -373,7 +385,7 @@ contract Manager is Ownable {
             _msgSender()
         );
 
-        _assertFullyCollateralized();
+        assert(isFullyCollateralized());
         emit Redemption(_msgSender(), _rsvQuantity);
     }
 
@@ -408,12 +420,4 @@ contract Manager is Ownable {
     //     }
     //     return minIssuable;
     // }
-
-    /// Ensure that the Vault is fully collateralized. 
-    function _assertFullyCollateralized() internal view {
-        uint256[] memory expected = basket.quantitiesRequired(rsv.totalSupply());
-        for (uint i = 0; i < basket.getSize(); i++) {
-            assert(IERC20(basket.tokens(i)).balanceOf(address(vault)) >= expected[i]);
-        }
-    }
 }
