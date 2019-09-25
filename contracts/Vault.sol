@@ -48,6 +48,7 @@ contract Vault is Ownable {
     ) 
         external onlyManager 
     {
+        require(tokens.length == quantities.length, "mismatched token quantities");
         for (uint i = 0; i < tokens.length; i++) {
             if (quantities[i] > 0) {
                 IERC20(tokens[i]).safeTransfer(to, quantities[i]);

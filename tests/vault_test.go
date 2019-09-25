@@ -169,3 +169,87 @@ func (s *VaultSuite) TestBatchWithdrawTo() {
 		s.Equal(expectedAmounts[i], balance)
 	}
 }
+
+// TestBatchWithdrawToVoidWithdrawal makes sure we perform the void withdrawal.
+func (s *VaultSuite) TestBatchWithdrawToVoidWithdrawal() {
+	receiver := s.account[2]
+	var initialAmounts []*big.Int
+	var withdrawAmounts []*big.Int
+	var expectedAmounts []*big.Int
+
+	// Determine what amounts to transfer and expect.
+	for _, erc20 := range s.erc20s {
+		balance, err := erc20.BalanceOf(nil, s.vaultAddress)
+		s.Require().NoError(err)
+
+		val := bigInt(0)
+		initialAmounts = append(initialAmounts, balance)
+		withdrawAmounts = append(withdrawAmounts, val)
+		expectedAmounts = append(expectedAmounts, balance.Sub(balance, val))
+	}
+
+	// Perform the void withdrawal.
+	s.requireTxStrongly(
+		s.vault.BatchWithdrawTo(s.signer, s.erc20Addresses, withdrawAmounts, receiver.address()))(
+		abi.VaultBatchWithdrawal{
+			Tokens: s.erc20Addresses, Quantities: withdrawAmounts, To: receiver.address(),
+		},
+	)
+
+	// Check that balances haven't changed.
+	for i, erc20 := range s.erc20s {
+		balance, err := erc20.BalanceOf(nil, s.vaultAddress)
+		s.Require().NoError(err)
+		s.Equal(expectedAmounts[i], balance)
+	}
+}
+
+// TestBatchWithdrawToBadInput makes sure we perform the void withdrawal.
+func (s *VaultSuite) TestBatchWithdrawToBadInput() {
+	receiver := s.account[2]
+	var withdrawAmounts []*big.Int
+
+	// Determine what amounts to transfer and expect.
+	for i, _ := range s.erc20s {
+		val := bigInt(uint32(i + 1))
+		withdrawAmounts = append(withdrawAmounts, val)
+	}
+	// Add one more to make it break
+	withdrawAmounts = append(withdrawAmounts, bigInt(0))
+
+	// Make sure the withdrawal fails.
+	s.requireTxFails(
+		s.vault.BatchWithdrawTo(s.signer, s.erc20Addresses, withdrawAmounts, receiver.address()),
+	)
+}
+
+// TestFunctionsProtected makes sure the endpoint modifiers work as expected.
+func (s *VaultSuite) TestFunctionsProtected() {
+	// Change the Manager address.
+	manager := s.account[1]
+	s.requireTxStrongly(s.vault.ChangeManager(s.signer, manager.address()))(
+		abi.VaultManagerTransferred{
+			PreviousManager: s.owner.address(), NewManager: manager.address(),
+		},
+	)
+
+	// Confirm the Manager address is changed.
+	managerAddress, err := s.vault.Manager(nil)
+	s.Require().NoError(err)
+	s.Equal(manager.address(), managerAddress)
+
+	// Make sure only the owner can call `changeManager`.
+	receiver := s.account[2]
+	s.requireTxFails(s.vault.ChangeManager(signer(manager), receiver.address()))
+	s.requireTxFails(s.vault.ChangeManager(signer(s.account[2]), receiver.address()))
+
+	// Make sure only the manager can call `batchWithdrawTo`.
+	var withdrawAmounts []*big.Int
+	s.requireTxFails(
+		s.vault.BatchWithdrawTo(s.signer, s.erc20Addresses, withdrawAmounts, receiver.address()),
+	)
+	s.requireTxFails(
+		s.vault.BatchWithdrawTo(signer(receiver), s.erc20Addresses, withdrawAmounts, receiver.address()),
+	)
+
+}
