@@ -48,7 +48,7 @@ var targets = []target{
 	target{Filename: "contracts/Vault.sol", ContractName: "Vault", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/rsv/Reserve.sol", ContractName: "Reserve", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
 	target{Filename: "contracts/rsv/ReserveEternalStorage.sol", ContractName: "ReserveEternalStorage", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
-	target{Filename: "contracts/ownership/Ownable.sol", ContractName: "Ownable", SolcVersion: "0.5.8", OptimizeRuns: "1"},
+	target{Filename: "contracts/test/BasicOwnable.sol", ContractName: "BasicOwnable", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/test/ReserveV2.sol", ContractName: "ReserveV2", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
 	target{Filename: "contracts/test/BasicERC20.sol", ContractName: "BasicERC20", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
 }
