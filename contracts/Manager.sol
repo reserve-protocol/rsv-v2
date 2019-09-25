@@ -144,6 +144,8 @@ contract Manager is Ownable {
         _;
     }
 
+    // This approach reduces bytecode since solidity inlines all modifiers under the hood. 
+
     function _notPaused() internal view {
         require(!paused, "contract is paused");
     }
