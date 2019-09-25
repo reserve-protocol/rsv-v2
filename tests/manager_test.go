@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
 	"os/exec"
 	"testing"
 
@@ -116,12 +117,6 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.requireTxStrongly(s.reserve.ChangeFreezer(s.signer, managerAddress))(
 		abi.ReserveFreezerChanged{NewFreezer: managerAddress},
 	)
-	s.requireTxStrongly(s.reserve.ChangeOwner(s.signer, managerAddress))(abi.ReserveOwnershipTransferred{
-		PreviousOwner: s.owner, NewOwner: managerAddress,
-	})
-	s.requireTxStrongly(s.vault.ChangeOwner(s.signer, managerAddress))(abi.VaultOwnershipTransferred{
-		PreviousOwner: s.owner, NewOwner: managerAddress,
-	})
 }
 
 func (s *ManagerSuite) TestDeploy() {}
@@ -152,3 +147,59 @@ func (s *ManagerSuite) TestConstructor() {
 	s.Require().NoError(err)
 	s.Equal(true, useWhitelist)
 }
+
+func (s *ManagerSuite) TestProposeNewBasket() {
+	tokens := []common.Address{s.account[5].address()}
+	backing := []*big.Int{bigInt(1000)}
+	s.requireTxWeakly(s.manager.ProposeNewBasket(signer(s.account[1]), tokens, backing))(
+		abi.ManagerNewBasketProposalCreated{
+			Id: bigInt(0), Proposer: s.account[1].address(), Tokens: tokens, Backing: backing,
+		},
+		abi.ProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
+	)
+
+	proposalsLength, err := s.manager.ProposalsLength(nil)
+	s.Require().NoError(err)
+	s.Equal(proposalsLength, bigInt(1))
+
+	proposalAddress, err := s.manager.Proposals(nil, bigInt(0))
+	s.Require().NoError(err)
+
+	proposal, err := abi.NewProposal(proposalAddress, s.node)
+	s.Require().NoError(err)
+
+	id, err := proposal.Id(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(0).String(), id.String())
+
+	proposer, err := proposal.Proposer(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[1].address(), proposer)
+
+	token, err := proposal.Tokens(nil, bigInt(0))
+	s.Require().NoError(err)
+	s.Equal(tokens[0], token)
+
+	token, err = proposal.Tokens(nil, bigInt(1))
+	s.Require().Error(err)
+
+	status, err := proposal.GetStatus(nil)
+	s.Require().NoError(err)
+	s.Equal(uint8(0), status) // Statuses.Created should have value 0
+
+	proposalBasketAddress, err := proposal.Basket(nil)
+	s.Require().NoError(err)
+	s.NotEqual(proposalBasketAddress, zeroAddress())
+
+	// basket, err := abi.NewBasket(basketAddress, s.node)
+	// s.Require().NoError(err)
+
+}
+
+// func (s *ManagerSuite) TestProposeQuantitiesAdjustment() {
+// 	in := []*big.Int{bigInt(1), bigInt(2)}
+// 	out := []*big.Int{bigInt(2), bigInt(1)}
+// 	s.requireTx(s.manager.ProposeQuantitiesAdjustment(signer(s.account[1]), in, out))(
+// 		abi.ProposalProposalCreated{Id: bigInt(0), Proposer: s.account[1].address()},
+// 	)
+// }
