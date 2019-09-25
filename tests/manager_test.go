@@ -2,8 +2,8 @@ package tests
 
 import (
 	"fmt"
-	"math/big"
 	"os/exec"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -117,6 +117,16 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.requireTxStrongly(s.reserve.ChangeFreezer(s.signer, managerAddress))(
 		abi.ReserveFreezerChanged{NewFreezer: managerAddress},
 	)
+
+	// Deploy collateral ERC20s
+	s.erc20s = make([]*abi.BasicERC20, 3)
+	s.erc20Addresses = make([]common.Address, 3)
+	for i := 0; i < 3; i++ {
+		erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
+		s.Require().NoError(err)
+		s.erc20s[i] = erc20
+		s.erc20Addresses[i] = erc20Address
+	}
 }
 
 func (s *ManagerSuite) TestDeploy() {}
@@ -148,12 +158,13 @@ func (s *ManagerSuite) TestConstructor() {
 	s.Equal(true, useWhitelist)
 }
 
-func (s *ManagerSuite) TestProposeNewBasket() {
-	tokens := []common.Address{s.account[5].address()}
-	backing := []*big.Int{bigInt(1000)}
-	s.requireTxWeakly(s.manager.ProposeNewBasket(signer(s.account[1]), tokens, backing))(
+func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
+	tokens := s.erc20Addresses
+	backing := generateBackings(len(tokens))
+	owner := s.account[0]
+	s.requireTxWeakly(s.manager.ProposeNewBasket(signer(owner), tokens, backing))(
 		abi.ManagerNewBasketProposalCreated{
-			Id: bigInt(0), Proposer: s.account[1].address(), Tokens: tokens, Backing: backing,
+			Id: bigInt(0), Proposer: owner.address(), Tokens: tokens, Backing: backing,
 		},
 		abi.ProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
 	)
@@ -174,13 +185,13 @@ func (s *ManagerSuite) TestProposeNewBasket() {
 
 	proposer, err := proposal.Proposer(nil)
 	s.Require().NoError(err)
-	s.Equal(s.account[1].address(), proposer)
+	s.Equal(owner.address(), proposer)
 
 	token, err := proposal.Tokens(nil, bigInt(0))
 	s.Require().NoError(err)
 	s.Equal(tokens[0], token)
 
-	token, err = proposal.Tokens(nil, bigInt(1))
+	token, err = proposal.Tokens(nil, bigInt(uint32(len(tokens)+1)))
 	s.Require().Error(err)
 
 	status, err := proposal.GetStatus(nil)
@@ -189,17 +200,31 @@ func (s *ManagerSuite) TestProposeNewBasket() {
 
 	proposalBasketAddress, err := proposal.Basket(nil)
 	s.Require().NoError(err)
-	s.NotEqual(proposalBasketAddress, zeroAddress())
+	s.NotEqual(zeroAddress(), proposalBasketAddress)
 
-	// basket, err := abi.NewBasket(basketAddress, s.node)
-	// s.Require().NoError(err)
+	basket, err := abi.NewBasket(proposalBasketAddress, s.node)
+	s.Require().NoError(err)
+
+	basketTokens, err := basket.GetTokens(nil)
+	s.Require().NoError(err)
+	s.True(reflect.DeepEqual(basketTokens, tokens))
+
+	basketSize, err := basket.GetSize(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(uint32(len(tokens))).String(), basketSize.String())
+
+	for i := 0; i < len(backing); i++ {
+		foundBacking, err := basket.BackingMap(nil, tokens[i])
+		s.Require().NoError(err)
+		s.Equal(backing[i], foundBacking)
+	}
 
 }
 
-// func (s *ManagerSuite) TestProposeQuantitiesAdjustment() {
-// 	in := []*big.Int{bigInt(1), bigInt(2)}
-// 	out := []*big.Int{bigInt(2), bigInt(1)}
-// 	s.requireTx(s.manager.ProposeQuantitiesAdjustment(signer(s.account[1]), in, out))(
-// 		abi.ProposalProposalCreated{Id: bigInt(0), Proposer: s.account[1].address()},
-// 	)
-// }
+func (s *ManagerSuite) TestProposeQuantitiesAdjustment() {
+	// in := []*big.Int{bigInt(1), bigInt(2)}
+	// out := []*big.Int{bigInt(2), bigInt(1)}
+	// s.requireTx(s.manager.ProposeQuantitiesAdjustment(signer(s.account[1]), in, out))(
+	// 	abi.ProposalProposalCreated{Id: bigInt(0), Proposer: s.account[1].address()},
+	// )
+}

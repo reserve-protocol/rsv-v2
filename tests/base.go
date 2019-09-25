@@ -48,10 +48,8 @@ type TestSuite struct {
 	managerAddress        common.Address
 	vault                 *abi.Vault
 	vaultAddress          common.Address
-	proposals             []*abi.Proposal
-	proposalAddresses     []common.Address
-	baskets               []*abi.Basket
-	basketAdddresses      []common.Address
+	erc20s                []*abi.BasicERC20
+	erc20Addresses        []common.Address
 
 	logParsers map[common.Address]logParser
 }
@@ -143,6 +141,13 @@ func (s *TestSuite) assertRSVTotalSupply(amount *big.Int) {
 	totalSupply, err := s.reserve.TotalSupply(nil)
 	s.NoError(err)
 	s.Equal(amount.String(), totalSupply.String())
+}
+
+// assertManagerCollateralized asserts that the Manager is collateralized.
+func (s *TestSuite) assertManagerCollateralized() {
+	collateralized, err := s.manager.IsFullyCollateralized(nil)
+	s.Require().NoError(err)
+	s.True(collateralized)
 }
 
 // createSlowCoverageNode creates a connection to a local geth node that passes through
@@ -308,4 +313,12 @@ func burningTransfer(from common.Address, value *big.Int) abi.ReserveTransfer {
 		To:    common.BigToAddress(bigInt(0)),
 		Value: value,
 	}
+}
+
+func generateBackings(n int) []*big.Int {
+	var backing []*big.Int
+	for i := 0; i < n; i++ {
+		backing = append(backing, bigInt(uint32(i+1)))
+	}
+	return backing
 }
