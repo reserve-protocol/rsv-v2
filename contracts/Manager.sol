@@ -268,6 +268,11 @@ contract Manager is Ownable {
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
     function executeProposal(uint256 _proposalID) external {
+        require(
+            _msgSender() == proposals[_proposalID].proposer() ||
+            _msgSender() == operator,
+            "cannot execute"
+        );
         require(proposalsLength > _proposalID, "proposals length < id");
         (address[] memory tokens, uint256[] memory quantitiesIn, uint256[] memory quantitiesOut) =
             proposals[_proposalID].complete(rsv.totalSupply(), address(vault), basket);
