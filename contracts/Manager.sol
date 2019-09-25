@@ -73,7 +73,7 @@ contract Manager is Ownable {
     // Proposals
     mapping(uint256 => Proposal) public proposals;
     uint256 public proposalsLength;
-    uint256 public constant delay = 24 hours;
+    uint256 public delay = 24 hours;
     
     // Issuance and Redemption controls
     mapping(address => bool) public whitelist;
@@ -93,9 +93,6 @@ contract Manager is Ownable {
     event Issuance(address indexed user, uint256 indexed amount);
     event Redemption(address indexed user, uint256 indexed amount);
 
-    // Whitelist events
-    event WhitelistChanged(address indexed user, bool val);
-
     // Pause events
     event Paused(address indexed account);
     event Unpaused(address indexed account);
@@ -103,6 +100,9 @@ contract Manager is Ownable {
     // Changes
     event OperatorChanged(address indexed account);
     event SeigniorageChanged(uint256 oldVal, uint256 newVal);
+    event WhitelistChanged(address indexed user, bool val);
+    event DelayChanged(uint256 oldVal, uint256 newVal);
+
 
     // Proposals
     event NewBasketProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] backing);
@@ -344,6 +344,13 @@ contract Manager is Ownable {
         emit SeigniorageChanged(seigniorage, _seigniorage);
     }
 
+    /// Set the Proposal delay in hours.
+    function setDelay(uint256 _delay) external onlyOwner {
+        emit DelayChanged(delay, _delay);
+        delay = _delay;
+    }
+
+    /// Clear the list of proposals. 
     function clearProposals() external onlyOwner {
         proposalsLength = 0;
         emit ProposalsCleared();
