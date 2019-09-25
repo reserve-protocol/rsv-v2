@@ -348,7 +348,7 @@ contract Manager is Ownable {
         uint256[] memory quantities = _quantitiesRequiredToIssue(_rsvQuantity);
 
         // Intake collateral tokens.
-        for (uint i = 0; i < basket.size(); i++) {
+        for (uint i = 0; i < basket.getSize(); i++) {
             IERC20(basket.tokens(i)).safeTransferFrom(_msgSender(), address(vault), quantities[i]);
         }
 
@@ -382,7 +382,7 @@ contract Manager is Ownable {
         uint256[] memory quantities = basket.quantitiesRequired(_rsvQuantity);
         uint256 seigniorageMultiplier = uint256(seigniorage.add(BPS_FACTOR));
 
-        for (uint i = 0; i < basket.size(); i++) {
+        for (uint i = 0; i < basket.getSize(); i++) {
             quantities[i] = quantities[i].mul(seigniorageMultiplier).div(BPS_FACTOR);
         }
     }
@@ -396,13 +396,14 @@ contract Manager is Ownable {
     //     uint256 issuable;
     //     uint256 minIssuable;
 
-    //     for (uint i = 0; i < basket.size(); i ++) {
+    //     for (uint i = 0; i < basket.getSize(); i ++) {
     //         allowance = IERC20(basket.tokens(i)).allowance(funder, address(this));
     //         balance = IERC20(basket.tokens(i)).balanceOf(funder);
     //         available = allowance;
     //         if (balance < available) available = balance;
 
-    //         issuable = rsvDecimalsFactor.mul(available).div(basket.backing(i));
+    //         issuable = 
+    //            rsvDecimalsFactor.mul(available).div(basket.backingMap(basket.tokens(i)));
     //         if (issuable < minIssuable) minIssuable = issuable;
     //     }
     //     return minIssuable;
@@ -411,7 +412,7 @@ contract Manager is Ownable {
     /// Ensure that the Vault is fully collateralized. 
     function _assertFullyCollateralized() internal view {
         uint256[] memory expected = basket.quantitiesRequired(rsv.totalSupply());
-        for (uint i = 0; i < basket.size(); i++) {
+        for (uint i = 0; i < basket.getSize(); i++) {
             assert(IERC20(basket.tokens(i)).balanceOf(address(vault)) >= expected[i]);
         }
     }

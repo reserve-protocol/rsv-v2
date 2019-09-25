@@ -96,10 +96,10 @@ contract Proposal is Ownable {
             }
 
             // Carry over any tokens from previous basket
-            for (uint j = 0; j < _prevBasket.size(); j++) {
+            for (uint j = 0; j < _prevBasket.getSize(); j++) {
                 if (!_has(tokens, _prevBasket.tokens(j))) {
                     tokens.push(_prevBasket.tokens(j));
-                    basketBacking.push(_prevBasket.backing(j));
+                    basketBacking.push(_prevBasket.backingMap(tokens[tokens.length-1]));
                 }
             }
 
