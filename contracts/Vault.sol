@@ -24,6 +24,7 @@ contract Vault is Ownable {
     constructor() public {
         // Initialize manager as _msgSender()
         manager = _msgSender();
+        emit ManagerTransferred(address(0), manager);
     }
 
     /// Modifies a function to only run when the `manager` account calls it. 
