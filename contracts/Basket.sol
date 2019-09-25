@@ -8,13 +8,15 @@ import "./zeppelin/token/ERC20/SafeERC20.sol";
  * Most importantly, the `backing` quantities correspond to quantities
  * for a single front-token, NOT for a single atto-front-token. 
 */
+
+/* TODO(elder): instead of parallel lists (which are error-prone), use structs to pass around
+ * tokens and their in/out-quantities or their new weights. If Solidity permits. */
 contract Basket {
     using SafeMath for uint256;
 
     uint8 public frontTokenDecimals;
     address[] public tokens;
-    mapping(address => uint256) public backingMap;
-
+    mapping(address => uint256) public backingMap; // TODO(elder): rename to "weights"
 
     constructor(
         address[] memory _tokens, 
@@ -30,6 +32,8 @@ contract Basket {
             backingMap[_tokens[i]] = _backing[i];
         }
         tokens = _tokens;
+        backing = _backing;
+        size = tokens.length;
         frontTokenDecimals = _frontTokenDecimals;
     }
 
@@ -37,7 +41,7 @@ contract Basket {
         return tokens;
     }
 
-    function getSize() external view returns(uint) {
+    function getSize() external view returns(uint) { // TODO(elder): just "size()"?
         return tokens.length;
     }
 
@@ -54,7 +58,8 @@ contract Basket {
     }
 
     /// Calculates what quantities of tokens are needed to reach `_other` at `_frontTokenSupply`.
-    function newQuantitiesRequired(uint256 _frontTokenSupply, Basket _other) external view returns(uint256[] memory) {
+    function newQuantitiesRequired(uint256 _frontTokenSupply, Basket _other)
+        external view returns(uint256[] memory) {
         uint256[] memory required = new uint256[](tokens.length);
 
         // Calculate required in terms of backing quantities, that is, per single front token. 
