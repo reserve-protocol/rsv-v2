@@ -90,7 +90,8 @@ contract Proposal is Ownable {
         if (basket == Basket(0)) {
             uint256 newQuantity;
             for (uint i = 0; i < tokens.length; i++) {
-                newQuantity = IERC20(tokens[i]).balanceOf(_vaultAddr) + quantitiesIn[i] - quantitiesOut[i];
+                newQuantity = 
+                    IERC20(tokens[i]).balanceOf(_vaultAddr).add(quantitiesIn[i]).sub(quantitiesOut[i]);
                 require(newQuantity >= 0, "proposal removes too many tokens");
                 basketBacking.push(newQuantity.mul(_prevBasket.frontTokenDecimals()).div(_rsvSupply));
             }
