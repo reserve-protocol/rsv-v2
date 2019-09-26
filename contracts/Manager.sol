@@ -98,8 +98,11 @@ contract Manager is Ownable {
     
     event ProposalAccepted(uint256 indexed id, address indexed proposer);
     event ProposalCanceled(uint256 indexed id, address indexed proposer, address indexed canceler);
-    event ProposalExecuted(uint256 indexed id, address indexed proposer, address indexed executor);
-    event BasketChanged(address indexed oldBasket, address indexed newBasket);
+    event ProposalExecuted(uint256 indexed id, 
+                           address indexed proposer, 
+                           address indexed executor,
+                           address oldBasket,
+                           address newBasket);
 
     // ============================ Constructor ===============================
 
@@ -260,38 +263,38 @@ contract Manager is Ownable {
     }
 
     /// Accepts a proposal for a new basket, beginning the required delay.
-    function acceptProposal(uint256 proposalID) external onlyOperator {
-        require(proposalsLength > proposalID, "proposals length < id");
-        proposals[proposalID].accept(now + delay);
-        emit ProposalAccepted(proposalID, proposals[proposalID].proposer());
+    function acceptProposal(uint256 id) external onlyOperator {
+        require(proposalsLength > id, "proposals length < id");
+        proposals[id].accept(now + delay);
+        emit ProposalAccepted(id, proposals[id].proposer());
     }
 
     // Cancels a proposal. This can be done anytime before it is enacted by any of:
     // 1. Proposer 2. Operator 3. Owner
-    function cancelProposal(uint256 proposalID) external {
+    function cancelProposal(uint256 id) external {
         require(
-            _msgSender() == proposals[proposalID].proposer() ||
+            _msgSender() == proposals[id].proposer() ||
             _msgSender() == _owner ||
             _msgSender() == operator, 
             "cannot cancel"
         );
-        proposals[proposalID].cancel();
-        emit ProposalCanceled(proposalID, proposals[proposalID].proposer(), _msgSender());
+        proposals[id].cancel();
+        emit ProposalCanceled(id, proposals[id].proposer(), _msgSender());
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
-    function executeProposal(uint256 proposalID) external {
+    function executeProposal(uint256 id) external {
         require(
-            _msgSender() == proposals[proposalID].proposer() ||
+            _msgSender() == proposals[id].proposer() ||
             _msgSender() == operator,
             "cannot execute"
         );
-        require(proposalsLength > proposalID, "proposals length < id");
-        address proposer = proposals[proposalID].proposer();
+        require(proposalsLength > id, "proposals length < id");
+        address proposer = proposals[id].proposer();
         Basket oldBasket = basket;
 
         // Complete proposal and compute new basket
-        basket = proposals[proposalID].complete(rsv, address(vault), oldBasket);
+        basket = proposals[id].complete(rsv, address(vault), oldBasket);
         
         // For each token in either basket, perform transfers between proposer and Vault 
         for (uint i = 0; i < oldBasket.size(); i++) {
@@ -306,8 +309,7 @@ contract Manager is Ownable {
         }
         
         assert(isFullyCollateralized());
-        emit BasketChanged(address(oldBasket), address(basket));
-        emit ProposalExecuted(proposalID, proposer, _msgSender());
+        emit ProposalExecuted(id, proposer, _msgSender(), address(oldBasket), address(basket));
     }
         
     /// Pause the contract.
