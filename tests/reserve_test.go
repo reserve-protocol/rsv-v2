@@ -123,35 +123,6 @@ func (s *ReserveSuite) TestDecimals() {
 	s.Equal(uint8(18), decimals)
 }
 
-func (s *ReserveSuite) TestChangeName() {
-	const newName, newSymbol = "Flamingo", "MGO"
-	s.requireTxStrongly(
-		s.reserve.ChangeName(s.signer, newName, newSymbol),
-	)(
-		abi.ReserveNameChanged{
-			NewName:   newName,
-			NewSymbol: newSymbol,
-		},
-	)
-
-	// Check new name.
-	name, err := s.reserve.Name(nil)
-	s.NoError(err)
-	s.Equal(newName, name)
-
-	// Check new symbol.
-	symbol, err := s.reserve.Symbol(nil)
-	s.NoError(err)
-	s.Equal(newSymbol, symbol)
-}
-
-func (s *ReserveSuite) TestChangeNameFailsForNonOwner() {
-	const newName, newSymbol = "Flamingo", "MGO"
-	s.requireTxFails(
-		s.reserve.ChangeName(signer(s.account[2]), newName, newSymbol),
-	)
-}
-
 func (s *ReserveSuite) TestAllowsMinting() {
 	recipient := common.BigToAddress(bigInt(1))
 	amount := bigInt(100)

@@ -31,8 +31,8 @@ contract Reserve is IERC20, Ownable {
     ITXFee public txFee;
 
     // Basic token data
-    string public name = "Reserve";
-    string public symbol = "RSV";
+    string public constant name = "Reserve";
+    string public constant symbol = "RSV";
     uint8 public constant decimals = 18;
     uint256 public totalSupply;
     uint256 public maxSupply;
@@ -56,9 +56,6 @@ contract Reserve is IERC20, Ownable {
     // Pause events
     event Paused(address indexed account);
     event Unpaused(address indexed account);
-
-    // Name change event
-    event NameChanged(string newName, string newSymbol);
 
     // Law enforcement events
     event Frozen(address indexed freezer, address indexed account);
@@ -136,13 +133,6 @@ contract Reserve is IERC20, Ownable {
     function changeMaxSupply(uint256 newMaxSupply) external onlyOwner {
         maxSupply = newMaxSupply;
         emit MaxSupplyChanged(newMaxSupply);
-    }
-
-    /// Change the name and ticker symbol of this token.
-    function changeName(string calldata newName, string calldata newSymbol) external onlyOwner {
-        name = newName;
-        symbol = newSymbol;
-        emit NameChanged(newName, newSymbol);
     }
 
     /// Pause the contract.
