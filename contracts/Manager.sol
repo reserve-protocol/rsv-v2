@@ -405,8 +405,8 @@ contract Manager is Ownable {
         }
     }
 
-    // From a weighting of RSV (e.g., a basket weight) and an amount of RSV,
-    // compute the amount of the weighted token that matches that amount of RSV.
+    /// From a weighting of RSV (e.g., a basket weight) and an amount of RSV,
+    /// compute the amount of the weighted token that matches that amount of RSV.
     function _weighted(uint256 amount, uint256 weight)
         internal view returns(uint256) {
         return amount.mul(weight).div(uint256(10)**rsv.decimals());
