@@ -109,6 +109,11 @@ contract Manager is Ownable {
         rsv = IRSV(rsvAddress);
         seigniorage = seigniorage_;
         paused = true;
+
+        // Start with the empty basket. 
+        address[] memory tokens = new address[](0);
+        uint256[] memory weights = new uint256[](0);
+        basket = new Basket(Basket(0), tokens, weights);
     }
 
     // ============================= Modifiers ================================
@@ -313,7 +318,7 @@ contract Manager is Ownable {
 
     /// Unpause the contract.
     function unpause() external onlyOwner {
-        require(address(basket) != address(0), "basket required to unpause");
+        require(basket.size() > 0, "basket cannot be empty");
         paused = false;
         emit Unpaused(_msgSender());
     }
@@ -393,11 +398,13 @@ contract Manager is Ownable {
         if (newWeight > oldWeight) {
             // This token must increase in the vault, so transfer from proposer to vault.
             uint256 transferAmount = _weighted(rsv.totalSupply(), newWeight.sub(oldWeight));
-            IERC20(token).safeTransferFrom(proposer, address(vault), transferAmount);
+            if (transferAmount > 0) 
+                IERC20(token).safeTransferFrom(proposer, address(vault), transferAmount);
         } else if (newWeight < oldWeight) {
             // This token will decrease in the vault, so transfer from vault to proposer.
             uint256 transferAmount = _weighted(rsv.totalSupply(), oldWeight.sub(newWeight));
-            vault.withdrawTo(token, transferAmount, proposer);
+            if (transferAmount > 0) 
+                vault.withdrawTo(token, transferAmount, proposer);
         }
     }
 

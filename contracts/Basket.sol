@@ -2,10 +2,10 @@ pragma solidity ^0.5.8;
 
 
 /**
- * The Basket contract defines the backing weights for a what a  is backed by.
+ * The Basket contract defines the backing weights for a what RSV is backed by.
  *
  * Most importantly, the `backing` quantities correspond to quantities
- * for a single front-token, NOT for a single atto-front-token. 
+ * for a single RSV, NOT for a single attoRSV. 
 */
 
 contract Basket {
@@ -15,9 +15,11 @@ contract Basket {
     // INVARIANT: {addr | addr in tokens} == {addr | has[addr] == true}
 
     // SECURITY PROPERTY: The value of prev is always a Basket, and cannot be set by any user.
+    // SECURITY PROPERTY: A basket can be of size 0. It is the Manager's responsibility
+    //                    to ensure Issuance does not happen against an empty basket. 
     constructor(Basket prev, address[] memory _tokens, uint256[] memory _weights) public {
         require(_tokens.length == _weights.length, "Basket: unequal array lengths");
-        require(_tokens.length > 0 && _tokens.length <= 100, "Basket: bad length");
+        require(_tokens.length <= 100, "Basket: bad length");
 
         // Initialize data from input arrays
         tokens = new address[](_tokens.length);
