@@ -255,23 +255,23 @@ contract Manager is Ownable {
     }
 
     /// Accepts a proposal for a new basket, beginning the required delay.
-    function acceptProposal(uint256 _proposalID) external onlyOperator {
-        require(proposalsLength > _proposalID, "proposals length < id");
-        proposals[_proposalID].accept(now + delay);
-        emit ProposalAccepted(_proposalID, proposals[_proposalID].proposer());
+    function acceptProposal(uint256 proposalID) external onlyOperator {
+        require(proposalsLength > proposalID, "proposals length < id");
+        proposals[proposalID].accept(now + delay);
+        emit ProposalAccepted(proposalID, proposals[proposalID].proposer());
     }
 
     // Cancels a proposal. This can be done anytime before it is enacted by any of:
     // 1. Proposer 2. Operator 3. Owner
-    function cancelProposal(uint256 _proposalID) external {
+    function cancelProposal(uint256 proposalID) external {
         require(
-            _msgSender() == proposals[_proposalID].proposer() ||
+            _msgSender() == proposals[proposalID].proposer() ||
             _msgSender() == _owner ||
             _msgSender() == operator, 
             "cannot cancel"
         );
-        proposals[_proposalID].cancel();
-        emit ProposalCanceled(_proposalID, proposals[_proposalID].proposer(), _msgSender());
+        proposals[proposalID].cancel();
+        emit ProposalCanceled(proposalID, proposals[proposalID].proposer(), _msgSender());
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
