@@ -40,20 +40,7 @@ contract Vault is Ownable {
         manager = newManager;
     }
 
-    /// Withdraws multiple tokens from the Vault and sends them to `to`. 
-    function batchWithdrawTo(
-        address[] calldata tokens, 
-        uint256[] calldata quantities, 
-        address to
-    ) 
-        external onlyManager 
-    {
-        require(tokens.length == quantities.length, "mismatched token quantities");
-        for (uint i = 0; i < tokens.length; i++) {
-            if (quantities[i] > 0) {
-                IERC20(tokens[i]).safeTransfer(to, quantities[i]);
-            }
-        }        
-        emit BatchWithdrawal(tokens, quantities, to);
+    function withdrawTo(address token, uint256 amount, address to) external onlyManager {
+        IERC20(token).safeTransfer(to, amount);
     }
 }

@@ -10,8 +10,8 @@ pragma solidity ^0.5.8;
 contract Basket {
     address[] public tokens;
     mapping(address => uint256) public weights;
-    mapping(address => bool) public hasToken;
-    // INVARIANT: {addr | addr in tokens} == {addr | hasToken[addr] == true}
+    mapping(address => bool) public has;
+    // INVARIANT: {addr | addr in tokens} == {addr | has[addr] == true}
 
     // SECURITY PROPERTY: The value of prev is always a Basket, and cannot be set by any user.
     constructor(Basket prev, address[] memory _tokens, uint256[] memory _weights) public {
@@ -20,7 +20,7 @@ contract Basket {
         
         for (uint i = 0; i < _tokens.length; i++) {
             weights[_tokens[i]] = _weights[i];
-            hasToken[_tokens[i]] = true;
+            has[_tokens[i]] = true;
         }
         tokens = _tokens;
 
@@ -28,9 +28,9 @@ contract Basket {
         if (prev != Basket(0)) {
             for (uint i = 0; i < prev.size(); i++) {
                 address tok = prev.tokens(i);
-                if (!hasToken[tok]) {
+                if (!has[tok]) {
                     weights[tok] = prev.weights(tok);
-                    hasToken[tok] = true;
+                    has[tok] = true;
                     tokens.push(tok);
                 }
             }
