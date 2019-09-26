@@ -44,7 +44,9 @@ type target struct {
 var targets = []target{
 	target{Filename: "contracts/Basket.sol", ContractName: "Basket", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/Manager.sol", ContractName: "Manager", SolcVersion: "0.5.8", OptimizeRuns: "1"},
-	target{Filename: "contracts/Proposal.sol", ContractName: "Proposal", SolcVersion: "0.5.8", OptimizeRuns: "1"},
+	//	target{Filename: "contracts/Proposal.sol", ContractName: "Proposal", SolcVersion: "0.5.8", OptimizeRuns: "1"},
+	target{Filename: "contracts/Proposal.sol", ContractName: "AdjustQuantities", SolcVersion: "0.5.8", OptimizeRuns: "1"},
+	target{Filename: "contracts/Proposal.sol", ContractName: "SetWeights", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/Vault.sol", ContractName: "Vault", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/rsv/Reserve.sol", ContractName: "Reserve", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
 	target{Filename: "contracts/rsv/ReserveEternalStorage.sol", ContractName: "ReserveEternalStorage", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
@@ -101,6 +103,7 @@ func main() {
 		cmd.Stdin = os.Stdin // solc doesn't need stdin to be set, but trailofbits' solc-select does
 		cmd.Stdout = combinedJson
 		cmd.Stderr = os.Stderr
+		log.Printf("%s: Compiling into combined-json with solc", t.Filename)
 
 		err = cmd.Run()
 		if err != nil {
@@ -127,12 +130,13 @@ func main() {
 
 		name := outputGoFile(t.ContractName)
 		check(ioutil.WriteFile(name, []byte(code), 0644), "writing "+name)
-
 		// Generate event bindings.
 		//
 		// We generate a String() function for each event and a
 		// Parse<ContractName>Log(*types.Log) function for each contract.
 		{
+			log.Printf("%s: Generating Go bindings", t.Filename)
+
 			buf := new(bytes.Buffer)
 			parsedABI, err := abi.JSON(bytes.NewReader([]byte(output.ABI)))
 			check(err, "parsing ABI JSON")
@@ -219,11 +223,11 @@ func main() {
 
 		// Write JSON artifacts for sol-coverage.
 		{
+			log.Printf("%s: Reformatting build for sol-coverage", t.Filename)
 			// sources records an ordering on source files.
 			// sol-compiler uses a different format from solc for this,
 			// so here we're converting from the former to the latter.
 			check(os.MkdirAll(solCovDir, 0755), "creating sol-coverage evm directory")
-
 			// m is a helper for writing succinct json object literals
 			type m map[string]interface{}
 
@@ -233,6 +237,7 @@ func main() {
 			}
 
 			compiledOutput := compilationResult.Contracts[t.Filename+":"+t.ContractName]
+
 			b, err := json.Marshal(m{
 				"schemaVersion": "2.0.0",
 				"ContractName":  t.ContractName,

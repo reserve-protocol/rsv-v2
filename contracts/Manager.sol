@@ -104,8 +104,16 @@ contract Manager is Ownable {
     event DelayChanged(uint256 oldVal, uint256 newVal);
 
     // Proposals
-    event NewBasketProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] backing);
-    event NewQuantityAdjustmentProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] quantitiesIn, uint256[] quantitiesOut);
+    event NewBasketProposalCreated(uint256 indexed id,
+                                   address indexed proposer,
+                                   address[] tokens,
+                                   uint256[] backing);
+    event NewQuantityAdjustmentProposalCreated(uint256 indexed id,
+                                               address indexed proposer,
+                                               address[] tokens,
+                                               uint256[] quantitiesIn,
+                                               uint256[] quantitiesOut);
+    
     event ProposalAccepted(uint256 indexed id, address indexed proposer);
     event ProposalCanceled(uint256 indexed id, address indexed proposer, address indexed canceler);
     event ProposalExecuted(uint256 indexed id, address indexed proposer, address indexed executor);
