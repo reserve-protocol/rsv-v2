@@ -2,6 +2,7 @@ pragma solidity ^0.5.8;
 
 import "./zeppelin/token/ERC20/IERC20.sol";
 import "./zeppelin/token/ERC20/SafeERC20.sol";
+import "./rsv/IRSV.sol";
 import "./ownership/Ownable.sol";
 import "./Basket.sol";
 
@@ -61,35 +62,24 @@ contract Proposal is Ownable {
         require(now > time, "wait to execute");
         state = State.Completed;
 
-        return _newBasket(rsvSupply, rsvDecimals, vault, oldBasket);
+        return _newBasket(rsv, vaultAddr, prevBasket);
     }
 
-    /// Returns the newly-proposed basket. The implementation varies
-    /// for different types of proposals, so it's abstract here.
-    function _newBasket(uint256 rsvSupply, uint8 rsvDecimals, address vault, Basket oldBasket)
-        internal returns(Basket);
-
-    /// _has returns true iff _addr is in _addrArray.
-    function _has(address[] memory _addrArray, address _addr) internal pure returns(bool) {
-        for (uint i = 0; i < _addrArray.length; i++) {
-            if (_addrArray[i] == _addr) return true;
-        }
-        return false;
-    }
+    /// Returns the newly-proposed basket. This varies for different types of proposals,
+    /// so it's abstract here.
+    function _newBasket(IRSV rsv, address vault, Basket oldBasket) internal returns(Basket);
 }
 
 /// TODO:doc
 contract WeightProposal is Proposal {
     Basket public basket;
 
-    constructor(address _proposer, Basket _basket)
-        Proposal(_proposer) public {
+    constructor(address _proposer, Basket _basket) Proposal(_proposer) public {
         basket = _basket;
     }
 
     /// Returns the newly-proposed basket
-    function _newBasket(uint256, uint8, address, Basket)
-        internal returns(Basket) {
+    function _newBasket(IRSV, address, Basket) internal returns(Basket) {
         return basket;
     }
 }
@@ -115,27 +105,27 @@ contract SwapProposal is Proposal {
     }
 
     /// Return the newly-proposed basket, based on the current vault and the old basket
-    function _newBasket(uint256 rsvSupply, uint8 rsvDecimals, address vault, Basket oldBasket)
+    function _newBasket(IRSV rsv, address vault, Basket oldBasket)
         internal returns(Basket) {
         // Compute new basket
         uint256[] memory weights = new uint256[](tokens.length);
         
         for (uint i = 0; i < tokens.length; i++) {
             uint256 newAmount;
+            IERC20 token = IERC20(tokens[i]);
 
             if (toVault[i]) {
-                newAmount = IERC20(tokens[i]).balanceOf(vault).add(amounts[i]);
+                newAmount = token.balanceOf(vault).add(amounts[i]);
             } else {
-                newAmount = IERC20(tokens[i]).balanceOf(vault).sub(amounts[i]);
+                newAmount = token.balanceOf(vault).sub(amounts[i]);
             }
 
             // TODO(elder): it'd maybe be clearer if oldBasket and rsvSupply here were replaced with
             // just a reference to the RSV contract.
             // TODO(elder): how do you correctly deal with rounding error here?
-            weights[i] = newAmount.mul(uint256(10)**rsvDecimals).div(rsvSupply);
+            weights[i] = newAmount.mul(uint256(10)**rsv.decimals()).div(rsv.totalSupply());
         }
 
         return new Basket(Basket(oldBasket), tokens, weights);
     }
 }
-

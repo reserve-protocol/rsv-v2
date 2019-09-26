@@ -1,6 +1,7 @@
 pragma solidity ^0.5.8;
 
 import "./zeppelin/token/ERC20/SafeERC20.sol";
+import "./zeppelin/token/ERC20/IERC20.sol";
 import "./zeppelin/math/SafeMath.sol";
 import "./ownership/Ownable.sol";
 

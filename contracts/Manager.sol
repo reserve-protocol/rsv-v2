@@ -3,31 +3,15 @@ pragma solidity ^0.5.8;
 import "./zeppelin/token/ERC20/SafeERC20.sol";
 import "./zeppelin/token/ERC20/IERC20.sol";
 import "./zeppelin/math/SafeMath.sol";
+import "./rsv/IRSV.sol";
 import "./ownership/Ownable.sol";
 import "./Basket.sol";
 import "./Proposal.sol";
 
 
-interface IRSV {
-    // Standard ERC20 functions
-    function transfer(address, uint256) external returns(bool);
-    function approve(address, uint256) external returns(bool);
-    function transferFrom(address, address, uint256) external returns(bool);
-    function totalSupply() external view returns(uint256);
-    function balanceOf(address) external view returns(uint256);
-    function allowance(address, address) external view returns(uint256);
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed holder, address indexed spender, uint256 value);
-
-    // RSV-specific functions
-    function mint(address, uint256) external;
-    function burnFrom(address, uint256) external;
-    function decimals() external view returns(uint8);
-}
-
 interface IVault {
-    function changeManger(address newManager) external;
-    function withdrawTo(address token, uint256 amount, address to) external;
+    function changeManger(address) external;
+    function withdrawTokenTo(address, uint256, address) external;
 }
 
 /**
@@ -69,7 +53,6 @@ contract Manager is Ownable {
     Basket public basket;
     IVault public vault;
     IRSV public rsv;
-    uint8 public constant rsvDecimals = 18;
 
     // Proposals
     mapping(uint256 => Proposal) public proposals;
@@ -108,7 +91,7 @@ contract Manager is Ownable {
     event WeightsProposed(uint256 indexed id,
                           address indexed proposer,
                           address[] tokens,
-                          uint256[] backing);
+                          uint256[] weights);
 
     event SwapProposed(uint256 indexed id,
                        address indexed proposer,
@@ -182,31 +165,46 @@ contract Manager is Ownable {
         return true;
     }
 
-    // ============================= Externals ================================
+    /// Get amounts of basket tokens required to issue an amount of RSV.
+    /// The returned array will be in the same order as the current basket.tokens.
+    function toIssue(uint256 rsvAmount) public view returns (uint256[] memory) {
+        uint256[] memory amounts = new uint256[](basket.size());
+        uint256 feeRate = uint256(seigniorage.add(BPS_FACTOR));
 
-    /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
-    function issue(uint256 _rsvQuantity) external notPaused onlyWhitelist {
-        _issue(_rsvQuantity);
+        for (uint i = 0; i < basket.size(); i++) {
+            address token = basket.tokens(i);
+            amounts[i] = _weighted(rsvAmount, basket.weights(token)).mul(feeRate).div(BPS_FACTOR);
+        }
+
+        return amounts;
     }
 
-    // /// Issues the maximum amount of RSV to the caller based on their allowances.
-    // function issueMax() external notPaused onlyWhitelist {
-    //     uint256 max = _calculateMaxIssuable(_msgSender());
-    //     _issue(max);
-    // }
+    /// Get amounts of basket tokens that would be sent upon redeeming an amount of RSV.
+    /// The returned array will be in the same order as the current basket.tokens.
+    function toRedeem(uint256 rsvAmount) public view returns (uint256[] memory) {
+        uint256[] memory amounts = new uint256[](basket.size());
 
-    /// Redeem a quantity of RSV for collateral tokens. 
-    function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+        for (uint i = 0; i < basket.size(); i++) {
+            address token = basket.tokens(i);
+            amounts[i] = _weighted(rsvAmount, basket.weights(token));
+        }
+
+        return amounts;
+    }
+
+    // ============================= Externals ================================
+
+    /// Issue RSV to the caller and deposit collateral tokens in the Vault.
+    function issue(uint256 rsvAmount) external notPaused onlyWhitelist {
+        _issue(rsvAmount);
+    }
+
+    /// Redeem RSV for collateral tokens. 
+    function redeem(uint256 rsvAmount) external notPaused onlyWhitelist {
         _redeem(_rsvQuantity);
     }
 
-    // /// Redeem `allowance` of RSV from the caller's account. 
-    // function redeemMax() external notPaused onlyWhitelist {
-    //     uint256 max = rsv.allowance(_msgSender(), address(this));
-    //     _redeem(max);
-    // }
-
-    /**
+    /*
      * Propose an exchange of current Vault tokens for new Vault tokens.
      * 
      * These parameters are phyiscally a set of arrays because Solidity doesn't let you pass
@@ -257,7 +255,6 @@ contract Manager is Ownable {
      * Returns the new proposal's ID.
      */
 
-    // TODO:rename, adjust
     function proposeWeights(address[] calldata tokens, uint256[] calldata weights)
         external returns(uint256)
     {
@@ -268,6 +265,7 @@ contract Manager is Ownable {
             new WeightProposal(_msgSender(), new Basket(Basket(0), tokens, weights));
 
         emit WeightsProposed(proposalsLength, _msgSender(), tokens, weights);
+
         return ++proposalsLength;
     }
 
@@ -371,39 +369,27 @@ contract Manager is Ownable {
         emit ProposalsCleared();
     }
 
-    /// Get the amounts of all basket tokens required to issue a given amount of RSV.
-    function amountsToIssue(uint256 rsvAmount) public view returns (uint256[] memory) {
-        uint256[] memory amounts = new uint256[](basket.size());
-
-        uint256 feeRate = uint256(seigniorage.add(BPS_FACTOR));
-        for (uint i = 0; i < basket.size(); i++) {
-            address token = basket.tokens(i);
-            amounts[i] = _weighted(rsvAmount, basket.weights(token)).mul(feeRate).div(BPS_FACTOR);
-        }
-        return amounts;
-    }
 
     // ============================= Internals ================================
 
-    /// _issue: Internal function for all issuances to go through.
+    /// Handles issuance.
     function _issue(uint256 rsvAmount) internal {
         require(rsvAmount > 0, "cannot issue zero RSV");
 
-        uint256[] memory amounts = amountsToIssue(rsvAmount);
-
         // Accept collateral tokens.
+        uint256[] memory amounts = toIssue(rsvAmount);
         for (uint i = 0; i < basket.size(); i++) {
             IERC20(basket.tokens(i)).safeTransferFrom(_msgSender(), address(vault), amounts[i]);
         }
+
         // Compensate with RSV.
         rsv.mint(_msgSender(), rsvAmount);
 
         assert(isFullyCollateralized());
         emit Issuance(_msgSender(), rsvAmount);
-        // TODO: it is odd that _issue and _redeem are this asymmetric. One of these should change.
     }
 
-    /// _redeem: Internal function for all redemptions to go through.
+    /// Handles redemption.
     function _redeem(uint256 rsvAmount) internal {
         require(rsvAmount > 0, "cannot redeem 0 RSV");
 
@@ -411,16 +397,14 @@ contract Manager is Ownable {
         rsv.burnFrom(_msgSender(), rsvAmount);
 
         // Compensate with collateral tokens.
+        uint256[] memory amounts = toRedeem(rsvAmount);
         for (uint i = 0; i < basket.size(); i++) {
-            address token = basket.tokens(i);
-            uint256 amount = _weighted(rsvAmount, basket.weights(token));
-            vault.withdrawTo(token, amount, _msgSender());
+            vault.withdrawTokenTo(basket.tokens(i), amounts[i], _msgSender());
         }
-        
+
         assert(isFullyCollateralized());
         emit Redemption(_msgSender(), rsvAmount);
     }
-
 
     /// _executeBasketShift transfers the necessary amount of `token` between vault and `proposer`
     /// to rebalance the vault's balance of token, as it goes from oldBasket to newBasket.
@@ -442,6 +426,7 @@ contract Manager is Ownable {
             uint256 transferAmount = _weighted(rsv.totalSupply(), oldWeight.sub(newWeight));
             vault.withdrawTo(token, transferAmount, proposer);
         }
+        return required;
     }
 
     // From a weighting of RSV (e.g., a basket weight) and an amount of RSV,

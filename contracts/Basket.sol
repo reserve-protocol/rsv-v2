@@ -1,5 +1,6 @@
 pragma solidity ^0.5.8;
 
+
 /**
  * The Basket contract defines the backing weights for a what a  is backed by.
  *
@@ -17,12 +18,14 @@ contract Basket {
     constructor(Basket prev, address[] memory _tokens, uint256[] memory _weights) public {
         require(_tokens.length == _weights.length, "Basket: unequal array lengths");
         require(_tokens.length > 0 && _tokens.length <= 100, "Basket: bad length");
-        
+
+        // Initialize data from input arrays
+        tokens = new address[](_tokens.length);
         for (uint i = 0; i < _tokens.length; i++) {
-            weights[_tokens[i]] = _weights[i];
+            weights[_tokens[i]] = _weights[i]; // TODO: on bugs, scatter back in address() calls?
             has[_tokens[i]] = true;
+            tokens[i] = _tokens[i];
         }
-        tokens = _tokens;
 
         // If there's a previous basket, copy those of its contents not already set.
         if (prev != Basket(0)) {
