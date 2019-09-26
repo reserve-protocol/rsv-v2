@@ -144,7 +144,7 @@ contract Manager is Ownable {
     function isFullyCollateralized() public view returns(bool) {
         for (uint i = 0; i < basket.size(); i++) {
             address token = basket.tokens(i);
-            uint256 fullAmount = _weighted(rsv.totalSupply(), basket.weights(token));
+            uint256 fullAmount = _weighted(rsv.totalSupply(), basket.weights(token), RoundingMode.UP);
 
             if (IERC20(token).balanceOf(address(vault)) < fullAmount)
                 return false;
@@ -156,11 +156,15 @@ contract Manager is Ownable {
     /// The returned array will be in the same order as the current basket.tokens.
     function toIssue(uint256 rsvAmount) public view returns (uint256[] memory) {
         uint256[] memory amounts = new uint256[](basket.size());
-        uint256 feeRate = uint256(seigniorage.add(BPS_FACTOR));
 
+        uint256 feeRate = uint256(seigniorage.add(BPS_FACTOR));
+        uint256 effectiveAmount = rsvAmount.mul(feeRate).div(BPS_FACTOR);
+        
+        // On issuance, amounts[i] of token i will enter the vault. To maintain full backing,
+        // we have to round _up_ each amounts[i].
         for (uint i = 0; i < basket.size(); i++) {
             address token = basket.tokens(i);
-            amounts[i] = _weighted(rsvAmount, basket.weights(token)).mul(feeRate).div(BPS_FACTOR);
+            amounts[i] = _weighted(effectiveAmount, basket.weights(token), RoundingMode.UP);
         }
 
         return amounts;
@@ -171,9 +175,11 @@ contract Manager is Ownable {
     function toRedeem(uint256 rsvAmount) public view returns (uint256[] memory) {
         uint256[] memory amounts = new uint256[](basket.size());
 
+        // On redemption, amounts[i] of token i will leave the vault. To maintain full backing,
+        // we have to round _down_ each amounts[i].
         for (uint i = 0; i < basket.size(); i++) {
             address token = basket.tokens(i);
-            amounts[i] = _weighted(rsvAmount, basket.weights(token));
+            amounts[i] = _weighted(rsvAmount, basket.weights(token), RoundingMode.DOWN);
         }
 
         return amounts;
@@ -191,7 +197,7 @@ contract Manager is Ownable {
         _redeem(rsvAmount);
     }
 
-    /*
+    /**
      * Propose an exchange of current Vault tokens for new Vault tokens.
      * 
      * These parameters are phyiscally a set of arrays because Solidity doesn't let you pass
@@ -386,24 +392,44 @@ contract Manager is Ownable {
     ) internal {
         uint256 newWeight = newBasket.weights(token);
         uint256 oldWeight = oldBasket.weights(token);
+
         if (newWeight > oldWeight) {
             // This token must increase in the vault, so transfer from proposer to vault.
-            uint256 transferAmount = _weighted(rsv.totalSupply(), newWeight.sub(oldWeight));
+            // Add epsilon so that _weighted() rounds up instead of down.
+            // (Transfer into vault: round up)
+            uint256 transferAmount =
+                _weighted(rsv.totalSupply(), newWeight.sub(oldWeight), RoundingMode.UP);
             if (transferAmount > 0) 
                 IERC20(token).safeTransferFrom(proposer, address(vault), transferAmount);
         } else if (newWeight < oldWeight) {
             // This token will decrease in the vault, so transfer from vault to proposer.
-            uint256 transferAmount = _weighted(rsv.totalSupply(), oldWeight.sub(newWeight));
+            // (Transfer out of vault: round down)
+            uint256 transferAmount =
+                _weighted(rsv.totalSupply(), oldWeight.sub(newWeight), RoundingMode.DOWN);
             if (transferAmount > 0) 
                 vault.withdrawTo(token, transferAmount, proposer);
         }
     }
 
+    // When you perform a weighting of some amount of RSV, it will involve a division, and
+    // precision will be lost. When it rounds, do you want to round UP or DOWN? Be maximally
+    // conservative.
+    enum RoundingMode {UP, DOWN}
+
     /// From a weighting of RSV (e.g., a basket weight) and an amount of RSV,
     /// compute the amount of the weighted token that matches that amount of RSV.
-    function _weighted(uint256 amount, uint256 weight)
-        internal view returns(uint256) {
-        return amount.mul(weight).div(uint256(10)**rsv.decimals());
-    }
+    function _weighted(uint256 amount, uint256 weight, RoundingMode rnd)
+        internal view returns(uint256)
+    {
+        require(amount >= 0);
+        uint256 decimalsDivisor = uint256(10)**rsv.decimals();
+        uint256 shiftedWeight = amount.mul(weight);
 
+        uint256 epsilon = 0;
+        if (rnd == RoundingMode.UP && shiftedWeight % decimalsDivisor > 0) {
+            epsilon = 1;
+        }
+
+        return shiftedWeight.div(decimalsDivisor).add(epsilon);
+    }
 }
