@@ -43,24 +43,17 @@ contract Reserve is IERC20, Ownable {
     // Auth roles
     address public minter;
     address public pauser;
-    address public freezer;
     address public feeRecipient;
 
     // Auth role change events
     event MinterChanged(address indexed newMinter);
     event PauserChanged(address indexed newPauser);
-    event FreezerChanged(address indexed newFreezer);
     event FeeRecipientChanged(address indexed newFeeRecipient);
     event MaxSupplyChanged(uint256 indexed newMaxSupply);
 
     // Pause events
     event Paused(address indexed account);
     event Unpaused(address indexed account);
-
-    // Law enforcement events
-    event Frozen(address indexed freezer, address indexed account);
-    event Unfrozen(address indexed freezer, address indexed account);
-    event Wiped(address indexed freezer, address indexed wiped);
 
 
     /// Initialize critical fields.
@@ -106,12 +99,6 @@ contract Reserve is IERC20, Ownable {
         emit PauserChanged(newPauser);
     }
 
-    /// Change who holds the `freezer` role.
-    function changeFreezer(address newFreezer) external onlyOwnerOr(freezer) {
-        freezer = newFreezer;
-        emit FreezerChanged(newFreezer);
-    }
-
     function changeFeeRecipient(address newFeeRecipient) external onlyOwnerOr(feeRecipient) {
         feeRecipient = newFeeRecipient;
         emit FeeRecipientChanged(newFeeRecipient);
@@ -153,43 +140,6 @@ contract Reserve is IERC20, Ownable {
         _;
     }
 
-    /// Freeze token transactions for a particular address.
-    function freeze(address account) external only(freezer) {
-        require(data.frozenTime(account) == 0, "account already frozen");
-
-        // In `wipe` we use block.timestamp (aka `now`) to check that enough time has passed since
-        // this freeze happened. That required time delay -- 4 weeks -- is a long time relative to
-        // the maximum drift of block.timestamp, so it is fine to trust the miner here.
-        // solium-disable-next-line security/no-block-members
-        data.setFrozenTime(account, now);
-
-        emit Frozen(freezer, account);
-    }
-
-    /// Unfreeze token transactions for a particular address.
-    function unfreeze(address account) external only(freezer) {
-        require(data.frozenTime(account) > 0, "account not frozen");
-        data.setFrozenTime(account, 0);
-        emit Unfrozen(freezer, account);
-    }
-
-    /// Modifies a function to run only when the `account` is not frozen.
-    modifier notFrozen(address account) {
-        require(data.frozenTime(account) == 0, "account frozen");
-        _;
-    }
-
-    /// Burn the balance of an account that has been frozen for at least 4 weeks.
-    function wipe(address account) external only(freezer) {
-        require(data.frozenTime(account) > 0, "cannot wipe unfrozen account");
-        // See commentary above about using block.timestamp.
-        // solium-disable-next-line security/no-block-members
-        require(data.frozenTime(account) + 4 weeks < now, "cannot wipe frozen account before 4 weeks");
-        _burn(account, data.balance(account));
-        emit Wiped(freezer, account);
-    }
-
-
     // ==== Token transfers, allowances, minting, and burning ====
 
 
@@ -207,8 +157,6 @@ contract Reserve is IERC20, Ownable {
     function transfer(address to, uint256 value)
         external
         notPaused
-        notFrozen(msg.sender)
-        notFrozen(to)
         returns (bool)
     {
         _transfer(msg.sender, to, value);
@@ -232,8 +180,6 @@ contract Reserve is IERC20, Ownable {
     function approve(address spender, uint256 value)
         external
         notPaused
-        notFrozen(msg.sender)
-        notFrozen(spender)
         returns (bool)
     {
         _approve(msg.sender, spender, value);
@@ -247,9 +193,6 @@ contract Reserve is IERC20, Ownable {
     function transferFrom(address from, address to, uint256 value)
         external
         notPaused
-        notFrozen(msg.sender)
-        notFrozen(from)
-        notFrozen(to)
         returns (bool)
     {
         _transfer(from, to, value);
@@ -264,8 +207,6 @@ contract Reserve is IERC20, Ownable {
     function increaseAllowance(address spender, uint256 addedValue)
         external
         notPaused
-        notFrozen(msg.sender)
-        notFrozen(spender)
         returns (bool)
     {
         _approve(msg.sender, spender, data.allowed(msg.sender, spender).add(addedValue));
@@ -279,9 +220,6 @@ contract Reserve is IERC20, Ownable {
     function decreaseAllowance(address spender, uint256 subtractedValue)
         external
         notPaused
-        notFrozen(msg.sender)
-        // This is the one case in which changing the allowance of a frozen spender is allowed.
-        // notFrozen(spender)
         returns (bool)
     {
         _approve(msg.sender, spender, data.allowed(msg.sender, spender).sub(subtractedValue));
@@ -292,7 +230,6 @@ contract Reserve is IERC20, Ownable {
     function mint(address account, uint256 value)
         external
         notPaused
-        notFrozen(account)
         only(minter)
     {
         require(account != address(0), "can't mint to address zero");
@@ -307,7 +244,6 @@ contract Reserve is IERC20, Ownable {
     function burnFrom(address account, uint256 value)
         external
         notPaused
-        notFrozen(account)
         only(minter)
     {
         _burn(account, value);
