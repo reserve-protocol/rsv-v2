@@ -48,6 +48,8 @@ type TestSuite struct {
 	managerAddress        common.Address
 	vault                 *abi.Vault
 	vaultAddress          common.Address
+	basket                *abi.Basket
+	basketAddress         common.Address
 	erc20s                []*abi.BasicERC20
 	erc20Addresses        []common.Address
 
@@ -339,10 +341,16 @@ func burningTransfer(from common.Address, value *big.Int) abi.ReserveTransfer {
 	}
 }
 
+func toAtto(n uint32, decimals uint32) *big.Int {
+	attoBase := big.NewInt(0).Exp(bigInt(10), bigInt(decimals), nil)
+	return big.NewInt(0).Mul(bigInt(n), attoBase)
+}
+
 func generateBackings(n int) []*big.Int {
 	var backing []*big.Int
 	for i := 0; i < n; i++ {
-		backing = append(backing, bigInt(uint32(i+1)))
+		val := bigInt(uint32(i + 1))
+		backing = append(backing, val)
 	}
 	return backing
 }

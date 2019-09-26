@@ -90,7 +90,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 
 	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
 
-	// Vault
+	// Vault.
 	vaultAddress, tx, vault, err := abi.DeployVault(s.signer, s.node)
 
 	s.logParsers[vaultAddress] = vault
@@ -105,7 +105,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.vault = vault
 	s.vaultAddress = vaultAddress
 
-	// Manager
+	// Manager.
 	managerAddress, tx, manager, err := abi.DeployManager(
 		s.signer, s.node, vaultAddress, reserveAddress, bigInt(0),
 	)
@@ -117,7 +117,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.manager = manager
 	s.managerAddress = managerAddress
 
-	// Set all auths to Manager
+	// Set all auths to Manager.
 	s.requireTxStrongly(s.reserve.ChangeMinter(s.signer, managerAddress))(
 		abi.ReserveMinterChanged{NewMinter: managerAddress},
 	)
@@ -125,12 +125,23 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 		abi.ReservePauserChanged{NewPauser: managerAddress},
 	)
 
-	// Set the operator
+	// Set the operator.
 	s.requireTxStrongly(s.manager.SetOperator(s.signer, s.operator.address()))(
 		abi.ManagerOperatorChanged{
 			OldAccount: zeroAddress(), NewAccount: s.operator.address(),
 		},
 	)
+
+	// Set the basket.
+	basketAddress, err := s.manager.Basket(nil)
+	s.Require().NoError(err)
+	s.NotEqual(zeroAddress(), basketAddress)
+
+	basket, err := abi.NewBasket(basketAddress, s.node)
+	s.Require().NoError(err)
+
+	s.basketAddress = basketAddress
+	s.basket = basket
 
 	// Deploy collateral ERC20s
 	s.erc20s = make([]*abi.BasicERC20, 3)
@@ -230,16 +241,14 @@ func (s *ManagerSuite) TestProposeWeightsHappyPath() {
 	// Advance 24h.
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
 
-	// Fund proposer account with ERC20s.
-	s.fundAccountWithERC20sAndApprove(proposer, bigInt(1000))
-
 	// Execute Proposal.
 	s.requireTxStrongly(s.manager.ExecuteProposal(signer(proposer), bigInt(0)))(
 		abi.ManagerProposalExecuted{
-			Id: bigInt(0), Proposer: proposer.address(), Executor: proposer.address(),
-		},
-		abi.ManagerBasketChanged{
-			OldBasket: zeroAddress(), NewBasket: proposalBasketAddress,
+			Id:        bigInt(0),
+			Proposer:  proposer.address(),
+			Executor:  proposer.address(),
+			OldBasket: s.basketAddress,
+			NewBasket: proposalBasketAddress,
 		},
 	)
 
@@ -249,11 +258,15 @@ func (s *ManagerSuite) TestProposeWeightsHappyPath() {
 	// Are we collateralized?
 	s.assertManagerCollateralized()
 
+	// Now we should be able to unpause.
 	s.requireTxStrongly(s.manager.Unpause(s.signer))(
 		abi.ManagerUnpaused{
 			Account: s.owner.address(),
 		},
 	)
+
+	// // Fund proposer account with ERC20s.
+	// s.fundAccountWithERC20sAndApprove(proposer, toAtto(1000))
 
 }
 

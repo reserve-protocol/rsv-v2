@@ -200,7 +200,11 @@ func (s *VaultSuite) TestWithdrawToVoidWithdrawal() {
 	// Make transfer.
 	s.requireTxStrongly(
 		s.vault.WithdrawTo(s.signer, s.erc20Addresses[0], val, receiver.address()),
-	)()
+	)(
+		abi.BasicERC20Transfer{
+			From: s.vaultAddress, To: receiver.address(), Value: val,
+		},
+	)
 
 	// Check that resultant balance is as expected.
 	balance, err = s.erc20s[0].BalanceOf(nil, s.vaultAddress)
