@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"math/big"
 	"os/exec"
 	"testing"
 
@@ -131,102 +130,13 @@ func (s *VaultSuite) TestChangeManager() {
 	s.Equal(manager.address(), managerAddress)
 }
 
-// TestBatchWithdrawTo unit tests the batchWidthdrawTo function.
-func (s *VaultSuite) TestBatchWithdrawTo() {
-	receiver := s.account[2]
-	var initialAmounts []*big.Int
-	var withdrawAmounts []*big.Int
-	var expectedAmounts []*big.Int
-	var eventsToExpect []fmt.Stringer
-
-	// Determine what amounts to transfer and expect.
-	for i, erc20 := range s.erc20s {
-		balance, err := erc20.BalanceOf(nil, s.vaultAddress)
-		s.Require().NoError(err)
-
-		val := bigInt(uint32(i + 1))
-		initialAmounts = append(initialAmounts, balance)
-		withdrawAmounts = append(withdrawAmounts, val)
-		expectedAmounts = append(expectedAmounts, balance.Sub(balance, val))
-		eventsToExpect = append(eventsToExpect, abi.BasicERC20Transfer{
-			From: s.vaultAddress, To: receiver.address(), Value: val,
-		})
-	}
-
-	// Transfer amounts.
-	eventsToExpect = append(eventsToExpect, abi.VaultBatchWithdrawal{
-		Tokens: s.erc20Addresses, Quantities: withdrawAmounts, To: receiver.address(),
-	})
-	s.requireTxStrongly(
-		s.vault.BatchWithdrawTo(s.signer, s.erc20Addresses, withdrawAmounts, receiver.address()))(
-		eventsToExpect...,
-	)
-
-	// Test expectations.
-	for i, erc20 := range s.erc20s {
-		balance, err := erc20.BalanceOf(nil, s.vaultAddress)
-		s.Require().NoError(err)
-		s.Equal(expectedAmounts[i], balance)
-	}
-}
-
-// TestBatchWithdrawToVoidWithdrawal makes sure we perform the void withdrawal.
-func (s *VaultSuite) TestBatchWithdrawToVoidWithdrawal() {
-	receiver := s.account[2]
-	var initialAmounts []*big.Int
-	var withdrawAmounts []*big.Int
-	var expectedAmounts []*big.Int
-
-	// Determine what amounts to transfer and expect.
-	for _, erc20 := range s.erc20s {
-		balance, err := erc20.BalanceOf(nil, s.vaultAddress)
-		s.Require().NoError(err)
-
-		val := bigInt(0)
-		initialAmounts = append(initialAmounts, balance)
-		withdrawAmounts = append(withdrawAmounts, val)
-		expectedAmounts = append(expectedAmounts, balance.Sub(balance, val))
-	}
-
-	// Perform the void withdrawal.
-	s.requireTxStrongly(
-		s.vault.BatchWithdrawTo(s.signer, s.erc20Addresses, withdrawAmounts, receiver.address()))(
-		abi.VaultBatchWithdrawal{
-			Tokens: s.erc20Addresses, Quantities: withdrawAmounts, To: receiver.address(),
-		},
-	)
-
-	// Check that balances haven't changed.
-	for i, erc20 := range s.erc20s {
-		balance, err := erc20.BalanceOf(nil, s.vaultAddress)
-		s.Require().NoError(err)
-		s.Equal(expectedAmounts[i], balance)
-	}
-}
-
-// TestBatchWithdrawToBadInput makes sure we perform the void withdrawal.
-func (s *VaultSuite) TestBatchWithdrawToBadInput() {
-	receiver := s.account[2]
-	var withdrawAmounts []*big.Int
-
-	// Determine what amounts to transfer and expect.
-	for i, _ := range s.erc20s {
-		val := bigInt(uint32(i + 1))
-		withdrawAmounts = append(withdrawAmounts, val)
-	}
-	// Add one more to make it break
-	withdrawAmounts = append(withdrawAmounts, bigInt(0))
-
-	// Make sure the withdrawal fails.
-	s.requireTxFails(
-		s.vault.BatchWithdrawTo(s.signer, s.erc20Addresses, withdrawAmounts, receiver.address()),
-	)
-}
-
-// TestFunctionsProtected makes sure the endpoint modifiers work as expected.
-func (s *VaultSuite) TestFunctionsProtected() {
-	// Change the Manager address.
+// TestChangeManagerProtected makes sure changeManager is protected.
+func (s *VaultSuite) TestChangeManagerProtected() {
 	manager := s.account[1]
+	// Try to change the Manager as someone other than owner.
+	s.requireTxFails(s.vault.ChangeManager(signer(manager), manager.address()))
+
+	// Change the Manager address as owner.
 	s.requireTxStrongly(s.vault.ChangeManager(s.signer, manager.address()))(
 		abi.VaultManagerTransferred{
 			PreviousManager: s.owner.address(), NewManager: manager.address(),
@@ -238,18 +148,95 @@ func (s *VaultSuite) TestFunctionsProtected() {
 	s.Require().NoError(err)
 	s.Equal(manager.address(), managerAddress)
 
-	// Make sure only the owner can call `changeManager`.
+	// Make sure it's still the case only the owner can change the manager.
 	receiver := s.account[2]
 	s.requireTxFails(s.vault.ChangeManager(signer(manager), receiver.address()))
 	s.requireTxFails(s.vault.ChangeManager(signer(s.account[2]), receiver.address()))
-
-	// Make sure only the manager can call `batchWithdrawTo`.
-	var withdrawAmounts []*big.Int
-	s.requireTxFails(
-		s.vault.BatchWithdrawTo(s.signer, s.erc20Addresses, withdrawAmounts, receiver.address()),
+	s.requireTxStrongly(s.vault.ChangeManager(s.signer, receiver.address()))(
+		abi.VaultManagerTransferred{
+			PreviousManager: manager.address(), NewManager: receiver.address(),
+		},
 	)
-	s.requireTxFails(
-		s.vault.BatchWithdrawTo(signer(receiver), s.erc20Addresses, withdrawAmounts, receiver.address()),
+}
+
+// TestWithdrawTo unit tests the withdrawTo function.
+func (s *VaultSuite) TestWithdrawTo() {
+	receiver := s.account[2]
+
+	for i, erc20 := range s.erc20s {
+		balance, err := erc20.BalanceOf(nil, s.vaultAddress)
+		s.Require().NoError(err)
+
+		val := bigInt(uint32(i + 1))
+		expected := balance.Sub(balance, val)
+
+		// Make transfer.
+		s.requireTxStrongly(
+			s.vault.WithdrawTo(s.signer, s.erc20Addresses[i], val, receiver.address()),
+		)(
+			abi.BasicERC20Transfer{
+				From: s.vaultAddress, To: receiver.address(), Value: val,
+			},
+		)
+
+		// Check that resultant balance is as expected.
+		balance, err = erc20.BalanceOf(nil, s.vaultAddress)
+		s.Require().NoError(err)
+		s.Equal(expected, balance)
+	}
+}
+
+// TestBatchWithdrawToVoidWithdrawal makes sure we perform the void withdrawal.
+func (s *VaultSuite) TestWithdrawToVoidWithdrawal() {
+	receiver := s.account[2]
+
+	// Do this for a few ERC20s
+	balance, err := s.erc20s[0].BalanceOf(nil, s.vaultAddress)
+	s.Require().NoError(err)
+
+	val := bigInt(0)
+	expected := balance
+
+	// Make transfer.
+	s.requireTxStrongly(
+		s.vault.WithdrawTo(s.signer, s.erc20Addresses[0], val, receiver.address()),
+	)()
+
+	// Check that resultant balance is as expected.
+	balance, err = s.erc20s[0].BalanceOf(nil, s.vaultAddress)
+	s.Require().NoError(err)
+	s.Equal(expected, balance)
+}
+
+// TestWithdrawToProtected makes sure withdrawTo is protected.
+func (s *VaultSuite) TestWithdrawToProtected() {
+	manager := s.account[1]
+	receiver := s.account[2]
+	val := bigInt(1)
+
+	// Set the manager.
+	s.requireTxStrongly(s.vault.ChangeManager(s.signer, manager.address()))(
+		abi.VaultManagerTransferred{
+			PreviousManager: s.owner.address(), NewManager: manager.address(),
+		},
 	)
 
+	// Confirm manager can transfer.
+	s.requireTxStrongly(
+		s.vault.WithdrawTo(signer(manager), s.erc20Addresses[0], val, receiver.address()),
+	)(
+		abi.BasicERC20Transfer{
+			From: s.vaultAddress, To: receiver.address(), Value: val,
+		},
+	)
+
+	// Confirm owner cannot transfer
+	s.requireTxFails(
+		s.vault.WithdrawTo(s.signer, s.erc20Addresses[0], val, receiver.address()),
+	)
+
+	// Confirm random cannot transfer
+	s.requireTxFails(
+		s.vault.WithdrawTo(signer(receiver), s.erc20Addresses[0], val, receiver.address()),
+	)
 }

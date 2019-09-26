@@ -165,15 +165,15 @@ func (s *ManagerSuite) TestConstructor() {
 	s.Equal(true, paused)
 }
 
-func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
+func (s *ManagerSuite) TestProposeWeightsHappyPath() {
 	tokens := s.erc20Addresses
-	backing := generateBackings(len(tokens))
+	weights := generateBackings(len(tokens))
 	proposer := s.account[2]
 
 	// Propose the basket.
-	s.requireTxWeakly(s.manager.ProposeNewBasket(signer(proposer), tokens, backing))(
-		abi.ManagerNewBasketProposalCreated{
-			Id: bigInt(0), Proposer: proposer.address(), Tokens: tokens, Backing: backing,
+	s.requireTxWeakly(s.manager.ProposeWeights(signer(proposer), tokens, weights))(
+		abi.ManagerWeightsProposed{
+			Id: bigInt(0), Proposer: proposer.address(), Tokens: tokens, Weights: weights,
 		},
 		abi.ProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
 	)
@@ -186,30 +186,18 @@ func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
 	// Construct Proposal binding.
 	proposalAddress, err := s.manager.Proposals(nil, bigInt(0))
 	s.Require().NoError(err)
-	proposal, err := abi.NewProposal(proposalAddress, s.node)
+	proposal, err := abi.NewWeightProposal(proposalAddress, s.node)
 	s.Require().NoError(err)
 
 	// Check Proposal has correct fields
-	id, err := proposal.Id(nil)
-	s.Require().NoError(err)
-	s.Equal(bigInt(0).String(), id.String())
-
 	foundProposer, err := proposal.Proposer(nil)
 	s.Require().NoError(err)
 	s.Equal(proposer.address(), foundProposer)
 
-	token, err := proposal.Tokens(nil, bigInt(0))
+	state, err := proposal.State(nil)
 	s.Require().NoError(err)
-	s.Equal(tokens[0], token)
+	s.Equal(uint8(0), state) // State.Created should have value 0
 
-	token, err = proposal.Tokens(nil, bigInt(uint32(len(tokens)+1)))
-	s.Require().Error(err)
-
-	status, err := proposal.GetStatus(nil)
-	s.Require().NoError(err)
-	s.Equal(uint8(0), status) // Statuses.Created should have value 0
-
-	// Construct Basket binding.
 	proposalBasketAddress, err := proposal.Basket(nil)
 	s.Require().NoError(err)
 	s.NotEqual(zeroAddress(), proposalBasketAddress)
@@ -222,14 +210,14 @@ func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
 	s.Require().NoError(err)
 	s.True(reflect.DeepEqual(basketTokens, tokens))
 
-	basketSize, err := basket.GetSize(nil)
+	basketSize, err := basket.Size(nil)
 	s.Require().NoError(err)
 	s.Equal(bigInt(uint32(len(tokens))).String(), basketSize.String())
 
-	for i := 0; i < len(backing); i++ {
-		foundBacking, err := basket.BackingMap(nil, tokens[i])
+	for i := 0; i < len(weights); i++ {
+		foundBacking, err := basket.Weights(nil, tokens[i])
 		s.Require().NoError(err)
-		s.Equal(backing[i], foundBacking)
+		s.Equal(weights[i], foundBacking)
 	}
 
 	// Accept the Proposal.
@@ -245,27 +233,27 @@ func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
 	// Fund proposer account with ERC20s.
 	s.fundAccountWithERC20sAndApprove(proposer, bigInt(1000))
 
-	// // Execute Proposal.
-	// s.requireTxStrongly(s.manager.ExecuteProposal(signer(proposer), bigInt(0)))(
-	// 	abi.ManagerProposalExecuted{
-	// 		Id: bigInt(0), Proposer: proposer.address(), Executor: proposer.address(),
-	// 	},
-	// 	abi.ManagerBasketChanged{
-	// 		OldBasket: zeroAddress(), NewBasket: proposalBasketAddress,
-	// 	},
-	// )
+	// Execute Proposal.
+	s.requireTxStrongly(s.manager.ExecuteProposal(signer(proposer), bigInt(0)))(
+		abi.ManagerProposalExecuted{
+			Id: bigInt(0), Proposer: proposer.address(), Executor: proposer.address(),
+		},
+		abi.ManagerBasketChanged{
+			OldBasket: zeroAddress(), NewBasket: proposalBasketAddress,
+		},
+	)
 
-	// // Gets the current basket and makes sure it is the same as `tokens` + `backing`
-	// s.assertCurrentBasketMirrorsTargets(tokens, backing)
+	// Gets the current basket and makes sure it is the same as `tokens` + `weights`
+	s.assertCurrentBasketMirrorsTargets(tokens, weights)
 
-	// // Are we collateralized?
-	// s.assertManagerCollateralized()
+	// Are we collateralized?
+	s.assertManagerCollateralized()
 
-	// s.requireTxStrongly(s.manager.Unpause(s.signer))(
-	// 	abi.ManagerUnpaused{
-	// 		Account: s.owner.address(),
-	// 	},
-	// )
+	s.requireTxStrongly(s.manager.Unpause(s.signer))(
+		abi.ManagerUnpaused{
+			Account: s.owner.address(),
+		},
+	)
 
 }
 

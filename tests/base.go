@@ -168,7 +168,7 @@ func (s *TestSuite) assertCurrentBasketMirrorsTargets(tokens []common.Address, b
 	// Check that tokens and backings are as expected.
 	for i := 0; i < len(tokens); i++ {
 		s.Equal(tokens[i], basketTokens[i])
-		weight, err := basket.BackingMap(nil, tokens[i])
+		weight, err := basket.Weights(nil, tokens[i])
 		s.Require().NoError(err)
 		s.Equal(backing[i].String(), weight.String())
 	}
