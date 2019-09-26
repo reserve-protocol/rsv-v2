@@ -55,14 +55,14 @@ contract Proposal is Ownable {
 
     /// Moves a proposal from the Accepted to Completed state.
     /// Returns the tokens, quantitiesIn, and quantitiesOut, required to implement the proposal.
-    function complete(uint256 rsvSupply, uint8 rsvDecimals, address vault, Basket oldBasket) 
+    function complete(IRSV rsv, address vault, Basket oldBasket) 
         external onlyOwner returns(Basket)
     {
         require(state == State.Accepted, "proposal must be accepted");
         require(now > time, "wait to execute");
         state = State.Completed;
 
-        return _newBasket(rsv, vaultAddr, prevBasket);
+        return _newBasket(rsv, vault, oldBasket);
     }
 
     /// Returns the newly-proposed basket. This varies for different types of proposals,

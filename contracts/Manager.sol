@@ -11,7 +11,7 @@ import "./Proposal.sol";
 
 interface IVault {
     function changeManger(address) external;
-    function withdrawTokenTo(address, uint256, address) external;
+    function withdrawTo(address, uint256, address) external;
 }
 
 /**
@@ -201,7 +201,7 @@ contract Manager is Ownable {
 
     /// Redeem RSV for collateral tokens. 
     function redeem(uint256 rsvAmount) external notPaused onlyWhitelist {
-        _redeem(_rsvQuantity);
+        _redeem(rsvAmount);
     }
 
     /*
@@ -301,8 +301,7 @@ contract Manager is Ownable {
         Basket oldBasket = basket;
 
         // Complete proposal and compute new basket
-        basket = proposals[proposalID].complete(
-            rsv.totalSupply(), rsv.decimals(), address(vault), oldBasket);
+        basket = proposals[proposalID].complete(rsv, address(vault), oldBasket);
         
         // For each token in either basket, perform transfers between proposer and Vault 
         for (uint i = 0; i < oldBasket.size(); i++) {
@@ -399,7 +398,7 @@ contract Manager is Ownable {
         // Compensate with collateral tokens.
         uint256[] memory amounts = toRedeem(rsvAmount);
         for (uint i = 0; i < basket.size(); i++) {
-            vault.withdrawTokenTo(basket.tokens(i), amounts[i], _msgSender());
+            vault.withdrawTo(basket.tokens(i), amounts[i], _msgSender());
         }
 
         assert(isFullyCollateralized());
@@ -426,7 +425,6 @@ contract Manager is Ownable {
             uint256 transferAmount = _weighted(rsv.totalSupply(), oldWeight.sub(newWeight));
             vault.withdrawTo(token, transferAmount, proposer);
         }
-        return required;
     }
 
     // From a weighting of RSV (e.g., a basket weight) and an amount of RSV,
