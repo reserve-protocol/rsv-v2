@@ -261,7 +261,7 @@ contract Manager is Ownable {
 
         proposals[proposalsLength] = new WeightProposal(
             _msgSender(),
-            new Basket(basket, _tokens, _weights)
+            new Basket(Basket(0), _tokens, _weights)
         );
 
         emit NewBasketProposalCreated(proposalsLength, _msgSender(), _tokens, _weights);
