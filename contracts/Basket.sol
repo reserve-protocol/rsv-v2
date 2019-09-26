@@ -1,5 +1,6 @@
 pragma solidity ^0.5.8;
 
+
 /**
  * The Basket contract defines the backing weights for a what a  is backed by.
  *
@@ -17,12 +18,13 @@ contract Basket {
     constructor(Basket prev, address[] memory _tokens, uint256[] memory _weights) public {
         require(_tokens.length == _weights.length, "Basket: unequal array lengths");
         require(_tokens.length > 0 && _tokens.length <= 100, "Basket: bad length");
-        
+        tokens = new address[](_tokens.length);
+
         for (uint i = 0; i < _tokens.length; i++) {
-            weights[_tokens[i]] = _weights[i];
-            hasToken[_tokens[i]] = true;
+            weights[address(_tokens[i])] = _weights[i];
+            hasToken[address(_tokens[i])] = true;
+            tokens[i] = address(_tokens[i]);
         }
-        tokens = _tokens;
 
         // If a previous basket is specified, copy over its contents where they were not already set.
         if (prev != Basket(0)) {
@@ -45,38 +47,3 @@ contract Basket {
         return tokens.length;
     }
 }
-
-/*
-    /// Calculates the quantities of tokens required to back `_frontTokenSupply`. 
-    function quantitiesRequired(uint256 _frontTokenSupply) external view returns(uint256[] memory) {
-        uint256[] memory tokenQuantities = new uint256[](tokens.length);
-
-        for (uint i = 0; i < tokens.length; i++) {
-            tokenQuantities[i] = 
-                _frontTokenSupply.mul(backingMap[tokens[i]]).div(frontTokenDecimals);
-        }
-
-        return tokenQuantities;
-    }
-
-    /// Calculates what quantities of tokens are needed to reach `_other` at `_frontTokenSupply`.
-    function newQuantitiesRequired(uint256 _frontTokenSupply, Basket _other)
-        external view returns(uint256[] memory) {
-        uint256[] memory required = new uint256[](tokens.length);
-
-        // Calculate required in terms of backing quantities, that is, per single front token. 
-        for (uint i = 0; i < tokens.length; i++) {
-            if (_other.backingMap(tokens[i]) > backingMap[tokens[i]]) {
-                required[i] = _other.backingMap(tokens[i]).sub(backingMap[tokens[i]]);
-            }
-        }
-
-        // Multiply by `_frontTokenSupply` to get total quantities.
-        for (uint i = 0; i < tokens.length; i++) {
-            required[i] = 
-                _frontTokenSupply.mul(required[i]).div(frontTokenDecimals);
-        }
-
-        return required;
-    }
-*/
