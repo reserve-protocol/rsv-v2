@@ -70,7 +70,14 @@ contract Proposal is Ownable {
     function _newBasket(IRSV rsv, address vault, Basket oldBasket) internal returns(Basket);
 }
 
-/// TODO:doc
+/**
+ * A WeightProposal represents a suggestion to change the backing for RSV to a new distribution
+ * of tokens. You can think of it as designating what a _single RSV_ should be backed by, but 
+ * deferring on the precise quantities of tokens that will be need to be exchanged until a later 
+ * point in time.
+ *
+ * When this proposal is completed, it simply returns the target basket. 
+ */
 contract WeightProposal is Proposal {
     Basket public basket;
 
@@ -84,7 +91,15 @@ contract WeightProposal is Proposal {
     }
 }
 
-/// TODO:doc
+/**
+ * A SwapProposal represents a suggestion to transfer fixed amounts of tokens into and out of the
+ * vault. Whereas a WeightProposal designates how much a _single RSV_ should be backed by, 
+ * a SwapProposal first designates what quantities of tokens to transfer in total and then 
+ * solves for the new resultant basket later. 
+ *
+ * When this proposal is completed, it calculates what the weights for the new basket will be
+ * and returns it. 
+ */
 contract SwapProposal is Proposal {
     address public proposer;
     address[] public tokens;
@@ -104,10 +119,10 @@ contract SwapProposal is Proposal {
         toVault = _toVault;
     }
 
-    /// Return the newly-proposed basket, based on the current vault and the old basket
+    /// Return the newly-proposed basket, based on the current vault and the old basket.
     function _newBasket(IRSV rsv, address vault, Basket oldBasket)
         internal returns(Basket) {
-        // Compute new basket
+        // Compute new basket.
         uint256[] memory weights = new uint256[](tokens.length);
         
         for (uint i = 0; i < tokens.length; i++) {
