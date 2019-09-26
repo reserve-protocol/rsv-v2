@@ -2,9 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
 	"os/exec"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/suite"
@@ -19,6 +21,8 @@ func TestManager(t *testing.T) {
 
 type ManagerSuite struct {
 	TestSuite
+
+	operator account
 }
 
 var (
@@ -62,7 +66,8 @@ func (s *ManagerSuite) TearDownSuite() {
 
 // BeforeTest runs before each test in the suite.
 func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
-	s.owner = s.account[0].address()
+	s.owner = s.account[0]
+	s.operator = s.account[1]
 
 	// Re-deploy Reserve and store a handle to the Go binding and the contract address.
 	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
@@ -72,7 +77,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	}
 
 	s.requireTxStrongly(tx, err)(abi.ReserveOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.owner,
+		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 	})
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
@@ -89,9 +94,14 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	vaultAddress, tx, vault, err := abi.DeployVault(s.signer, s.node)
 
 	s.logParsers[vaultAddress] = vault
-	s.requireTxStrongly(tx, err)(abi.VaultOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.owner,
-	})
+	s.requireTxStrongly(tx, err)(
+		abi.VaultOwnershipTransferred{
+			PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
+		},
+		abi.VaultManagerTransferred{
+			PreviousManager: zeroAddress(), NewManager: s.owner.address(),
+		},
+	)
 	s.vault = vault
 	s.vaultAddress = vaultAddress
 
@@ -102,7 +112,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 
 	s.logParsers[managerAddress] = manager
 	s.requireTxStrongly(tx, err)(abi.ManagerOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.owner,
+		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 	})
 	s.manager = manager
 	s.managerAddress = managerAddress
@@ -114,8 +124,12 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.requireTxStrongly(s.reserve.ChangePauser(s.signer, managerAddress))(
 		abi.ReservePauserChanged{NewPauser: managerAddress},
 	)
-	s.requireTxStrongly(s.reserve.ChangeFreezer(s.signer, managerAddress))(
-		abi.ReserveFreezerChanged{NewFreezer: managerAddress},
+
+	// Set the operator
+	s.requireTxStrongly(s.manager.SetOperator(s.signer, s.operator.address()))(
+		abi.ManagerOperatorChanged{
+			OldAccount: zeroAddress(), NewAccount: s.operator.address(),
+		},
 	)
 
 	// Deploy collateral ERC20s
@@ -126,6 +140,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 		s.Require().NoError(err)
 		s.erc20s[i] = erc20
 		s.erc20Addresses[i] = erc20Address
+		s.logParsers[erc20Address] = erc20
 	}
 }
 
@@ -141,10 +156,6 @@ func (s *ManagerSuite) TestConstructor() {
 	s.Require().NoError(err)
 	s.Equal(s.reserveAddress, rsvAddr)
 
-	whitelisted, err := s.manager.Whitelist(nil, s.owner)
-	s.Require().NoError(err)
-	s.Equal(true, whitelisted)
-
 	seigniorage, err := s.manager.Seigniorage(nil)
 	s.Require().NoError(err)
 	s.Equal(bigInt(0).String(), seigniorage.String())
@@ -152,40 +163,40 @@ func (s *ManagerSuite) TestConstructor() {
 	paused, err := s.manager.Paused(nil)
 	s.Require().NoError(err)
 	s.Equal(true, paused)
-
-	useWhitelist, err := s.manager.UseWhitelist(nil)
-	s.Require().NoError(err)
-	s.Equal(true, useWhitelist)
 }
 
 func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
 	tokens := s.erc20Addresses
 	backing := generateBackings(len(tokens))
-	owner := s.account[0]
-	s.requireTxWeakly(s.manager.ProposeNewBasket(signer(owner), tokens, backing))(
+	proposer := s.account[2]
+
+	// Propose the basket.
+	s.requireTxWeakly(s.manager.ProposeNewBasket(signer(proposer), tokens, backing))(
 		abi.ManagerNewBasketProposalCreated{
-			Id: bigInt(0), Proposer: owner.address(), Tokens: tokens, Backing: backing,
+			Id: bigInt(0), Proposer: proposer.address(), Tokens: tokens, Backing: backing,
 		},
 		abi.ProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
 	)
 
+	// Confirm proposals length increments.
 	proposalsLength, err := s.manager.ProposalsLength(nil)
 	s.Require().NoError(err)
 	s.Equal(proposalsLength, bigInt(1))
 
+	// Construct Proposal binding.
 	proposalAddress, err := s.manager.Proposals(nil, bigInt(0))
 	s.Require().NoError(err)
-
 	proposal, err := abi.NewProposal(proposalAddress, s.node)
 	s.Require().NoError(err)
 
+	// Check Proposal has correct fields
 	id, err := proposal.Id(nil)
 	s.Require().NoError(err)
 	s.Equal(bigInt(0).String(), id.String())
 
-	proposer, err := proposal.Proposer(nil)
+	foundProposer, err := proposal.Proposer(nil)
 	s.Require().NoError(err)
-	s.Equal(owner.address(), proposer)
+	s.Equal(proposer.address(), foundProposer)
 
 	token, err := proposal.Tokens(nil, bigInt(0))
 	s.Require().NoError(err)
@@ -198,6 +209,7 @@ func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
 	s.Require().NoError(err)
 	s.Equal(uint8(0), status) // Statuses.Created should have value 0
 
+	// Construct Basket binding.
 	proposalBasketAddress, err := proposal.Basket(nil)
 	s.Require().NoError(err)
 	s.NotEqual(zeroAddress(), proposalBasketAddress)
@@ -205,6 +217,7 @@ func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
 	basket, err := abi.NewBasket(proposalBasketAddress, s.node)
 	s.Require().NoError(err)
 
+	// Check Basket has correct fields
 	basketTokens, err := basket.GetTokens(nil)
 	s.Require().NoError(err)
 	s.True(reflect.DeepEqual(basketTokens, tokens))
@@ -219,6 +232,41 @@ func (s *ManagerSuite) TestProposeNewBasketHappyPath() {
 		s.Equal(backing[i], foundBacking)
 	}
 
+	// Accept the Proposal.
+	s.requireTxStrongly(s.manager.AcceptProposal(signer(s.operator), bigInt(0)))(
+		abi.ManagerProposalAccepted{
+			Id: bigInt(0), Proposer: proposer.address(),
+		},
+	)
+
+	// Advance 24h.
+	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
+
+	// Fund proposer account with ERC20s.
+	s.fundAccountWithERC20sAndApprove(proposer, bigInt(1000))
+
+	// // Execute Proposal.
+	// s.requireTxStrongly(s.manager.ExecuteProposal(signer(proposer), bigInt(0)))(
+	// 	abi.ManagerProposalExecuted{
+	// 		Id: bigInt(0), Proposer: proposer.address(), Executor: proposer.address(),
+	// 	},
+	// 	abi.ManagerBasketChanged{
+	// 		OldBasket: zeroAddress(), NewBasket: proposalBasketAddress,
+	// 	},
+	// )
+
+	// // Gets the current basket and makes sure it is the same as `tokens` + `backing`
+	// s.assertCurrentBasketMirrorsTargets(tokens, backing)
+
+	// // Are we collateralized?
+	// s.assertManagerCollateralized()
+
+	// s.requireTxStrongly(s.manager.Unpause(s.signer))(
+	// 	abi.ManagerUnpaused{
+	// 		Account: s.owner.address(),
+	// 	},
+	// )
+
 }
 
 func (s *ManagerSuite) TestProposeQuantitiesAdjustment() {
@@ -227,4 +275,31 @@ func (s *ManagerSuite) TestProposeQuantitiesAdjustment() {
 	// s.requireTx(s.manager.ProposeQuantitiesAdjustment(signer(s.account[1]), in, out))(
 	// 	abi.ProposalProposalCreated{Id: bigInt(0), Proposer: s.account[1].address()},
 	// )
+}
+
+func (s *ManagerSuite) TestPauseAuth() {
+	s.requireTxFails(s.manager.Pause(signer(s.account[2])))
+	s.requireTxFails(s.manager.Pause(signer(s.operator)))
+	s.requireTxStrongly(s.manager.Pause(s.signer))(
+		abi.ManagerPaused{
+			Account: s.owner.address(),
+		},
+	)
+}
+
+// Helpers
+
+func (s *ManagerSuite) fundAccountWithERC20sAndApprove(acc account, val *big.Int) {
+	for _, erc20 := range s.erc20s {
+		s.requireTxStrongly(erc20.Transfer(s.signer, acc.address(), val))(
+			abi.BasicERC20Transfer{
+				From: s.owner.address(), To: acc.address(), Value: val,
+			},
+		)
+		s.requireTxStrongly(erc20.Approve(signer(acc), s.managerAddress, val))(
+			abi.BasicERC20Approval{
+				Owner: acc.address(), Spender: s.managerAddress, Value: val,
+			},
+		)
+	}
 }
