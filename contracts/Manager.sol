@@ -185,7 +185,7 @@ contract Manager is Ownable {
         return amounts;
     }
 
-    // ============================= Externals ================================
+    // ============================= External ================================
 
     /// Issue RSV to the caller and deposit collateral tokens in the Vault.
     function issue(uint256 rsvAmount) external notPaused {
@@ -345,7 +345,7 @@ contract Manager is Ownable {
     }
 
 
-    // ============================= Internals ================================
+    // ============================= Internal ================================
 
     /// Handles issuance.
     function _issue(uint256 rsvAmount) internal {
