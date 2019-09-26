@@ -126,6 +126,6 @@ contract SwapProposal is Proposal {
             weights[i] = newAmount.mul(uint256(10)**rsv.decimals()).div(rsv.totalSupply());
         }
 
-        return new Basket(Basket(oldBasket), tokens, weights);
+        return new Basket(oldBasket, tokens, weights);
     }
 }
