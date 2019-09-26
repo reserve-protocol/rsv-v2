@@ -14,8 +14,9 @@ import "./Basket.sol";
  * 2. Acceptance
  * 3. Completion
  *
- * A time can be set during acceptance to determine when completion is eligible.
- * A proposal can also be closed before it is Completed. 
+ * A time can be set during acceptance to determine when completion is
+ * eligible.  A proposal can also be cancelled before it is completed. If a
+ * proposal is cancelled, it can no longer become Completed.
  *
  * This contract is intended to be used in one of two possible ways. Either:
  * - A target RSV basket is suggested, and quantities to be exchanged are  
