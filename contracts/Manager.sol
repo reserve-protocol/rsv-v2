@@ -269,8 +269,8 @@ contract Manager is Ownable {
         emit ProposalAccepted(id, proposals[id].proposer());
     }
 
-    // Cancels a proposal. This can be done anytime before it is enacted by any of:
-    // 1. Proposer 2. Operator 3. Owner
+    /// Cancels a proposal. This can be done anytime before it is enacted by any of:
+    /// 1. Proposer 2. Operator 3. Owner
     function cancelProposal(uint256 id) external {
         require(
             _msgSender() == proposals[id].proposer() ||
