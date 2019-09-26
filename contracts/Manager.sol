@@ -3,30 +3,15 @@ pragma solidity ^0.5.8;
 import "./zeppelin/token/ERC20/SafeERC20.sol";
 import "./zeppelin/token/ERC20/IERC20.sol";
 import "./zeppelin/math/SafeMath.sol";
+import "./rsv/IRSV.sol";
 import "./ownership/Ownable.sol";
 import "./Basket.sol";
 import "./Proposal.sol";
 
 
-interface IRSV {
-    // Standard ERC20 functions
-    function transfer(address, uint256) external returns(bool);
-    function approve(address, uint256) external returns(bool);
-    function transferFrom(address, address, uint256) external returns(bool);
-    function totalSupply() external view returns(uint256);
-    function balanceOf(address) external view returns(uint256);
-    function allowance(address, address) external view returns(uint256);
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed holder, address indexed spender, uint256 value);
-
-    // RSV-specific functions
-    function mint(address, uint256) external;
-    function burnFrom(address, uint256) external;
-}
-
 interface IVault {
     function changeManger(address) external;
-    function batchWithdrawTo(address[] calldata, uint256[] calldata, address) external;
+    function withdrawTo(address, uint256, address) external;
 }
 
 /**
@@ -68,7 +53,6 @@ contract Manager is Ownable {
     Basket public basket;
     IVault public vault;
     IRSV public rsv;
-    uint8 public constant rsvDecimals = 18;
 
     // Proposals
     mapping(uint256 => Proposal) public proposals;
@@ -101,13 +85,21 @@ contract Manager is Ownable {
     event DelayChanged(uint256 oldVal, uint256 newVal);
 
     // Proposals
-    event NewBasketProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] backing);
-    event NewQuantityAdjustmentProposalCreated(uint256 indexed id, address indexed proposer, address[] tokens, uint256[] quantitiesIn, uint256[] quantitiesOut);
+    event WeightsProposed(uint256 indexed id,
+                          address indexed proposer,
+                          address[] tokens,
+                          uint256[] weights);
+
+    event SwapProposed(uint256 indexed id,
+                       address indexed proposer,
+                       address[] tokens,
+                       uint256[] amounts,
+                       bool[] toVault);
+    
     event ProposalAccepted(uint256 indexed id, address indexed proposer);
     event ProposalCanceled(uint256 indexed id, address indexed proposer, address indexed canceler);
     event ProposalExecuted(uint256 indexed id, address indexed proposer, address indexed executor);
     event BasketChanged(address indexed oldBasket, address indexed newBasket);
-
 
     // ============================ Constructor ===============================
 
@@ -148,101 +140,117 @@ contract Manager is Ownable {
 
     /// Ensure that the Vault is fully collateralized. 
     function isFullyCollateralized() public view returns(bool) {
-        uint256[] memory expected = basket.quantitiesRequired(rsv.totalSupply());
-        for (uint i = 0; i < basket.getSize(); i++) {
-            if (IERC20(basket.tokens(i)).balanceOf(address(vault)) < expected[i])
+        for (uint i = 0; i < basket.size(); i++) {
+            address token = basket.tokens(i);
+            uint256 fullAmount = _weighted(rsv.totalSupply(), basket.weights(token));
+
+            if (IERC20(token).balanceOf(address(vault)) < fullAmount)
                 return false;
         }
         return true;
     }
 
+    /// Get amounts of basket tokens required to issue an amount of RSV.
+    /// The returned array will be in the same order as the current basket.tokens.
+    function toIssue(uint256 rsvAmount) public view returns (uint256[] memory) {
+        uint256[] memory amounts = new uint256[](basket.size());
+        uint256 feeRate = uint256(seigniorage.add(BPS_FACTOR));
+
+        for (uint i = 0; i < basket.size(); i++) {
+            address token = basket.tokens(i);
+            amounts[i] = _weighted(rsvAmount, basket.weights(token)).mul(feeRate).div(BPS_FACTOR);
+        }
+
+        return amounts;
+    }
+
+    /// Get amounts of basket tokens that would be sent upon redeeming an amount of RSV.
+    /// The returned array will be in the same order as the current basket.tokens.
+    function toRedeem(uint256 rsvAmount) public view returns (uint256[] memory) {
+        uint256[] memory amounts = new uint256[](basket.size());
+
+        for (uint i = 0; i < basket.size(); i++) {
+            address token = basket.tokens(i);
+            amounts[i] = _weighted(rsvAmount, basket.weights(token));
+        }
+
+        return amounts;
+    }
+
     // ============================= Externals ================================
 
-    /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
-    function issue(uint256 _rsvQuantity) external notPaused {
-        _issue(_rsvQuantity);
+    /// Issue RSV to the caller and deposit collateral tokens in the Vault.
+    function issue(uint256 rsvAmount) external notPaused {
+        _issue(rsvAmount);
     }
 
-    // /// Issues the maximum amount of RSV to the caller based on their allowances.
-    // function issueMax() external notPaused {
-    //     uint256 max = _calculateMaxIssuable(_msgSender());
-    //     _issue(max);
-    // }
-
-    /// Redeem a quantity of RSV for collateral tokens. 
-    function redeem(uint256 _rsvQuantity) external notPaused {
-        _redeem(_rsvQuantity);
+    /// Redeem RSV for collateral tokens. 
+    function redeem(uint256 rsvAmount) external notPaused {
+        _redeem(rsvAmount);
     }
 
-    // /// Redeem `allowance` of RSV from the caller's account. 
-    // function redeemMax() external notPaused {
-    //     uint256 max = rsv.allowance(_msgSender(), address(this));
-    //     _redeem(max);
-    // }
-
-    /**
-     * Proposes an adjustment to the quantities of tokens in the Vault. Importantly, this type of
-     * proposal does not change token addresses. Therefore, if you want to introduce a new token,
-     * first use the other proposal type. 
-     */ 
-    function proposeQuantitiesAdjustment(
-        address[] calldata _tokens,
-        uint256[] calldata _amountsIn,
-        uint256[] calldata _amountsOut
+    /*
+     * Propose an exchange of current Vault tokens for new Vault tokens.
+     * 
+     * These parameters are phyiscally a set of arrays because Solidity doesn't let you pass
+     * around arrays of structs as parameters of transactions. Semantically, read these three
+     * lists as a list of triples (token, amount, toVault), where:
+     *
+     * - token is the address of an ERC-20 token,
+     * - amount is the amount of the token that the proposer says they will trade with the vault, and
+     * - toVault is the direction of that trade. If toVault is true, the proposer offers to send
+     *   `amount` of `token` to the vault. If toVault is false, the proposer expects to receive
+     *   `amount` of `token` from the vault.
+     * 
+     * If this proposal is accepted and executed, this set of absolute transfers will occur,
+     * and the Vault's basket weights will be adjusted accordingly. (The expected behavior of
+     * proposers is that they will aim to make proposals that move the basket weights towards
+     * some target of Reserve's management while maintaining full backing; the expected
+     * behavior of Reserve's management is to only accept such proposals.)
+     * 
+     * Note: This type of proposal does not remove token addresses!
+     * If you want to remove token addresses entirely, use proposeWeights.
+     * 
+     * Returns the new proposal's ID.
+     */
+    function proposeSwap(
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        bool[] calldata toVault
     ) 
         external returns(uint256)
     {
-        require(_tokens.length == _amountsIn.length, "token quantities mismatched");
-        require(_amountsIn.length == _amountsOut.length, "quantities mismatched");
+        require(tokens.length == amounts.length && amounts.length == toVault.length,
+                "proposeSwap: unequal lengths");
 
-        proposals[proposalsLength] = new Proposal(
-            proposalsLength,
-            _msgSender(),
-            _tokens,
-            _amountsIn,
-            _amountsOut,
-            Basket(0)
-        );
+        proposals[proposalsLength] = new SwapProposal(_msgSender(), tokens, amounts, toVault);
 
-        emit NewQuantityAdjustmentProposalCreated(
-            proposalsLength, 
-            _msgSender(), 
-            _tokens,
-            _amountsIn, 
-            _amountsOut
-        );
+        emit SwapProposed(proposalsLength, _msgSender(), tokens, amounts, toVault);
         return ++proposalsLength;
     }
 
     
-    /**
-     * Proposes a new basket defined by a list of tokens and their backing quantities. 
-     * Importantly, this type of proposal means the balances that will be required from the 
-     * proposer at the time of execution are variable. If the supply of RSV changes significantly,
-     * then much more tokens could be required to execute the proposal. 
+    /** 
+     * Propose a new basket, defined by a list of tokens address, and their basket weights.
      * 
-     */ 
-    function proposeNewBasket(
-        address[] calldata _tokens,
-        uint256[] calldata _backing
-    )
+     * Note: With this type of proposal, the allowances of tokens that will be required of the
+     * proposer may change between proposition and execution. If the supply of RSV rises or falls,
+     * then more or fewer tokens will be required to execute the proposal.
+     *
+     * Returns the new proposal's ID.
+     */
+
+    function proposeWeights(address[] calldata tokens, uint256[] calldata weights)
         external returns(uint256)
     {
-        require(_tokens.length == _backing.length, "mismatched token quantities");
-        require(_tokens.length > 0, "no tokens in basket");
-        uint256[] memory quantitiesIn;
-        uint256[] memory quantitiesOut;
+        require(tokens.length == weights.length, "proposeWeights: unequal lengths");
+        require(tokens.length > 0, "proposeWeights: zero length");
 
-        proposals[proposalsLength] = new Proposal(
-            proposalsLength,
-            _msgSender(),
-            _tokens,
-            quantitiesIn,
-            quantitiesOut,
-            new Basket(_tokens, _backing, rsvDecimals)
-        );
+        proposals[proposalsLength] =
+            new WeightProposal(_msgSender(), new Basket(Basket(0), tokens, weights));
 
-        emit NewBasketProposalCreated(proposalsLength, _msgSender(), _tokens, _backing);
+        emit WeightsProposed(proposalsLength, _msgSender(), tokens, weights);
+
         return ++proposalsLength;
     }
 
@@ -262,39 +270,41 @@ contract Manager is Ownable {
             _msgSender() == operator, 
             "cannot cancel"
         );
-        proposals[_proposalID].close();
+        proposals[_proposalID].cancel();
         emit ProposalCanceled(_proposalID, proposals[_proposalID].proposer(), _msgSender());
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
-    function executeProposal(uint256 _proposalID) external {
+    function executeProposal(uint256 proposalID) external {
         require(
-            _msgSender() == proposals[_proposalID].proposer() ||
+            _msgSender() == proposals[proposalID].proposer() ||
             _msgSender() == operator,
             "cannot execute"
         );
-        require(proposalsLength > _proposalID, "proposals length < id");
-        (address[] memory tokens, uint256[] memory quantitiesIn, uint256[] memory quantitiesOut) =
-            proposals[_proposalID].complete(rsv.totalSupply(), address(vault), basket);
+        require(proposalsLength > proposalID, "proposals length < id");
+        address proposer = proposals[proposalID].proposer();
+        Basket oldBasket = basket;
 
-        // Proposer -> Vault
-        for (uint i = 0; i < tokens.length; i++) {
-            IERC20(tokens[i]).safeTransferFrom(
-                proposals[_proposalID].proposer(), 
-                address(vault), 
-                quantitiesIn[i]
-            );
+        // Complete proposal and compute new basket
+        basket = proposals[proposalID].complete(rsv, address(vault), oldBasket);
+        
+        // For each token in either basket, perform transfers between proposer and Vault 
+        for (uint i = 0; i < oldBasket.size(); i++) {
+            address token = oldBasket.tokens(i);
+            _executeBasketShift(oldBasket, basket, token, proposer);
         }
-
-        // Vault -> Proposer
-        vault.batchWithdrawTo(tokens, quantitiesOut, proposals[_proposalID].proposer());
-
-        emit BasketChanged(address(basket), address(proposals[_proposalID].basket()));
-        basket = proposals[_proposalID].basket();
+        for (uint i = 0; i < basket.size(); i++) {
+            address token = basket.tokens(i);
+            if (!oldBasket.has(token)) {
+                _executeBasketShift(oldBasket, basket, token, proposer);
+            }
+        }
+        
         assert(isFullyCollateralized());
-        emit ProposalExecuted(_proposalID, proposals[_proposalID].proposer(), _msgSender());
+        emit BasketChanged(address(oldBasket), address(basket));
+        emit ProposalExecuted(proposalID, proposer, _msgSender());
     }
-
+        
     /// Pause the contract.
     function pause() external onlyOwner {
         paused = true;
@@ -332,78 +342,70 @@ contract Manager is Ownable {
         emit ProposalsCleared();
     }
 
-    /// Get quantities required to issue a quantity of RSV, in terms of basket tokens.  
-    function toIssue(uint256 _rsvQuantity) external view returns (uint256[] memory) {
-        return _quantitiesRequiredToIssue(_rsvQuantity);
-    }
-
 
     // ============================= Internals ================================
 
-    /// Internal function for all issuances to go through.
-    function _issue(uint256 _rsvQuantity) internal {
-        require(_rsvQuantity > 0, "cannot issue zero RSV");
-        uint256[] memory quantities = _quantitiesRequiredToIssue(_rsvQuantity);
+    /// Handles issuance.
+    function _issue(uint256 rsvAmount) internal {
+        require(rsvAmount > 0, "cannot issue zero RSV");
 
-        // Intake collateral tokens.
-        for (uint i = 0; i < basket.getSize(); i++) {
-            IERC20(basket.tokens(i)).safeTransferFrom(_msgSender(), address(vault), quantities[i]);
+        // Accept collateral tokens.
+        uint256[] memory amounts = toIssue(rsvAmount);
+        for (uint i = 0; i < basket.size(); i++) {
+            IERC20(basket.tokens(i)).safeTransferFrom(_msgSender(), address(vault), amounts[i]);
         }
 
         // Compensate with RSV.
-        rsv.mint(_msgSender(), _rsvQuantity);
+        rsv.mint(_msgSender(), rsvAmount);
 
         assert(isFullyCollateralized());
-        emit Issuance(_msgSender(), _rsvQuantity);
+        emit Issuance(_msgSender(), rsvAmount);
     }
 
-    /// Internal function for all redemptions to go through.
-    function _redeem(uint256 _rsvQuantity) internal {
-        require(_rsvQuantity > 0, "cannot redeem 0 RSV");
+    /// Handles redemption.
+    function _redeem(uint256 rsvAmount) internal {
+        require(rsvAmount > 0, "cannot redeem 0 RSV");
 
         // Burn RSV tokens.
-        rsv.burnFrom(_msgSender(), _rsvQuantity);
+        rsv.burnFrom(_msgSender(), rsvAmount);
 
         // Compensate with collateral tokens.
-        vault.batchWithdrawTo(
-            basket.getTokens(), 
-            basket.quantitiesRequired(_rsvQuantity), 
-            _msgSender()
-        );
+        uint256[] memory amounts = toRedeem(rsvAmount);
+        for (uint i = 0; i < basket.size(); i++) {
+            vault.withdrawTo(basket.tokens(i), amounts[i], _msgSender());
+        }
 
         assert(isFullyCollateralized());
-        emit Redemption(_msgSender(), _rsvQuantity);
+        emit Redemption(_msgSender(), rsvAmount);
     }
 
-    /// Calculates the quantities of tokens required to issue `_rsvQuantity`. 
-    function _quantitiesRequiredToIssue(uint256 _rsvQuantity) internal view returns(uint256[] memory) {
-        uint256[] memory quantities = basket.quantitiesRequired(_rsvQuantity);
-        uint256 seigniorageMultiplier = uint256(seigniorage.add(BPS_FACTOR));
-
-        for (uint i = 0; i < basket.getSize(); i++) {
-            quantities[i] = quantities[i].mul(seigniorageMultiplier).div(BPS_FACTOR);
+    /// _executeBasketShift transfers the necessary amount of `token` between vault and `proposer`
+    /// to rebalance the vault's balance of token, as it goes from oldBasket to newBasket.
+    /// @dev To carry out a proposal, this is executed once per relevant token.
+    function _executeBasketShift(
+        Basket oldBasket,
+        Basket newBasket,
+        address token,
+        address proposer
+    ) internal {
+        uint256 newWeight = newBasket.weights(token);
+        uint256 oldWeight = oldBasket.weights(token);
+        if (newWeight > oldWeight) {
+            // This token must increase in the vault, so transfer from proposer to vault.
+            uint256 transferAmount = _weighted(rsv.totalSupply(), newWeight.sub(oldWeight));
+            IERC20(token).safeTransferFrom(proposer, address(vault), transferAmount);
+        } else if (newWeight < oldWeight) {
+            // This token will decrease in the vault, so transfer from vault to proposer.
+            uint256 transferAmount = _weighted(rsv.totalSupply(), oldWeight.sub(newWeight));
+            vault.withdrawTo(token, transferAmount, proposer);
         }
     }
 
-    // /// Calculates the maximum we could issue to an address based on their allowances.
-    // function _calculateMaxIssuable(address funder) internal view returns(uint256) {
-    //     uint256 rsvDecimalsFactor = uint256(10) ** rsvDecimals;
-    //     uint256 allowance;
-    //     uint256 balance;
-    //     uint256 available;
-    //     uint256 issuable;
-    //     uint256 minIssuable;
+    // From a weighting of RSV (e.g., a basket weight) and an amount of RSV,
+    // compute the amount of the weighted token that matches that amount of RSV.
+    function _weighted(uint256 amount, uint256 weight)
+        internal view returns(uint256) {
+        return amount.mul(weight).div(uint256(10)**rsv.decimals());
+    }
 
-    //     for (uint i = 0; i < basket.getSize(); i ++) {
-    //         allowance = IERC20(basket.tokens(i)).allowance(funder, address(this));
-    //         balance = IERC20(basket.tokens(i)).balanceOf(funder);
-    //         available = allowance;
-    //         if (balance < available) available = balance;
-
-    //         issuable = 
-    //            rsvDecimalsFactor.mul(available).div(basket.backingMap(basket.tokens(i)));
-    //         if (issuable < minIssuable) minIssuable = issuable;
-    //     }
-    //     return minIssuable;
-    // }
 }

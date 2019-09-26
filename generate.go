@@ -44,7 +44,8 @@ type target struct {
 var targets = []target{
 	target{Filename: "contracts/Basket.sol", ContractName: "Basket", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/Manager.sol", ContractName: "Manager", SolcVersion: "0.5.8", OptimizeRuns: "1"},
-	target{Filename: "contracts/Proposal.sol", ContractName: "Proposal", SolcVersion: "0.5.8", OptimizeRuns: "1"},
+	target{Filename: "contracts/Proposal.sol", ContractName: "SwapProposal", SolcVersion: "0.5.8", OptimizeRuns: "1"},
+	target{Filename: "contracts/Proposal.sol", ContractName: "WeightProposal", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/Vault.sol", ContractName: "Vault", SolcVersion: "0.5.8", OptimizeRuns: "1"},
 	target{Filename: "contracts/rsv/Reserve.sol", ContractName: "Reserve", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
 	target{Filename: "contracts/rsv/ReserveEternalStorage.sol", ContractName: "ReserveEternalStorage", SolcVersion: "0.5.8", OptimizeRuns: "1000000"},
@@ -101,6 +102,7 @@ func main() {
 		cmd.Stdin = os.Stdin // solc doesn't need stdin to be set, but trailofbits' solc-select does
 		cmd.Stdout = combinedJson
 		cmd.Stderr = os.Stderr
+		fmt.Printf("solc   %s:%s\n", t.Filename, t.ContractName)
 
 		err = cmd.Run()
 		if err != nil {
@@ -127,12 +129,13 @@ func main() {
 
 		name := outputGoFile(t.ContractName)
 		check(ioutil.WriteFile(name, []byte(code), 0644), "writing "+name)
-
 		// Generate event bindings.
 		//
 		// We generate a String() function for each event and a
 		// Parse<ContractName>Log(*types.Log) function for each contract.
 		{
+			fmt.Printf("abigen %s:%s\n", t.Filename, t.ContractName)
+
 			buf := new(bytes.Buffer)
 			parsedABI, err := abi.JSON(bytes.NewReader([]byte(output.ABI)))
 			check(err, "parsing ABI JSON")
@@ -223,7 +226,6 @@ func main() {
 			// sol-compiler uses a different format from solc for this,
 			// so here we're converting from the former to the latter.
 			check(os.MkdirAll(solCovDir, 0755), "creating sol-coverage evm directory")
-
 			// m is a helper for writing succinct json object literals
 			type m map[string]interface{}
 
@@ -233,6 +235,7 @@ func main() {
 			}
 
 			compiledOutput := compilationResult.Contracts[t.Filename+":"+t.ContractName]
+
 			b, err := json.Marshal(m{
 				"schemaVersion": "2.0.0",
 				"ContractName":  t.ContractName,

@@ -15,3 +15,5 @@ fmt:
 
 run-geth:
 	docker run -it --rm -p 8545:8501 0xorg/devnet
+
+.PHONY: clean contracts test fmt run-geth
