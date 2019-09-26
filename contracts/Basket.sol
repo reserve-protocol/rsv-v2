@@ -25,7 +25,7 @@ contract Basket {
         // Initialize data from input arrays
         tokens = new address[](_tokens.length);
         for (uint i = 0; i < _tokens.length; i++) {
-            weights[_tokens[i]] = _weights[i]; // TODO: on bugs, scatter back in address() calls?
+            weights[_tokens[i]] = _weights[i];
             has[_tokens[i]] = true;
             tokens[i] = _tokens[i];
         }

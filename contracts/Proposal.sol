@@ -135,7 +135,11 @@ contract SwapProposal is Proposal {
                 newAmount = token.balanceOf(vault).sub(amounts[i]);
             }
 
+<<<<<<< HEAD
             // TODO(elder): how do you correctly deal with rounding error here?
+=======
+            // TODO: how do you correctly deal with rounding error here?
+>>>>>>> Cleaning up most remaining TODOs.
             weights[i] = newAmount.mul(uint256(10)**rsv.decimals()).div(rsv.totalSupply());
         }
 
