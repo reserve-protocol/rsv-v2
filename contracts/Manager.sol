@@ -283,12 +283,7 @@ contract Manager is Ownable {
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
-    function executeProposal(uint256 id) external {
-        require(
-            _msgSender() == proposals[id].proposer() ||
-            _msgSender() == operator,
-            "cannot execute"
-        );
+    function executeProposal(uint256 id) external onlyOperator {
         require(proposalsLength > id, "proposals length < id");
         address proposer = proposals[id].proposer();
         Basket oldBasket = basket;
