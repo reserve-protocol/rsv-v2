@@ -32,8 +32,6 @@ contract Basket {
             backingMap[_tokens[i]] = _backing[i];
         }
         tokens = _tokens;
-        backing = _backing;
-        size = tokens.length;
         frontTokenDecimals = _frontTokenDecimals;
     }
 
