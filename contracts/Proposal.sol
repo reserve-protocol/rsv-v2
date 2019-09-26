@@ -120,8 +120,6 @@ contract SwapProposal is Proposal {
                 newAmount = token.balanceOf(vault).sub(amounts[i]);
             }
 
-            // TODO(elder): it'd maybe be clearer if oldBasket and rsvSupply here were replaced with
-            // just a reference to the RSV contract.
             // TODO(elder): how do you correctly deal with rounding error here?
             weights[i] = newAmount.mul(uint256(10)**rsv.decimals()).div(rsv.totalSupply());
         }
