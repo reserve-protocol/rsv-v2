@@ -49,26 +49,25 @@ contract Proposal is Ownable {
     /// Cancels a proposal if it has not been completed. 
     function cancel() external onlyOwner {
         require(state != State.Completed);
-        state = State.Closed;
+        state = State.Cancelled;
     }
 
     /// Moves a proposal from the Accepted to Completed state.
     /// Returns the tokens, quantitiesIn, and quantitiesOut, required to implement the proposal.
-    function complete(uint256 rsvSupply, address vaultAddr, Basket prevBasket) 
+    function complete(uint256 rsvSupply, uint8 rsvDecimals, address vault, Basket oldBasket) 
         external onlyOwner returns(Basket)
     {
         require(state == State.Accepted, "proposal must be accepted");
         require(now > time, "wait to execute");
         state = State.Completed;
 
-        return _newBasket(rsvSupply, vaultAddr, prevBasket);
+        return _newBasket(rsvSupply, rsvDecimals, vault, oldBasket);
     }
 
-    /// Returns the newly-proposed basket, and the tokens, quantitiesIn, and quantitiesOut
-    /// required to implement the proposal.  This varies for different types of proposals,
-    /// so it's abstract here.
+    /// Returns the newly-proposed basket. The implementation varies
+    /// for different types of proposals, so it's abstract here.
     function _newBasket(uint256 rsvSupply, uint8 rsvDecimals, address vault, Basket oldBasket)
-        internal view returns(Basket);
+        internal returns(Basket);
 
     /// _has returns true iff _addr is in _addrArray.
     function _has(address[] memory _addrArray, address _addr) internal pure returns(bool) {
@@ -79,14 +78,31 @@ contract Proposal is Ownable {
     }
 }
 
+/// TODO:doc
+contract WeightProposal is Proposal {
+    Basket public basket;
+
+    constructor(address _proposer, Basket _basket)
+        Proposal(_proposer) public {
+        basket = _basket;
+    }
+
+    /// Returns the newly-proposed basket
+    function _newBasket(uint256, uint8, address, Basket)
+        internal returns(Basket) {
+        return basket;
+    }
+}
+
+/// TODO:doc
 contract SwapProposal is Proposal {
     address public proposer;
-    IERC20[] public tokens;
+    address[] public tokens;
     uint256[] public amounts;
     bool[] public toVault;
 
     constructor(address _proposer,
-                IERC20[] memory _tokens,
+                address[] memory _tokens,
                 uint256[] memory _amounts,
                 bool[] memory _toVault )
         Proposal(_proposer) public
@@ -100,41 +116,26 @@ contract SwapProposal is Proposal {
 
     /// Return the newly-proposed basket, based on the current vault and the old basket
     function _newBasket(uint256 rsvSupply, uint8 rsvDecimals, address vault, Basket oldBasket)
-        internal view returns(Basket) {
+        internal returns(Basket) {
         // Compute new basket
-        uint256[] memory weights;
+        uint256[] memory weights = new uint256[](tokens.length);
         
         for (uint i = 0; i < tokens.length; i++) {
             uint256 newAmount;
 
             if (toVault[i]) {
-                newAmount = tokens[i].balanceOf(vault).add(amounts[i]);
+                newAmount = IERC20(tokens[i]).balanceOf(vault).add(amounts[i]);
             } else {
-                newAmount = tokens[i].balanceOf(vault).sub(amounts[i]);
+                newAmount = IERC20(tokens[i]).balanceOf(vault).sub(amounts[i]);
             }
 
             // TODO(elder): it'd maybe be clearer if oldBasket and rsvSupply here were replaced with
             // just a reference to the RSV contract.
-
             // TODO(elder): how do you correctly deal with rounding error here?
-            weights.push(newAmount.mul(10**rsvDecimals).div(rsvSupply));
+            weights[i] = newAmount.mul(uint256(10)**rsvDecimals).div(rsvSupply);
         }
 
-        return new Basket(oldBasket, tokens, weights);
+        return new Basket(Basket(oldBasket), tokens, weights);
     }
 }
 
-contract WeightProposal is Proposal {
-    Basket public basket;
-
-    constructor(address _proposer, Basket _basket)
-        Proposal(_proposer) public {
-        basket = _basket;
-    }
-
-    /// Returns the newly-proposed basket
-    function _newBasket(uint256 rsvSupply, uint8 rsvDecimals, address vault, Basket oldBasket)
-        internal view returns(Basket) {
-        return basket;
-    }
-}
