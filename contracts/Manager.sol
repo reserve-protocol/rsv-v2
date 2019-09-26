@@ -75,9 +75,7 @@ contract Manager is Ownable {
     uint256 public proposalsLength;
     uint256 public delay = 24 hours;
     
-    // Issuance and Redemption controls
-    mapping(address => bool) public whitelist;
-    bool public useWhitelist;
+    // Pausing
     bool public paused;
 
     // The spread between issuance and redemption in BPS.
@@ -100,7 +98,6 @@ contract Manager is Ownable {
     // Changes
     event OperatorChanged(address indexed oldAccount, address indexed newAccount);
     event SeigniorageChanged(uint256 oldVal, uint256 newVal);
-    event WhitelistChanged(address indexed user, bool val);
     event DelayChanged(uint256 oldVal, uint256 newVal);
 
     // Proposals
@@ -118,10 +115,8 @@ contract Manager is Ownable {
     constructor(address vaultAddr, address rsvAddress, uint256 seigniorage_) public {
         vault = IVault(vaultAddr);
         rsv = IRSV(rsvAddress);
-        whitelist[_msgSender()] = true;
         seigniorage = seigniorage_;
         paused = true;
-        useWhitelist = true;
     }
 
     // ============================= Modifiers ================================
@@ -129,12 +124,6 @@ contract Manager is Ownable {
     /// Modifies a function to run only when the contract is not paused.
     modifier notPaused() {
         _notPaused();
-        _;
-    }
-
-    /// Modifies a function to run only when the caller is on the whitelist, if it is enabled.
-    modifier onlyWhitelist() {
-        _onlyWhitelist();
         _;
     }
 
@@ -148,10 +137,6 @@ contract Manager is Ownable {
 
     function _notPaused() internal view {
         require(!paused, "contract is paused");
-    }
-
-    function _onlyWhitelist() internal view {
-        if (useWhitelist) require(whitelist[_msgSender()], "not on whitelist");
     }
 
     function _onlyOperator() internal view {
@@ -174,23 +159,23 @@ contract Manager is Ownable {
     // ============================= Externals ================================
 
     /// Issue a quantity of RSV to the caller and deposit collateral tokens in the Vault.
-    function issue(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+    function issue(uint256 _rsvQuantity) external notPaused {
         _issue(_rsvQuantity);
     }
 
     // /// Issues the maximum amount of RSV to the caller based on their allowances.
-    // function issueMax() external notPaused onlyWhitelist {
+    // function issueMax() external notPaused {
     //     uint256 max = _calculateMaxIssuable(_msgSender());
     //     _issue(max);
     // }
 
     /// Redeem a quantity of RSV for collateral tokens. 
-    function redeem(uint256 _rsvQuantity) external notPaused onlyWhitelist {
+    function redeem(uint256 _rsvQuantity) external notPaused {
         _redeem(_rsvQuantity);
     }
 
     // /// Redeem `allowance` of RSV from the caller's account. 
-    // function redeemMax() external notPaused onlyWhitelist {
+    // function redeemMax() external notPaused {
     //     uint256 max = rsv.allowance(_msgSender(), address(this));
     //     _redeem(max);
     // }
@@ -321,17 +306,6 @@ contract Manager is Ownable {
         require(address(basket) != address(0), "basket required to unpause");
         paused = false;
         emit Unpaused(_msgSender());
-    }
-
-    /// Add or remove user from whitelist.
-    function setWhitelist(address _user, bool _val) external onlyOwner {
-        whitelist[_user] = _val;
-        emit WhitelistChanged(_user, _val);
-    }
-
-    /// Set whether or not to apply the whitelist to Issuance and Redemption. 
-    function setUseWhitelist(bool _useWhitelist) external onlyOwner {
-        useWhitelist = _useWhitelist;
     }
 
     /// Set the operator

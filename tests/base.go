@@ -150,6 +150,30 @@ func (s *TestSuite) assertManagerCollateralized() {
 	s.True(collateralized)
 }
 
+// assertCurrentBasketMirrorsTargets asserts that the current manager basket matches expectations.
+func (s *TestSuite) assertCurrentBasketMirrorsTargets(tokens []common.Address, backing []*big.Int) {
+	// Get the new basket.
+	basketAddress, err := s.manager.Basket(nil)
+	s.Require().NoError(err)
+	s.NotEqual(zeroAddress(), basketAddress)
+
+	basket, err := abi.NewBasket(basketAddress, s.node)
+	s.Require().NoError(err)
+
+	// Get tokens
+	basketTokens, err := basket.GetTokens(nil)
+	s.Require().NoError(err)
+	s.Equal(len(tokens), len(basketTokens))
+
+	// Check that tokens and backings are as expected.
+	for i := 0; i < len(tokens); i++ {
+		s.Equal(tokens[i], basketTokens[i])
+		weight, err := basket.BackingMap(nil, tokens[i])
+		s.Require().NoError(err)
+		s.Equal(backing[i].String(), weight.String())
+	}
+}
+
 // createSlowCoverageNode creates a connection to a local geth node that passes through
 // sol-coverage instrumentation. This mode is significantly slower than running against
 // the in-process node created by `createFastNode`.
