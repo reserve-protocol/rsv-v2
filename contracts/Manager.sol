@@ -15,28 +15,25 @@ interface IVault {
 }
 
 /**
- * The Manager contract is the point of contact between the Reserve ecosystem
- * and the surrounding world. It manages the Issuance and Redemption of RSV,
- * a decentralized stablecoin backed by a basket of tokens. 
+ * The Manager contract is the point of contact between the Reserve ecosystem and the
+ * surrounding world. It manages the Issuance and Redemption of RSV, a decentralized stablecoin
+ * backed by a basket of tokens.
  *
- * The Manager also implements a Proposal system to handle administration of
- * changes to the backing of RSV. Anyone can propose a change to the backing.
- * Once the `owner` approves the proposal, then after a pre-determined delay
- * the proposal is eligible for execution by anyone. However, the funds to 
- * execute the proposal must come from the proposer.
+ * The Manager also implements a Proposal system to handle administration of changes to the
+ * backing of RSV. Anyone can propose a change to the backing.  Once the `owner` approves the
+ * proposal, then after a pre-determined delay the proposal is eligible for execution by
+ * anyone. However, the funds to execute the proposal must come from the proposer.
  *
- * There are two different ways to propose changes to the backing of RSV. 
- * See: 
- * - proposeQuantitiesAdjustment()
- * - proposeNewBasket()
+ * There are two different ways to propose changes to the backing of RSV:
+ * - proposeSwap()
+ * - proposeWeights(), and
  *
- * In both cases, tokens are exchanged with the Vault and a new RSV backing is 
- * set. You can think of the first type of proposal as being useful when you
- * don't want to change the list of tokens that back RSV, but do want to change
- * the quantities. The second type of proposal is more useful when you want to
- * change the tokens in the basket. The downside of this proposal type is that
- * it's difficult to know what capital will be required come execution of the
- * proposal.  
+ * In both cases, tokens are exchanged with the Vault and a new RSV backing is set. You can
+ * think of the first type of proposal as being useful when you don't want to rebalance the
+ * Vault by exchanging absolute quantities of tokens; its downside is that you don't know
+ * precisely what the resulting basket weights will be. The second type of proposal is more
+ * useful when you want to fine-tune the Vault weights and accept the downside that it's
+ * difficult to know what capital will be required when the proposal is executed.
  */
 contract Manager is Ownable {
     using SafeERC20 for IERC20;
@@ -62,13 +59,10 @@ contract Manager is Ownable {
     // Pausing
     bool public paused;
 
-    // The spread between issuance and redemption in BPS.
-    uint256 public seigniorage;                 // 0.1% spread -> 10 BPS
-    uint256 constant BPS_FACTOR = 10000;        // This is what 100% looks like in BPS.
+    // The spread between issuance and redemption in basis points (BPS).
+    uint256 public seigniorage;          // 0.1% spread -> 10 BPS
+    uint256 constant BPS_FACTOR = 10000; // This is what 100% looks like in BPS.
     
-
-    // EVENTS
-
     event ProposalsCleared();
 
     // RSV traded events

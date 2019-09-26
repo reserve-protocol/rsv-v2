@@ -2,7 +2,8 @@ pragma solidity ^0.5.8;
 
 
 /**
- * The Basket contract defines the backing weights for a what RSV is backed by.
+ * This Basket contract is essentially a data structure; it represents the tokens and weights
+ * in some Reserve-backing basket, either proposed or accepted.
  *
  * Most importantly, the `backing` quantities correspond to quantities
  * for a single RSV, NOT for a single attoRSV. 
