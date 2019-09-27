@@ -421,15 +421,16 @@ contract Manager is Ownable {
     function _weighted(uint256 amount, uint256 weight, RoundingMode rnd)
         internal view returns(uint256)
     {
-        require(amount >= 0);
+        // This wouldn't work properly with negative numbers, but we don't need them here.
+        require(amount >= 0 && weight >= 0, "Weigh negative amounts");
+        
         uint256 decimalsDivisor = uint256(10)**rsv.decimals();
         uint256 shiftedWeight = amount.mul(weight);
 
-        uint256 epsilon = 0;
-        if (rnd == RoundingMode.UP && shiftedWeight % decimalsDivisor > 0) {
-            epsilon = 1;
+        // If the weighting is precise, or we're rounding down, then use normal 
+        if (rnd == RoundingMode.DOWN || shiftedWeight % decimalsDivisor == 0) {
+            return shiftedWeight.div(decimalsDivisor);
         }
-
-        return shiftedWeight.div(decimalsDivisor).add(epsilon);
+        return shiftedWeight.div(decimalsDivisor).add(1);
     }
 }

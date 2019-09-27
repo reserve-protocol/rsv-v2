@@ -121,25 +121,33 @@ contract SwapProposal is Proposal {
     }
 
     /// Return the newly-proposed basket, based on the current vault and the old basket.
-    function _newBasket(IRSV rsv, address vault, Basket oldBasket)
-        internal returns(Basket) {
-        // Compute new basket.
+    function _newBasket(IRSV rsv, address vault, Basket oldBasket) internal returns(Basket) {
+
         uint256[] memory weights = new uint256[](tokens.length);
+        uint256 divisor = uint256(10)**rsv.decimals();
+        uint256 rsvSupply = rsv.totalSupply();
         
         for (uint i = 0; i < tokens.length; i++) {
-            uint256 newAmount;
-            IERC20 token = IERC20(tokens[i]);
-
+            address token = tokens[i];
+            uint256 oldWeight = oldBasket.weights(token);
+            
             if (toVault[i]) {
-                newAmount = token.balanceOf(vault).add(amounts[i]);
+                weights[i] = oldWeight.add( amounts[i].mul(divisor).div(rsvSupply) );
             } else {
-                newAmount = token.balanceOf(vault).sub(amounts[i]);
+                weights[i] = oldWeight.sub( divRoundUp(amounts[i].mul(divisor), rsvSupply) );
             }
-
-            // TODO(elder): how do you correctly deal with rounding error here?
-            weights[i] = newAmount.mul(uint256(10)**rsv.decimals()).div(rsv.totalSupply());
         }
 
         return new Basket(oldBasket, tokens, weights);
+    }
+
+    /// Divide, rounding fractions up.
+    function divRoundUp(uint256 numerator, uint256 denominator) internal pure returns(uint256) {
+        require(numerator >= 0 && denominator > 0, "Rounding negative division");
+            
+        if (numerator % denominator == 0) {
+            return numerator.div(denominator);
+        }
+        return numerator.div(denominator).add(1);
     }
 }
