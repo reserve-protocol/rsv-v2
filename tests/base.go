@@ -346,11 +346,10 @@ func toAtto(n uint32, decimals uint32) *big.Int {
 	return big.NewInt(0).Mul(bigInt(n), attoBase)
 }
 
-func generateBackings(n int) []*big.Int {
-	var backing []*big.Int
+func makeLinearWeights(val *big.Int, n int) []*big.Int {
+	var arr []*big.Int
 	for i := 0; i < n; i++ {
-		val := bigInt(uint32(i + 1))
-		backing = append(backing, val)
+		arr = append(arr, bigInt(0).Mul(val, bigInt(uint32(i+1))))
 	}
-	return backing
+	return arr
 }
