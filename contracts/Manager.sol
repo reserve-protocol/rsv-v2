@@ -26,7 +26,7 @@ interface IVault {
  *
  * There are two different ways to propose changes to the backing of RSV:
  * - proposeSwap()
- * - proposeWeights(), and
+ * - proposeWeights()
  *
  * In both cases, tokens are exchanged with the Vault and a new RSV backing is set. You can
  * think of the first type of proposal as being useful when you don't want to rebalance the
