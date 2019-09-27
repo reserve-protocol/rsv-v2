@@ -56,19 +56,19 @@ contract Proposal is Ownable {
 
     /// Moves a proposal from the Accepted to Completed state.
     /// Returns the tokens, quantitiesIn, and quantitiesOut, required to implement the proposal.
-    function complete(IRSV rsv, address vault, Basket oldBasket) 
+    function complete(IRSV rsv, Basket oldBasket) 
         external onlyOwner returns(Basket)
     {
         require(state == State.Accepted, "proposal must be accepted");
         require(now > time, "wait to execute");
         state = State.Completed;
 
-        return _newBasket(rsv, vault, oldBasket);
+        return _newBasket(rsv, oldBasket);
     }
 
     /// Returns the newly-proposed basket. This varies for different types of proposals,
     /// so it's abstract here.
-    function _newBasket(IRSV rsv, address vault, Basket oldBasket) internal returns(Basket);
+    function _newBasket(IRSV rsv, Basket oldBasket) internal returns(Basket);
 }
 
 /**
@@ -87,7 +87,7 @@ contract WeightProposal is Proposal {
     }
 
     /// Returns the newly-proposed basket
-    function _newBasket(IRSV, address, Basket) internal returns(Basket) {
+    function _newBasket(IRSV, Basket) internal returns(Basket) {
         return basket;
     }
 }
@@ -121,7 +121,7 @@ contract SwapProposal is Proposal {
     }
 
     /// Return the newly-proposed basket, based on the current vault and the old basket.
-    function _newBasket(IRSV rsv, address vault, Basket oldBasket) internal returns(Basket) {
+    function _newBasket(IRSV rsv, Basket oldBasket) internal returns(Basket) {
 
         uint256[] memory weights = new uint256[](tokens.length);
         uint256 divisor = uint256(10)**rsv.decimals();
@@ -145,7 +145,7 @@ contract SwapProposal is Proposal {
     function divRoundUp(uint256 numerator, uint256 denominator) internal pure returns(uint256) {
         require(numerator >= 0 && denominator > 0, "Rounding negative division");
             
-        if (numerator % denominator == 0) {
+        if (numerator.mod(denominator) == 0) {
             return numerator.div(denominator);
         }
         return numerator.div(denominator).add(1);

@@ -289,7 +289,7 @@ contract Manager is Ownable {
         Basket oldBasket = basket;
 
         // Complete proposal and compute new basket
-        basket = proposals[id].complete(rsv, address(vault), oldBasket);
+        basket = proposals[id].complete(rsv, oldBasket);
         
         // For each token in either basket, perform transfers between proposer and Vault 
         for (uint i = 0; i < oldBasket.size(); i++) {
@@ -428,7 +428,7 @@ contract Manager is Ownable {
         uint256 shiftedWeight = amount.mul(weight);
 
         // If the weighting is precise, or we're rounding down, then use normal 
-        if (rnd == RoundingMode.DOWN || shiftedWeight % decimalsDivisor == 0) {
+        if (rnd == RoundingMode.DOWN || shiftedWeight.mod(decimalsDivisor) == 0) {
             return shiftedWeight.div(decimalsDivisor);
         }
         return shiftedWeight.div(decimalsDivisor).add(1);
