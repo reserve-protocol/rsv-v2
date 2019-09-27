@@ -177,8 +177,34 @@ func (s *ManagerSuite) TestConstructor() {
 }
 
 func (s *ManagerSuite) TestProposeWeightsHappyPath() {
+	weights := makeLinearWeights(bigInt(1), len(s.erc20s))
+	s.initializeManagerWithWeightsProposal(weights)
+
+}
+
+// func (s *ManagerSuite) TestProposeSwapHappyPath() {
+// 	var amounts []*big.Int
+// 	var toVault []bool
+// 	for i := 0; i < len(s.erc20Addresses); i++ {
+// 		weights = append(weights, bigInt(0))
+// 		amounts = append(amounts, bigInt(0))
+// 	}
+// }
+
+func (s *ManagerSuite) TestPauseAuth() {
+	s.requireTxFails(s.manager.Pause(signer(s.account[2])))
+	s.requireTxFails(s.manager.Pause(signer(s.operator)))
+	s.requireTxStrongly(s.manager.Pause(s.signer))(
+		abi.ManagerPaused{
+			Account: s.owner.address(),
+		},
+	)
+}
+
+// Helpers
+
+func (s *ManagerSuite) initializeManagerWithWeightsProposal(weights []*big.Int) {
 	tokens := s.erc20Addresses
-	weights := generateBackings(len(tokens))
 	proposer := s.account[2]
 
 	// Propose the basket.
@@ -200,15 +226,7 @@ func (s *ManagerSuite) TestProposeWeightsHappyPath() {
 	proposal, err := abi.NewWeightProposal(proposalAddress, s.node)
 	s.Require().NoError(err)
 
-	// Check Proposal has correct fields
-	foundProposer, err := proposal.Proposer(nil)
-	s.Require().NoError(err)
-	s.Equal(proposer.address(), foundProposer)
-
-	state, err := proposal.State(nil)
-	s.Require().NoError(err)
-	s.Equal(uint8(0), state) // State.Created should have value 0
-
+	// Get Proposal Basket.
 	proposalBasketAddress, err := proposal.Basket(nil)
 	s.Require().NoError(err)
 	s.NotEqual(zeroAddress(), proposalBasketAddress)
@@ -242,17 +260,17 @@ func (s *ManagerSuite) TestProposeWeightsHappyPath() {
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
 
 	// Execute Proposal.
-	s.requireTxStrongly(s.manager.ExecuteProposal(signer(proposer), bigInt(0)))(
+	s.requireTxStrongly(s.manager.ExecuteProposal(signer(s.operator), bigInt(0)))(
 		abi.ManagerProposalExecuted{
 			Id:        bigInt(0),
 			Proposer:  proposer.address(),
-			Executor:  proposer.address(),
+			Executor:  s.operator.address(),
 			OldBasket: s.basketAddress,
 			NewBasket: proposalBasketAddress,
 		},
 	)
 
-	// Gets the current basket and makes sure it is the same as `tokens` + `weights`
+	// Gets the current basket and makes sure it is correct.
 	s.assertCurrentBasketMirrorsTargets(tokens, weights)
 
 	// Are we collateralized?
@@ -264,43 +282,119 @@ func (s *ManagerSuite) TestProposeWeightsHappyPath() {
 			Account: s.owner.address(),
 		},
 	)
-
-	// // Fund proposer account with ERC20s.
-	// s.fundAccountWithERC20sAndApprove(proposer, toAtto(1000))
-
 }
 
-func (s *ManagerSuite) TestProposeQuantitiesAdjustment() {
-	// in := []*big.Int{bigInt(1), bigInt(2)}
-	// out := []*big.Int{bigInt(2), bigInt(1)}
-	// s.requireTx(s.manager.ProposeQuantitiesAdjustment(signer(s.account[1]), in, out))(
-	// 	abi.ProposalProposalCreated{Id: bigInt(0), Proposer: s.account[1].address()},
+func (s *ManagerSuite) initializeManagerWithSwapProposal(amounts []*big.Int, toVault []bool) {
+	tokens := s.erc20Addresses
+	proposer := s.account[2]
+
+	// Propose the basket.
+	s.requireTxWeakly(s.manager.ProposeSwap(signer(proposer), tokens, amounts, toVault))(
+		abi.ManagerSwapProposed{
+			Id:       bigInt(0),
+			Proposer: proposer.address(),
+			Tokens:   tokens,
+			Amounts:  amounts,
+			ToVault:  toVault,
+		},
+		abi.ProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
+	)
+
+	// Confirm proposals length increments.
+	proposalsLength, err := s.manager.ProposalsLength(nil)
+	s.Require().NoError(err)
+	s.Equal(proposalsLength, bigInt(1))
+
+	// Construct Proposal binding.
+	proposalAddress, err := s.manager.Proposals(nil, bigInt(0))
+	s.Require().NoError(err)
+	_, err = abi.NewSwapProposal(proposalAddress, s.node)
+	s.Require().NoError(err)
+
+	// Accept the Proposal.
+	s.requireTxStrongly(s.manager.AcceptProposal(signer(s.operator), bigInt(0)))(
+		abi.ManagerProposalAccepted{
+			Id: bigInt(0), Proposer: proposer.address(),
+		},
+	)
+
+	// Advance 24h.
+	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
+
+	// Execute Proposal.
+	s.requireTxWeakly(s.manager.ExecuteProposal(signer(proposer), bigInt(0)))(
+		abi.ManagerProposalExecuted{
+			Id:        bigInt(0),
+			Proposer:  proposer.address(),
+			Executor:  proposer.address(),
+			OldBasket: s.basketAddress,
+			NewBasket: zeroAddress(),
+		},
+	)
+
+	// Figure out what the basket _should_ be.
+	var oldWeights []*big.Int
+	newWeights := s.newWeights(oldWeights, amounts, toVault)
+
+	// Gets the current basket and makes sure it is correct.
+	s.assertCurrentBasketMirrorsTargets(tokens, newWeights)
+
+	// Are we collateralized?
+	s.assertManagerCollateralized()
+
+	// // We should NOT be able to unpause, because weights should all be zero.
+	// s.requireTxStrongly(s.manager.Unpause(s.signer))(
+	// 	abi.ManagerUnpaused{
+	// 		Account: s.owner.address(),
+	// 	},
 	// )
 }
 
-func (s *ManagerSuite) TestPauseAuth() {
-	s.requireTxFails(s.manager.Pause(signer(s.account[2])))
-	s.requireTxFails(s.manager.Pause(signer(s.operator)))
-	s.requireTxStrongly(s.manager.Pause(s.signer))(
-		abi.ManagerPaused{
-			Account: s.owner.address(),
-		},
-	)
-}
-
-// Helpers
-
 func (s *ManagerSuite) fundAccountWithERC20sAndApprove(acc account, val *big.Int) {
 	for _, erc20 := range s.erc20s {
+		// Fund the account.
 		s.requireTxStrongly(erc20.Transfer(s.signer, acc.address(), val))(
 			abi.BasicERC20Transfer{
 				From: s.owner.address(), To: acc.address(), Value: val,
 			},
 		)
+
+		// Have the account approve the Manager.
 		s.requireTxStrongly(erc20.Approve(signer(acc), s.managerAddress, val))(
 			abi.BasicERC20Approval{
 				Owner: acc.address(), Spender: s.managerAddress, Value: val,
 			},
 		)
 	}
+}
+
+func (s *ManagerSuite) newWeights(
+	oldWeights []*big.Int, amounts []*big.Int, toVault []bool,
+) []*big.Int {
+	// Find rsv supply
+	rsvSupply, err := s.reserve.TotalSupply(nil)
+	s.Require().NoError(err)
+
+	// Compute newWeights.
+	var newWeights []*big.Int
+	for i, _ := range s.erc20s {
+		weight := oldWeights[i]
+		oldAmount := bigInt(0).Mul(weight, rsvSupply)
+
+		var newAmount *big.Int
+		if toVault[i] {
+			newAmount = bigInt(0).Add(oldAmount, amounts[i])
+		} else {
+			newAmount = bigInt(0).Sub(oldAmount, amounts[i])
+		}
+
+		// TODO: Rounding?
+		if rsvSupply.Cmp(newAmount) == 1 {
+			newWeights[i] = bigInt(0).Div(newAmount, rsvSupply)
+		} else {
+			newWeights[i] = bigInt(0)
+		}
+	}
+
+	return newWeights
 }
