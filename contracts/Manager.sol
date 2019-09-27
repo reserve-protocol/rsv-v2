@@ -166,13 +166,17 @@ contract Manager is Ownable {
         emit ProposalsCleared();
     }
 
-    /// Ensure that the Vault is fully collateralized. 
+    /// Ensure that the Vault is fully collateralized.  That this is true should be an
+    /// invariant of this contract: it's true before and after every txn.
     function isFullyCollateralized() public view returns(bool) {
         for (uint i = 0; i < basket.size(); i++) {
-            address token = basket.tokens(i);
-            uint256 fullAmount = _weighted(rsv.totalSupply(), basket.weights(token), RoundingMode.UP);
 
-            if (IERC20(token).balanceOf(address(vault)) < fullAmount)
+            address token = basket.tokens(i);
+            uint256 weight = basket.weights(token);
+            uint256 balance = IERC20(token).balanceOf(address(vault));
+
+            // Return false if supply * weight / 10**18 < balance:
+            if (rsv.totalSupply().mul(weight) < balance.mul(uint256(10)**rsv.decimals()))
                 return false;
         }
         return true;
@@ -244,8 +248,6 @@ contract Manager is Ownable {
         assert(isFullyCollateralized());
         emit Redemption(_msgSender(), rsvAmount);
     }
-
-    // ============================= External ================================
 
     /**
      * Propose an exchange of current Vault tokens for new Vault tokens.
