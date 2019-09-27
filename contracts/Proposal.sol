@@ -134,20 +134,10 @@ contract SwapProposal is Proposal {
             if (toVault[i]) {
                 weights[i] = oldWeight.add( amounts[i].mul(divisor).div(rsvSupply) );
             } else {
-                weights[i] = oldWeight.sub( divRoundUp(amounts[i].mul(divisor), rsvSupply) );
+                weights[i] = oldWeight.sub( amounts[i].mul(divisor).div(rsvSupply) );
             }
         }
 
         return new Basket(oldBasket, tokens, weights);
-    }
-
-    /// Divide, rounding fractions up.
-    function divRoundUp(uint256 numerator, uint256 denominator) internal pure returns(uint256) {
-        require(numerator >= 0 && denominator > 0, "Rounding negative division");
-            
-        if (numerator.mod(denominator) == 0) {
-            return numerator.div(denominator);
-        }
-        return numerator.div(denominator).add(1);
     }
 }

@@ -117,28 +117,54 @@ contract Manager is Ownable {
 
     /// Modifies a function to run only when the contract is not paused.
     modifier notPaused() {
-        _notPaused();
+        require(!paused, "contract is paused");
         _;
     }
 
     /// Modifies a function to run only when the caller is the operator account. 
     modifier onlyOperator() {
-        _onlyOperator();
+        require(_msgSender() == operator, "operator only");
         _;
     }
 
-    // This approach reduces bytecode since solidity inlines all modifiers under the hood. 
+    // ========================= Public + External ============================
 
-    function _notPaused() internal view {
-        require(!paused, "contract is paused");
+    /// Pause the contract.
+    function pause() external onlyOwner {
+        paused = true;
+        emit Paused(_msgSender());
     }
 
-    function _onlyOperator() internal view {
-        require(_msgSender() == operator, "operator only");
+    /// Unpause the contract.
+    function unpause() external onlyOwner {
+        require(basket.size() > 0, "basket cannot be empty");
+        paused = false;
+        emit Unpaused(_msgSender());
     }
 
+    /// Set the operator
+    function setOperator(address _operator) external onlyOwner {
+        emit OperatorChanged(operator, _operator);
+        operator = _operator;
+    }
 
-    // ============================= Public ==================================
+    /// Set the seigniorage, in BPS. 
+    function setSegniorage(uint256 _seigniorage) external onlyOwner {
+        seigniorage = _seigniorage;
+        emit SeigniorageChanged(seigniorage, _seigniorage);
+    }
+
+    /// Set the Proposal delay in hours.
+    function setDelay(uint256 _delay) external onlyOwner {
+        emit DelayChanged(delay, _delay);
+        delay = _delay;
+    }
+
+    /// Clear the list of proposals. 
+    function clearProposals() external onlyOwner {
+        proposalsLength = 0;
+        emit ProposalsCleared();
+    }
 
     /// Ensure that the Vault is fully collateralized. 
     function isFullyCollateralized() public view returns(bool) {
@@ -185,17 +211,41 @@ contract Manager is Ownable {
         return amounts;
     }
 
+    /// Handles issuance.
+    function issue(uint256 rsvAmount) public notPaused {
+        require(rsvAmount > 0, "cannot issue zero RSV");
+
+        // Accept collateral tokens.
+        uint256[] memory amounts = toIssue(rsvAmount);
+        for (uint i = 0; i < basket.size(); i++) {
+            IERC20(basket.tokens(i)).safeTransferFrom(_msgSender(), address(vault), amounts[i]);
+        }
+
+        // Compensate with RSV.
+        rsv.mint(_msgSender(), rsvAmount);
+
+        assert(isFullyCollateralized());
+        emit Issuance(_msgSender(), rsvAmount);
+    }
+
+    /// Handles redemption.
+    function redeem(uint256 rsvAmount) public notPaused {
+        require(rsvAmount > 0, "cannot redeem 0 RSV");
+
+        // Burn RSV tokens.
+        rsv.burnFrom(_msgSender(), rsvAmount);
+
+        // Compensate with collateral tokens.
+        uint256[] memory amounts = toRedeem(rsvAmount);
+        for (uint i = 0; i < basket.size(); i++) {
+            vault.withdrawTo(basket.tokens(i), amounts[i], _msgSender());
+        }
+
+        assert(isFullyCollateralized());
+        emit Redemption(_msgSender(), rsvAmount);
+    }
+
     // ============================= External ================================
-
-    /// Issue RSV to the caller and deposit collateral tokens in the Vault.
-    function issue(uint256 rsvAmount) external notPaused {
-        _issue(rsvAmount);
-    }
-
-    /// Redeem RSV for collateral tokens. 
-    function redeem(uint256 rsvAmount) external notPaused {
-        _redeem(rsvAmount);
-    }
 
     /**
      * Propose an exchange of current Vault tokens for new Vault tokens.
@@ -307,79 +357,8 @@ contract Manager is Ownable {
         emit ProposalExecuted(id, proposer, _msgSender(), address(oldBasket), address(basket));
     }
         
-    /// Pause the contract.
-    function pause() external onlyOwner {
-        paused = true;
-        emit Paused(_msgSender());
-    }
-
-    /// Unpause the contract.
-    function unpause() external onlyOwner {
-        require(basket.size() > 0, "basket cannot be empty");
-        paused = false;
-        emit Unpaused(_msgSender());
-    }
-
-    /// Set the operator
-    function setOperator(address _operator) external onlyOwner {
-        emit OperatorChanged(operator, _operator);
-        operator = _operator;
-    }
-
-    /// Set the seigniorage, in BPS. 
-    function setSegniorage(uint256 _seigniorage) external onlyOwner {
-        seigniorage = _seigniorage;
-        emit SeigniorageChanged(seigniorage, _seigniorage);
-    }
-
-    /// Set the Proposal delay in hours.
-    function setDelay(uint256 _delay) external onlyOwner {
-        emit DelayChanged(delay, _delay);
-        delay = _delay;
-    }
-
-    /// Clear the list of proposals. 
-    function clearProposals() external onlyOwner {
-        proposalsLength = 0;
-        emit ProposalsCleared();
-    }
-
 
     // ============================= Internal ================================
-
-    /// Handles issuance.
-    function _issue(uint256 rsvAmount) internal {
-        require(rsvAmount > 0, "cannot issue zero RSV");
-
-        // Accept collateral tokens.
-        uint256[] memory amounts = toIssue(rsvAmount);
-        for (uint i = 0; i < basket.size(); i++) {
-            IERC20(basket.tokens(i)).safeTransferFrom(_msgSender(), address(vault), amounts[i]);
-        }
-
-        // Compensate with RSV.
-        rsv.mint(_msgSender(), rsvAmount);
-
-        assert(isFullyCollateralized());
-        emit Issuance(_msgSender(), rsvAmount);
-    }
-
-    /// Handles redemption.
-    function _redeem(uint256 rsvAmount) internal {
-        require(rsvAmount > 0, "cannot redeem 0 RSV");
-
-        // Burn RSV tokens.
-        rsv.burnFrom(_msgSender(), rsvAmount);
-
-        // Compensate with collateral tokens.
-        uint256[] memory amounts = toRedeem(rsvAmount);
-        for (uint i = 0; i < basket.size(); i++) {
-            vault.withdrawTo(basket.tokens(i), amounts[i], _msgSender());
-        }
-
-        assert(isFullyCollateralized());
-        emit Redemption(_msgSender(), rsvAmount);
-    }
 
     /// _executeBasketShift transfers the necessary amount of `token` between vault and `proposer`
     /// to rebalance the vault's balance of token, as it goes from oldBasket to newBasket.
