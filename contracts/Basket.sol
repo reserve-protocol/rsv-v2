@@ -2,11 +2,17 @@ pragma solidity ^0.5.8;
 
 
 /**
- * This Basket contract is essentially a data structure; it represents the tokens and weights
+ * This Basket contract is essentially just a data structure; it represents the tokens and weights 
  * in some Reserve-backing basket, either proposed or accepted.
  *
- * Most importantly, the `backing` quantities correspond to quantities
- * for a single RSV, NOT for a single attoRSV. 
+ * Each `weights` value is a fixed-point number with _36_ digits right of the point. A token's
+ * weight is how many token quanta 1 RSV will be redeemed for. (Or, since it's more natural for a
+ * dev to think about: a weight has 18 fixed-point digits, and represents how many token quanta 1
+ * attoRSV will be redeemed for.)
+ * 
+ * For example, let's say we have the token USDX in the vault, and it's represented to 6 decimal
+ * places, and the RSV basket should include 3/10ths of a USDX for each RSV. Then the corresponding
+ * basket weight will be represented as 3*(10**41).
 */
 
 contract Basket {

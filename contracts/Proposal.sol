@@ -107,6 +107,8 @@ contract SwapProposal is Proposal {
     uint256[] public amounts;
     bool[] public toVault;
 
+    uint256 constant WEIGHT_FACTOR = 10**18;
+    
     constructor(address _proposer,
                 address[] memory _tokens,
                 uint256[] memory _amounts,
@@ -124,13 +126,14 @@ contract SwapProposal is Proposal {
     function _newBasket(IRSV rsv, Basket oldBasket) internal returns(Basket) {
 
         uint256[] memory weights = new uint256[](tokens.length);
-        uint256 divisor = uint256(10)**rsv.decimals();
+        // TODO: divisor should be compile-time computable.
+        uint256 divisor = WEIGHT_FACTOR.mul(uint256(10)**(rsv.decimals()));
         uint256 rsvSupply = rsv.totalSupply();
         
         for (uint i = 0; i < tokens.length; i++) {
             address token = tokens[i];
             uint256 oldWeight = oldBasket.weights(token);
-            
+
             if (toVault[i]) {
                 weights[i] = oldWeight.add( amounts[i].mul(divisor).div(rsvSupply) );
             } else {

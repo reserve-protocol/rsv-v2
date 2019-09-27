@@ -62,6 +62,7 @@ contract Manager is Ownable {
     // The spread between issuance and redemption in basis points (BPS).
     uint256 public seigniorage;          // 0.1% spread -> 10 BPS
     uint256 constant BPS_FACTOR = 10000; // This is what 100% looks like in BPS.
+    uint256 constant WEIGHT_FACTOR = 10**18;
     
     event ProposalsCleared();
 
@@ -404,11 +405,11 @@ contract Manager is Ownable {
     {
         // This wouldn't work properly with negative numbers, but we don't need them here.
         require(amount >= 0 && weight >= 0, "Weigh negative amounts");
-        
-        uint256 decimalsDivisor = uint256(10)**rsv.decimals();
+        // TODO: decimalsDivisor should be compile-time computable.        
+        uint256 decimalsDivisor = WEIGHT_FACTOR.mul(uint256(10)**(rsv.decimals()));
         uint256 shiftedWeight = amount.mul(weight);
 
-        // If the weighting is precise, or we're rounding down, then use normal 
+        // If the weighting is precise, or we're rounding down, then use normal division.
         if (rnd == RoundingMode.DOWN || shiftedWeight.mod(decimalsDivisor) == 0) {
             return shiftedWeight.div(decimalsDivisor);
         }
