@@ -1,0 +1,6 @@
+abi/*.go
+artifacts
+*.hex
+build
+evm
+sol-coverage-evm
