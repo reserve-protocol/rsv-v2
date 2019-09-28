@@ -108,7 +108,6 @@ contract WeightProposal is Proposal {
 
 // On "unit" comments, see comment at top of Manager.sol.
 contract SwapProposal is Proposal {
-    address public proposer;
     address[] public tokens;
     uint256[] public amounts; // unit: qToken
     bool[] public toVault;

@@ -190,7 +190,7 @@ contract Manager is Ownable {
     /// Ensure that the Vault is fully collateralized.  That this is true should be an
     /// invariant of this contract: it's true before and after every txn.
     function isFullyCollateralized() public view returns(bool) {
-        uint256 scaleFactor = WEIGHT_FACTOR.mul(uint256(10) ** rsv.decimals);
+        uint256 scaleFactor = WEIGHT_FACTOR.mul(uint256(10) ** rsv.decimals());
         // scaleFactor unit: aqToken/qToken * qRSV/RSV
 
         for (uint i = 0; i < basket.size(); i++) {
@@ -200,7 +200,7 @@ contract Manager is Ownable {
             uint256 balance = IERC20(token).balanceOf(address(vault)); // unit: qRSV
 
             // Return false if this token is undercollateralized:
-            if (rsv.totalSupply().mul(weight) < balance.mul(scaleFactor) {
+            if (rsv.totalSupply().mul(weight) < balance.mul(scaleFactor)) {
                 // checking units: [qRSV] * [aqToken/RSV] == [qToken] * [aqToken/qToken * qRSV/RSV]
                 return false;
             }
