@@ -35,8 +35,8 @@ contract Proposal is Ownable {
 
     enum State { Created, Accepted, Cancelled, Completed }
     State public state;
-
-    event BasketCreated(address indexed basketAddress);
+    
+    event CompletedProposalWithBasket(address indexed basketAddress);
 
     constructor(address _proposer) public {
         proposer = _proposer;
@@ -66,7 +66,7 @@ contract Proposal is Ownable {
         state = State.Completed;
 
         Basket b = _newBasket(rsv, oldBasket);
-        emit BasketCreated(address(b));
+        emit CompletedProposalWithBasket(address(b));
         return b;
     }
 

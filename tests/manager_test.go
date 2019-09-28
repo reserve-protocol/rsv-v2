@@ -37,11 +37,6 @@ var (
 // SetupSuite runs once, before all of the tests in the suite.
 func (s *ManagerSuite) SetupSuite() {
 	s.setup()
-	if coverageEnabled {
-		s.createSlowCoverageNode()
-	} else {
-		s.createFastNode()
-	}
 }
 
 // TearDownSuite runs once, after all of the tests in the suite.
@@ -212,7 +207,7 @@ func (s *ManagerSuite) initializeManagerWithWeightsProposal(weights []*big.Int) 
 		abi.ManagerWeightsProposed{
 			Id: bigInt(0), Proposer: proposer.address(), Tokens: tokens, Weights: weights,
 		},
-		abi.ProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
+		abi.WeightProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
 	)
 
 	// Confirm proposals length increments.
@@ -226,6 +221,8 @@ func (s *ManagerSuite) initializeManagerWithWeightsProposal(weights []*big.Int) 
 	proposal, err := abi.NewWeightProposal(proposalAddress, s.node)
 	s.Require().NoError(err)
 
+	s.logParsers[proposalAddress] = proposal
+
 	// Get Proposal Basket.
 	proposalBasketAddress, err := proposal.Basket(nil)
 	s.Require().NoError(err)
@@ -233,6 +230,8 @@ func (s *ManagerSuite) initializeManagerWithWeightsProposal(weights []*big.Int) 
 
 	basket, err := abi.NewBasket(proposalBasketAddress, s.node)
 	s.Require().NoError(err)
+
+	s.logParsers[proposalBasketAddress] = basket
 
 	// Check Basket has correct fields
 	basketTokens, err := basket.GetTokens(nil)
@@ -260,13 +259,16 @@ func (s *ManagerSuite) initializeManagerWithWeightsProposal(weights []*big.Int) 
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
 
 	// Execute Proposal.
-	s.requireTxStrongly(s.manager.ExecuteProposal(signer(s.operator), bigInt(0)))(
+	s.requireTxWeakly(s.manager.ExecuteProposal(signer(s.operator), bigInt(0)))(
 		abi.ManagerProposalExecuted{
 			Id:        bigInt(0),
 			Proposer:  proposer.address(),
 			Executor:  s.operator.address(),
 			OldBasket: s.basketAddress,
 			NewBasket: proposalBasketAddress,
+		},
+		abi.WeightProposalCompletedProposalWithBasket{
+			BasketAddress: proposalBasketAddress,
 		},
 	)
 
@@ -297,7 +299,7 @@ func (s *ManagerSuite) initializeManagerWithSwapProposal(amounts []*big.Int, toV
 			Amounts:  amounts,
 			ToVault:  toVault,
 		},
-		abi.ProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
+		abi.WeightProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
 	)
 
 	// Confirm proposals length increments.

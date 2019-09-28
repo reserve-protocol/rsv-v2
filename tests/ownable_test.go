@@ -35,11 +35,6 @@ var (
 // SetupSuite runs once, before all of the tests in the suite.
 func (s *OwnableSuite) SetupSuite() {
 	s.setup()
-	if coverageEnabled {
-		s.createSlowCoverageNode()
-	} else {
-		s.createFastNode()
-	}
 }
 
 // TearDownSuite runs once, after all of the tests in the suite.

@@ -8,8 +8,10 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 
+	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
@@ -52,6 +54,8 @@ type TestSuite struct {
 	basketAddress         common.Address
 	erc20s                []*abi.BasicERC20
 	erc20Addresses        []common.Address
+
+	utilContract *bind.BoundContract
 
 	logParsers map[common.Address]logParser
 }
@@ -176,6 +180,13 @@ func (s *TestSuite) assertCurrentBasketMirrorsTargets(tokens []common.Address, b
 	}
 }
 
+// currentTimestamp retrieves the current block time.
+func (s *TestSuite) currentTimestamp() *big.Int {
+	result := new(big.Int)
+	s.NoError(s.utilContract.Call(nil, &result, "time"))
+	return result
+}
+
 // createSlowCoverageNode creates a connection to a local geth node that passes through
 // sol-coverage instrumentation. This mode is significantly slower than running against
 // the in-process node created by `createFastNode`.
@@ -255,6 +266,22 @@ func (s *TestSuite) setup() {
 		s.Require().NoError(err)
 	}
 	s.signer = signer(s.account[0])
+
+	s.createFastNode()
+
+	// Deploy utility contract just for reading block time
+	bytecode := "0x6080604052348015600f57600080fd5b5060918061001e6000396000f3fe6080604052348015600f57600080fd5b50600436106044577c0100000000000000000000000000000000000000000000000000000000600035046316ada54781146049575b600080fd5b604f6061565b60408051918252519081900360200190f35b429056fea165627a7a723058205524d6a0c4d80ea5535c2ea64615c2619a21518e242cb929275cbd678b04468f0029"
+	utilABI, err := ethabi.JSON(strings.NewReader(`
+	[{"constant":true,"inputs":[],"name":"time","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"}]
+	`))
+	s.Require().NoError(err)
+
+	code, err := hex.DecodeString(strings.TrimPrefix(bytecode, "0x"))
+	s.Require().NoError(err)
+
+	_, tx, utilContract, err := bind.DeployContract(s.signer, utilABI, code, s.node)
+	s.requireTxStrongly(tx, err)( /* assert zero events */ )
+	s.utilContract = utilContract
 }
 
 // backend is a wrapper around *backends.SimulatedBackend.
