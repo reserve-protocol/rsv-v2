@@ -103,7 +103,7 @@ contract WeightProposal is Proposal {
  * solves for the new resultant basket later.
  *
  * When this proposal is completed, it calculates what the weights for the new basket will be
- * and returns it.
+ * and returns it. If RSV supply is 0, this kind of Proposal cannot be used. 
  */
 
 // On "unit" comments, see comment at top of Manager.sol.
