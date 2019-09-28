@@ -64,7 +64,7 @@ func (s *VaultSuite) BeforeTest(suiteName, testName string) {
 	s.logParsers = map[common.Address]logParser{
 		vaultAddress: vault,
 	}
-	s.requireTxStrongly(tx, err)(
+	s.requireTxWithEvents(tx, err)(
 		abi.VaultOwnershipTransferred{
 			PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 		},
@@ -86,7 +86,7 @@ func (s *VaultSuite) BeforeTest(suiteName, testName string) {
 		s.logParsers[erc20Address] = erc20
 
 		val := bigInt(1000)
-		s.requireTxStrongly(erc20.Transfer(s.signer, vaultAddress, val))(
+		s.requireTxWithEvents(erc20.Transfer(s.signer, vaultAddress, val))(
 			abi.BasicERC20Transfer{
 				From: s.owner.address(), To: vaultAddress, Value: val,
 			},
@@ -113,7 +113,7 @@ func (s *VaultSuite) TestConstructor() {
 func (s *VaultSuite) TestChangeManager() {
 	// Change the Manager address.
 	manager := s.account[1]
-	s.requireTxStrongly(s.vault.ChangeManager(s.signer, manager.address()))(
+	s.requireTxWithEvents(s.vault.ChangeManager(s.signer, manager.address()))(
 		abi.VaultManagerTransferred{
 			PreviousManager: s.owner.address(), NewManager: manager.address(),
 		},
@@ -132,7 +132,7 @@ func (s *VaultSuite) TestChangeManagerProtected() {
 	s.requireTxFails(s.vault.ChangeManager(signer(manager), manager.address()))
 
 	// Change the Manager address as owner.
-	s.requireTxStrongly(s.vault.ChangeManager(s.signer, manager.address()))(
+	s.requireTxWithEvents(s.vault.ChangeManager(s.signer, manager.address()))(
 		abi.VaultManagerTransferred{
 			PreviousManager: s.owner.address(), NewManager: manager.address(),
 		},
@@ -147,7 +147,7 @@ func (s *VaultSuite) TestChangeManagerProtected() {
 	receiver := s.account[2]
 	s.requireTxFails(s.vault.ChangeManager(signer(manager), receiver.address()))
 	s.requireTxFails(s.vault.ChangeManager(signer(s.account[2]), receiver.address()))
-	s.requireTxStrongly(s.vault.ChangeManager(s.signer, receiver.address()))(
+	s.requireTxWithEvents(s.vault.ChangeManager(s.signer, receiver.address()))(
 		abi.VaultManagerTransferred{
 			PreviousManager: manager.address(), NewManager: receiver.address(),
 		},
@@ -166,7 +166,7 @@ func (s *VaultSuite) TestWithdrawTo() {
 		expected := balance.Sub(balance, val)
 
 		// Make transfer.
-		s.requireTxStrongly(
+		s.requireTxWithEvents(
 			s.vault.WithdrawTo(s.signer, s.erc20Addresses[i], val, receiver.address()),
 		)(
 			abi.BasicERC20Transfer{
@@ -193,7 +193,7 @@ func (s *VaultSuite) TestWithdrawToVoidWithdrawal() {
 	expected := balance
 
 	// Make transfer.
-	s.requireTxStrongly(
+	s.requireTxWithEvents(
 		s.vault.WithdrawTo(s.signer, s.erc20Addresses[0], val, receiver.address()),
 	)(
 		abi.BasicERC20Transfer{
@@ -214,14 +214,14 @@ func (s *VaultSuite) TestWithdrawToProtected() {
 	val := bigInt(1)
 
 	// Set the manager.
-	s.requireTxStrongly(s.vault.ChangeManager(s.signer, manager.address()))(
+	s.requireTxWithEvents(s.vault.ChangeManager(s.signer, manager.address()))(
 		abi.VaultManagerTransferred{
 			PreviousManager: s.owner.address(), NewManager: manager.address(),
 		},
 	)
 
 	// Confirm manager can transfer.
-	s.requireTxStrongly(
+	s.requireTxWithEvents(
 		s.vault.WithdrawTo(signer(manager), s.erc20Addresses[0], val, receiver.address()),
 	)(
 		abi.BasicERC20Transfer{

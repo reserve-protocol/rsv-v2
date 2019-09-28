@@ -117,7 +117,7 @@ func (s *WeightProposalSuite) BeforeTest(suiteName, testName string) {
 		proposalAddress: proposal,
 	}
 
-	s.requireTxStrongly(tx, err)(
+	s.requireTxWithEvents(tx, err)(
 		abi.WeightProposalOwnershipTransferred{
 			PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 		},
@@ -159,7 +159,7 @@ func (s *WeightProposalSuite) TestAccept() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Check that the futureTimewas set.
 	foundTime, err := s.proposal.Time(nil)
@@ -185,7 +185,7 @@ func (s *WeightProposalSuite) TestAcceptRequiresCreated() {
 	futureTime := bigInt(0)
 
 	// Cancel the proposal.
-	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+	s.requireTxWithEvents(s.proposal.Cancel(s.signer))()
 
 	// Confirm it's cancelled.
 	state, err := s.proposal.State(nil)
@@ -199,7 +199,7 @@ func (s *WeightProposalSuite) TestAcceptRequiresCreated() {
 // TestCancel tests that `cancel` changes the state as expected.
 func (s *WeightProposalSuite) TestCancel() {
 	// Cancel the proposal.
-	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+	s.requireTxWithEvents(s.proposal.Cancel(s.signer))()
 
 	// Confirm it's cancelled.
 	state, err := s.proposal.State(nil)
@@ -218,10 +218,10 @@ func (s *WeightProposalSuite) TestCancelRequiresNotCompleted() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Complete the proposal and check the right basket is returned.
-	s.requireTxStrongly(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
+	s.requireTxWithEvents(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
 		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
 	)
 
@@ -239,10 +239,10 @@ func (s *WeightProposalSuite) TestComplete() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Complete the proposal and check the right basket is returned.
-	s.requireTxStrongly(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
+	s.requireTxWithEvents(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
 		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
 	)
 
@@ -258,7 +258,7 @@ func (s *WeightProposalSuite) TestCompleteIsProtected() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Try to complete the proposal with the wrong signer..
 	s.requireTxFails(s.proposal.Complete(signer(s.proposer), s.reserveAddress, s.basketAddress))
@@ -271,7 +271,7 @@ func (s *WeightProposalSuite) TestCompleteRequiresAccepted() {
 	s.requireTxFails(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
 
 	// Cancel the proposal.
-	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+	s.requireTxWithEvents(s.proposal.Cancel(s.signer))()
 
 	// Try to complete the proposal after it has been cancelled.
 	s.requireTxFails(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
@@ -282,10 +282,10 @@ func (s *WeightProposalSuite) TestCompleteCanOnlyHappenOnce() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Complete the proposal and check the right basket is returned.
-	s.requireTxStrongly(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
+	s.requireTxWithEvents(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
 		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
 	)
 
@@ -305,7 +305,7 @@ func (s *WeightProposalSuite) TestCompleteCannotHappenBeforeNow() {
 	futureTime := bigInt(0).Add(currentTime, bigInt(100))
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Check that calling `complete` reverts.
 	s.requireTxFails(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
@@ -314,7 +314,7 @@ func (s *WeightProposalSuite) TestCompleteCannotHappenBeforeNow() {
 	s.node.(backend).AdjustTime(100 * time.Second)
 
 	// Now the proposal can be completed.
-	s.requireTxStrongly(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
+	s.requireTxWithEvents(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
 		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
 	)
 }
@@ -338,7 +338,7 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 		proposalAddress: proposal,
 	}
 
-	s.requireTxStrongly(tx, err)(
+	s.requireTxWithEvents(tx, err)(
 		abi.SwapProposalOwnershipTransferred{
 			PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 		},
@@ -387,17 +387,17 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 		reserveAddress: reserve,
 	}
 
-	s.requireTxStrongly(tx, err)(abi.ReserveOwnershipTransferred{
+	s.requireTxWithEvents(tx, err)(abi.ReserveOwnershipTransferred{
 		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 	})
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 
 	// Make RSV supply nonzero so weights can be calculated.
-	s.requireTxStrongly(s.reserve.ChangeMinter(s.signer, s.owner.address()))(
+	s.requireTxWithEvents(s.reserve.ChangeMinter(s.signer, s.owner.address()))(
 		abi.ReserveMinterChanged{NewMinter: s.owner.address()},
 	)
-	s.requireTxStrongly(s.reserve.Mint(s.signer, s.proposer.address(), bigInt(1)))(
+	s.requireTxWithEvents(s.reserve.Mint(s.signer, s.proposer.address(), bigInt(1)))(
 		mintingTransfer(s.proposer.address(), bigInt(1)),
 	)
 
@@ -423,7 +423,7 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 		s.weights,
 	)
 
-	s.requireTxStrongly(tx, err)()
+	s.requireTxWithEvents(tx, err)()
 	s.basketAddress = basketAddress
 	s.basket = basket
 }
@@ -437,7 +437,7 @@ func (s *SwapProposalSuite) TestAccept() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Check that the futureTimewas set.
 	foundTime, err := s.proposal.Time(nil)
@@ -463,7 +463,7 @@ func (s *SwapProposalSuite) TestAcceptRequiresCreated() {
 	futureTime := bigInt(0)
 
 	// Cancel the proposal.
-	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+	s.requireTxWithEvents(s.proposal.Cancel(s.signer))()
 
 	// Confirm it's cancelled.
 	state, err := s.proposal.State(nil)
@@ -477,7 +477,7 @@ func (s *SwapProposalSuite) TestAcceptRequiresCreated() {
 // TestCancel tests that `cancel` changes the state as expected.
 func (s *SwapProposalSuite) TestCancel() {
 	// Cancel the proposal.
-	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+	s.requireTxWithEvents(s.proposal.Cancel(s.signer))()
 
 	// Confirm it's cancelled.
 	state, err := s.proposal.State(nil)
@@ -496,12 +496,10 @@ func (s *SwapProposalSuite) TestCancelRequiresNotCompleted() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Complete the proposal and check the right basket is returned.
-	s.requireTxWeakly(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
-		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
-	)
+	s.requireTx(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
 
 	// Check that State is Completed.
 	state, err := s.proposal.State(nil)
@@ -517,12 +515,10 @@ func (s *SwapProposalSuite) TestComplete() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Complete the proposal and check the right basket is returned.
-	s.requireTxWeakly(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
-		abi.SwapProposalCompletedProposalWithBasket{BasketAddress: zeroAddress()},
-	)
+	s.requireTx(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
 
 	// Check that State is Completed.
 	state, err := s.proposal.State(nil)
@@ -536,7 +532,7 @@ func (s *SwapProposalSuite) TestCompleteIsProtected() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Try to complete the proposal with the wrong signer..
 	s.requireTxFails(s.proposal.Complete(signer(s.proposer), s.reserveAddress, s.basketAddress))
@@ -549,7 +545,7 @@ func (s *SwapProposalSuite) TestCompleteRequiresAccepted() {
 	s.requireTxFails(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
 
 	// Cancel the proposal.
-	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+	s.requireTxWithEvents(s.proposal.Cancel(s.signer))()
 
 	// Try to complete the proposal after it has been cancelled.
 	s.requireTxFails(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
@@ -560,12 +556,10 @@ func (s *SwapProposalSuite) TestCompleteCanOnlyHappenOnce() {
 	futureTime := bigInt(0)
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Complete the proposal and check the right basket is returned.
-	s.requireTxWeakly(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
-		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
-	)
+	s.requireTx(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
 
 	// Check that State is Completed.
 	state, err := s.proposal.State(nil)
@@ -583,7 +577,7 @@ func (s *SwapProposalSuite) TestCompleteCannotHappenBeforeNow() {
 	futureTime := bigInt(0).Add(currentTime, bigInt(100))
 
 	// Accept proposal.
-	s.requireTxStrongly(s.proposal.Accept(s.signer, futureTime))()
+	s.requireTxWithEvents(s.proposal.Accept(s.signer, futureTime))()
 
 	// Check that calling `complete` reverts.
 	s.requireTxFails(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
@@ -592,7 +586,5 @@ func (s *SwapProposalSuite) TestCompleteCannotHappenBeforeNow() {
 	s.node.(backend).AdjustTime(100 * time.Second)
 
 	// Now the proposal can be completed.
-	s.requireTxWeakly(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))(
-		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
-	)
+	s.requireTx(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
 }

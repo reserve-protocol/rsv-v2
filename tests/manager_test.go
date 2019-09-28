@@ -23,6 +23,7 @@ type ManagerSuite struct {
 	TestSuite
 
 	operator account
+	proposer account
 }
 
 var (
@@ -63,15 +64,16 @@ func (s *ManagerSuite) TearDownSuite() {
 func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.owner = s.account[0]
 	s.operator = s.account[1]
+	s.proposer = s.account[5]
 
-	// Re-deploy Reserve and store a handle to the Go binding and the contract address.
+	// Deploy Reserve and store a handle to the Go binding and the contract address.
 	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
 
 	s.logParsers = map[common.Address]logParser{
 		reserveAddress: reserve,
 	}
 
-	s.requireTxStrongly(tx, err)(abi.ReserveOwnershipTransferred{
+	s.requireTxWithEvents(tx, err)(abi.ReserveOwnershipTransferred{
 		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 	})
 	s.reserve = reserve
@@ -89,7 +91,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	vaultAddress, tx, vault, err := abi.DeployVault(s.signer, s.node)
 
 	s.logParsers[vaultAddress] = vault
-	s.requireTxStrongly(tx, err)(
+	s.requireTxWithEvents(tx, err)(
 		abi.VaultOwnershipTransferred{
 			PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 		},
@@ -106,22 +108,25 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	)
 
 	s.logParsers[managerAddress] = manager
-	s.requireTxStrongly(tx, err)(abi.ManagerOwnershipTransferred{
+	s.requireTxWithEvents(tx, err)(abi.ManagerOwnershipTransferred{
 		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 	})
 	s.manager = manager
 	s.managerAddress = managerAddress
 
 	// Set all auths to Manager.
-	s.requireTxStrongly(s.reserve.ChangeMinter(s.signer, managerAddress))(
+	s.requireTxWithEvents(s.reserve.ChangeMinter(s.signer, managerAddress))(
 		abi.ReserveMinterChanged{NewMinter: managerAddress},
 	)
-	s.requireTxStrongly(s.reserve.ChangePauser(s.signer, managerAddress))(
+	s.requireTxWithEvents(s.reserve.ChangePauser(s.signer, managerAddress))(
 		abi.ReservePauserChanged{NewPauser: managerAddress},
+	)
+	s.requireTxWithEvents(s.vault.ChangeManager(s.signer, managerAddress))(
+		abi.VaultManagerTransferred{PreviousManager: s.owner.address(), NewManager: managerAddress},
 	)
 
 	// Set the operator.
-	s.requireTxStrongly(s.manager.SetOperator(s.signer, s.operator.address()))(
+	s.requireTxWithEvents(s.manager.SetOperator(s.signer, s.operator.address()))(
 		abi.ManagerOperatorChanged{
 			OldAccount: zeroAddress(), NewAccount: s.operator.address(),
 		},
@@ -138,15 +143,30 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.basketAddress = basketAddress
 	s.basket = basket
 
-	// Deploy collateral ERC20s
+	// Deploy collateral ERC20s and set allowances
 	s.erc20s = make([]*abi.BasicERC20, 3)
 	s.erc20Addresses = make([]common.Address, 3)
 	for i := 0; i < 3; i++ {
 		erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
 		s.Require().NoError(err)
+
 		s.erc20s[i] = erc20
 		s.erc20Addresses[i] = erc20Address
 		s.logParsers[erc20Address] = erc20
+
+		// Transfer all of the ERC20 tokens to `proposer`.
+		s.requireTxWithEvents(erc20.Transfer(s.signer, s.proposer.address(), shiftRight(1, 36)))(
+			abi.BasicERC20Transfer{
+				From: s.owner.address(), To: s.proposer.address(), Value: shiftRight(1, 36),
+			},
+		)
+		// Have `proposer` approve the Manager to spend its funds.
+		s.requireTxWithEvents(erc20.Approve(signer(s.proposer), s.managerAddress, shiftRight(1, 36)))(
+			abi.BasicERC20Approval{
+				Owner: s.proposer.address(), Spender: s.managerAddress, Value: shiftRight(1, 36),
+			},
+		)
+
 	}
 }
 
@@ -171,52 +191,102 @@ func (s *ManagerSuite) TestConstructor() {
 	s.Equal(true, paused)
 }
 
-func (s *ManagerSuite) TestProposeWeightsHappyPath() {
-	weights := makeLinearWeights(bigInt(1), len(s.erc20s))
-	s.initializeManagerWithWeightsProposal(weights)
+// TestProposeWeightsUseCase sets a basket, issues RSV, changes the basket, and redeems RSV.
+func (s *ManagerSuite) TestProposeWeightsFullUsecase() {
+	tokens := s.erc20Addresses
+	weights := []*big.Int{shiftRight(1, 36), shiftRight(2, 36), shiftRight(3, 36)}
 
-}
+	// Change the basket using a weight proposal.
+	s.changeBasketUsingWeightProposal(tokens, weights)
 
-// func (s *ManagerSuite) TestProposeSwapHappyPath() {
-// 	var amounts []*big.Int
-// 	var toVault []bool
-// 	for i := 0; i < len(s.erc20Addresses); i++ {
-// 		weights = append(weights, bigInt(0))
-// 		amounts = append(amounts, bigInt(0))
-// 	}
-// }
-
-func (s *ManagerSuite) TestPauseAuth() {
-	s.requireTxFails(s.manager.Pause(signer(s.account[2])))
-	s.requireTxFails(s.manager.Pause(signer(s.operator)))
-	s.requireTxStrongly(s.manager.Pause(s.signer))(
-		abi.ManagerPaused{
+	// Now we should be able to unpause.
+	s.requireTxWithEvents(s.manager.Unpause(s.signer))(
+		abi.ManagerUnpaused{
 			Account: s.owner.address(),
 		},
 	)
+
+	// Issue a billion RSV.
+	rsvToIssue := shiftRight(1, 9) // 1 billion
+	s.requireTx(s.manager.Issue(signer(s.proposer), rsvToIssue))
+	s.assertManagerCollateralized()
+
+	// Change to a new basket.
+	newWeights := []*big.Int{shiftRight(2, 36), shiftRight(3, 36), shiftRight(1, 36)}
+	s.changeBasketUsingWeightProposal(tokens, newWeights)
+
+	// Approve the manager to spend a billion RSV.
+	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvToIssue))(
+		abi.ReserveApproval{Owner: s.proposer.address(), Spender: s.managerAddress, Value: rsvToIssue},
+	)
+
+	// Redeem a billion RSV.
+	s.requireTx(s.manager.Redeem(signer(s.proposer), rsvToIssue))
+	s.assertManagerCollateralized()
+
+	// We should be back to zero RSV supply.
+	s.assertRSVTotalSupply(bigInt(0))
+
+}
+
+// TestProposeSwapFullUsecase sets up a basket with a WeightProposal, issues RSV,
+// changes the basket using a SwapProposal, and redeems the RSV.
+func (s *ManagerSuite) TestProposeSwapFullUsecase() {
+	tokens := s.erc20Addresses
+	weights := []*big.Int{shiftRight(1, 48), shiftRight(2, 48), shiftRight(3, 48)}
+
+	// Change the basket using a weight proposal.
+	s.changeBasketUsingWeightProposal(tokens, weights)
+
+	// Now we should be able to unpause.
+	s.requireTxWithEvents(s.manager.Unpause(s.signer))(
+		abi.ManagerUnpaused{
+			Account: s.owner.address(),
+		},
+	)
+
+	// Issue a billion RSV.
+	rsvToIssue := shiftRight(1, 9) // 1 billion
+	s.requireTx(s.manager.Issue(signer(s.proposer), rsvToIssue))
+	s.assertManagerCollateralized()
+
+	// Change to a new basket using a SwapProposal
+	amounts := []*big.Int{shiftRight(2, 18), shiftRight(3, 18), shiftRight(1, 18)}
+	toVault := []bool{true, false, true}
+	s.changeBasketUsingSwapProposal(tokens, amounts, toVault)
+
+	// Approve the manager to spend a billion RSV.
+	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvToIssue))(
+		abi.ReserveApproval{Owner: s.proposer.address(), Spender: s.managerAddress, Value: rsvToIssue},
+	)
+
+	// Redeem a billion RSV.
+	s.requireTx(s.manager.Redeem(signer(s.proposer), rsvToIssue))
+	s.assertManagerCollateralized()
+
+	// We should be back to zero RSV supply.
+	s.assertRSVTotalSupply(bigInt(0))
+}
+
+// TestPauseIsProtected tests that pause can only be called by owner.
+func (s *ManagerSuite) TestPauseIsProtected() {
+	s.requireTxFails(s.manager.Pause(signer(s.account[2])))
+	s.requireTxFails(s.manager.Pause(signer(s.operator)))
 }
 
 // Helpers
 
-func (s *ManagerSuite) initializeManagerWithWeightsProposal(weights []*big.Int) {
-	tokens := s.erc20Addresses
-	proposer := s.account[2]
-
-	// Propose the basket.
-	s.requireTxWeakly(s.manager.ProposeWeights(signer(proposer), tokens, weights))(
-		abi.ManagerWeightsProposed{
-			Id: bigInt(0), Proposer: proposer.address(), Tokens: tokens, Weights: weights,
-		},
-		abi.WeightProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
-	)
+func (s *ManagerSuite) changeBasketUsingWeightProposal(tokens []common.Address, weights []*big.Int) {
+	// Propose the new basket.
+	s.requireTx(s.manager.ProposeWeights(signer(s.proposer), tokens, weights))
 
 	// Confirm proposals length increments.
 	proposalsLength, err := s.manager.ProposalsLength(nil)
 	s.Require().NoError(err)
-	s.Equal(proposalsLength, bigInt(1))
+	proposalID := bigInt(0).Sub(proposalsLength, bigInt(1))
 
 	// Construct Proposal binding.
-	proposalAddress, err := s.manager.Proposals(nil, bigInt(0))
+	proposalAddress, err := s.manager.Proposals(nil, proposalID)
 	s.Require().NoError(err)
 	proposal, err := abi.NewWeightProposal(proposalAddress, s.node)
 	s.Require().NoError(err)
@@ -234,14 +304,17 @@ func (s *ManagerSuite) initializeManagerWithWeightsProposal(weights []*big.Int) 
 	s.logParsers[proposalBasketAddress] = basket
 
 	// Check Basket has correct fields
+	// Tokens
 	basketTokens, err := basket.GetTokens(nil)
 	s.Require().NoError(err)
 	s.True(reflect.DeepEqual(basketTokens, tokens))
 
+	// Size
 	basketSize, err := basket.Size(nil)
 	s.Require().NoError(err)
 	s.Equal(bigInt(uint32(len(tokens))).String(), basketSize.String())
 
+	// Weights
 	for i := 0; i < len(weights); i++ {
 		foundBacking, err := basket.Weights(nil, tokens[i])
 		s.Require().NoError(err)
@@ -249,125 +322,81 @@ func (s *ManagerSuite) initializeManagerWithWeightsProposal(weights []*big.Int) 
 	}
 
 	// Accept the Proposal.
-	s.requireTxStrongly(s.manager.AcceptProposal(signer(s.operator), bigInt(0)))(
+	s.requireTxWithEvents(s.manager.AcceptProposal(signer(s.operator), proposalID))(
 		abi.ManagerProposalAccepted{
-			Id: bigInt(0), Proposer: proposer.address(),
+			Id: proposalID, Proposer: s.proposer.address(),
 		},
 	)
+
+	// Confirm we cannot execute the proposal yet.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.operator), proposalID))
 
 	// Advance 24h.
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
 
 	// Execute Proposal.
-	s.requireTxWeakly(s.manager.ExecuteProposal(signer(s.operator), bigInt(0)))(
-		abi.ManagerProposalExecuted{
-			Id:        bigInt(0),
-			Proposer:  proposer.address(),
-			Executor:  s.operator.address(),
-			OldBasket: s.basketAddress,
-			NewBasket: proposalBasketAddress,
-		},
-		abi.WeightProposalCompletedProposalWithBasket{
-			BasketAddress: proposalBasketAddress,
-		},
-	)
+	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
 
 	// Gets the current basket and makes sure it is correct.
-	s.assertCurrentBasketMirrorsTargets(tokens, weights)
+	s.assertBasket(basket, tokens, weights)
 
-	// Are we collateralized?
+	// Assert that the vault is still collateralized.
 	s.assertManagerCollateralized()
-
-	// Now we should be able to unpause.
-	s.requireTxStrongly(s.manager.Unpause(s.signer))(
-		abi.ManagerUnpaused{
-			Account: s.owner.address(),
-		},
-	)
 }
 
-func (s *ManagerSuite) initializeManagerWithSwapProposal(amounts []*big.Int, toVault []bool) {
-	tokens := s.erc20Addresses
-	proposer := s.account[2]
-
-	// Propose the basket.
-	s.requireTxWeakly(s.manager.ProposeSwap(signer(proposer), tokens, amounts, toVault))(
-		abi.ManagerSwapProposed{
-			Id:       bigInt(0),
-			Proposer: proposer.address(),
-			Tokens:   tokens,
-			Amounts:  amounts,
-			ToVault:  toVault,
-		},
-		abi.WeightProposalOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.managerAddress},
-	)
+func (s *ManagerSuite) changeBasketUsingSwapProposal(tokens []common.Address, amounts []*big.Int, toVault []bool) {
+	// Propose the new basket.
+	s.requireTx(s.manager.ProposeSwap(signer(s.proposer), tokens, amounts, toVault))
 
 	// Confirm proposals length increments.
 	proposalsLength, err := s.manager.ProposalsLength(nil)
 	s.Require().NoError(err)
-	s.Equal(proposalsLength, bigInt(1))
+	proposalID := bigInt(0).Sub(proposalsLength, bigInt(1))
 
 	// Construct Proposal binding.
-	proposalAddress, err := s.manager.Proposals(nil, bigInt(0))
+	proposalAddress, err := s.manager.Proposals(nil, proposalID)
 	s.Require().NoError(err)
-	_, err = abi.NewSwapProposal(proposalAddress, s.node)
+	proposal, err := abi.NewSwapProposal(proposalAddress, s.node)
 	s.Require().NoError(err)
 
+	s.logParsers[proposalAddress] = proposal
+
 	// Accept the Proposal.
-	s.requireTxStrongly(s.manager.AcceptProposal(signer(s.operator), bigInt(0)))(
+	s.requireTxWithEvents(s.manager.AcceptProposal(signer(s.operator), proposalID))(
 		abi.ManagerProposalAccepted{
-			Id: bigInt(0), Proposer: proposer.address(),
+			Id: proposalID, Proposer: s.proposer.address(),
 		},
 	)
+
+	// Confirm we cannot execute the proposal yet.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.operator), proposalID))
 
 	// Advance 24h.
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
 
-	// Execute Proposal.
-	s.requireTxWeakly(s.manager.ExecuteProposal(signer(proposer), bigInt(0)))(
-		abi.ManagerProposalExecuted{
-			Id:        bigInt(0),
-			Proposer:  proposer.address(),
-			Executor:  proposer.address(),
-			OldBasket: s.basketAddress,
-			NewBasket: zeroAddress(),
-		},
-	)
+	// DEBUGGING
+	oldBasketAddress, err := s.manager.Basket(nil)
+	s.Require().NoError(err)
+	oldBasket, err := abi.NewBasket(oldBasketAddress, s.node)
+	s.Require().NoError(err)
+	for i, erc20Address := range s.erc20Addresses {
+		weight, err := oldBasket.Weights(nil, erc20Address)
+		s.Require().NoError(err)
+		fmt.Println(weight)
 
-	// Figure out what the basket _should_ be.
-	var oldWeights []*big.Int
-	newWeights := s.newWeights(oldWeights, amounts, toVault)
+		amount, err := proposal.Amounts(nil, bigInt(uint32(i)))
+		s.Require().NoError(err)
+		fmt.Println(amount)
+	}
+
+	// Execute Proposal.
+	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
 
 	// Gets the current basket and makes sure it is correct.
-	s.assertCurrentBasketMirrorsTargets(tokens, newWeights)
+	// s.assertBasket(basket, tokens, weights)
 
-	// Are we collateralized?
+	// Assert that the vault is still collateralized.
 	s.assertManagerCollateralized()
-
-	// // We should NOT be able to unpause, because weights should all be zero.
-	// s.requireTxStrongly(s.manager.Unpause(s.signer))(
-	// 	abi.ManagerUnpaused{
-	// 		Account: s.owner.address(),
-	// 	},
-	// )
-}
-
-func (s *ManagerSuite) fundAccountWithERC20sAndApprove(acc account, val *big.Int) {
-	for _, erc20 := range s.erc20s {
-		// Fund the account.
-		s.requireTxStrongly(erc20.Transfer(s.signer, acc.address(), val))(
-			abi.BasicERC20Transfer{
-				From: s.owner.address(), To: acc.address(), Value: val,
-			},
-		)
-
-		// Have the account approve the Manager.
-		s.requireTxStrongly(erc20.Approve(signer(acc), s.managerAddress, val))(
-			abi.BasicERC20Approval{
-				Owner: acc.address(), Spender: s.managerAddress, Value: val,
-			},
-		)
-	}
 }
 
 func (s *ManagerSuite) newWeights(
