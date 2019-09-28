@@ -145,28 +145,6 @@ func (s *OwnableSuite) TestAcceptOwnershipByNominatedOwner() {
 	s.Equal(ownerAddress, newOwner.address())
 }
 
-// TestAcceptOwnershipByOwner tests that ownership can be accepted by the owner.
-func (s *OwnableSuite) TestAcceptOwnershipByOwner() {
-	newOwner := s.account[1]
-	s.requireTxWithEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
-		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
-		},
-	)
-
-	// Check that the old owner can force the nominated owner to accept ownership.
-	s.requireTxWithEvents(s.ownable.AcceptOwnership(s.signer))(
-		abi.BasicOwnableOwnershipTransferred{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
-		},
-	)
-
-	// Check that state changed appropriately.
-	ownerAddress, err := s.ownable.Owner(nil)
-	s.Require().NoError(err)
-	s.Equal(ownerAddress, newOwner.address())
-}
-
 // TestAcceptOwnershipNegativeCases makes sure acceptOwner reverts when it is supposed to.
 func (s *OwnableSuite) TestAcceptOwnershipNegativeCases() {
 	newOwner := s.account[1]
