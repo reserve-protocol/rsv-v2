@@ -171,8 +171,8 @@ contract Manager is Ownable {
 
     /// Set the seigniorage, in BPS.
     function setSeigniorage(uint256 _seigniorage) external onlyOwner {
-        seigniorage = _seigniorage;
         emit SeigniorageChanged(seigniorage, _seigniorage);
+        seigniorage = _seigniorage;
     }
 
     /// Set the Proposal delay in hours.
