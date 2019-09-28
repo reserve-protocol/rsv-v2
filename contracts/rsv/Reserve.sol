@@ -118,6 +118,7 @@ contract Reserve is IERC20, Ownable {
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
     function transferEternalStorage(address newOwner) external onlyOwner {
+        require(paused);
         data.transferOwnership(newOwner);
     }
 
