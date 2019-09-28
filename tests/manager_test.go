@@ -384,6 +384,19 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.assertManagerCollateralized()
 }
 
+// TestIssueRequireStatements tests that `issue` reverts when Paused. 
+func (s *ManagerSuite) TestIssueRequireStatements() {
+	amount := bigInt(1)
+
+	// Issue should succeed first.
+	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
+	s.assertManagerCollateralized()
+
+	// Issue should fail now. 
+	s.requireTxFails(s.manager.Issue(signer(s.proposer), bigInt(0)))
+	s.assertManagerCollateralized()
+}
+
 // TestRedeem tests that `redeem` compensates the person with the correct amounts.
 func (s *ManagerSuite) TestRedeem() {
 	// Issue.
@@ -447,6 +460,35 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 
 	// Confirm the same redemption now fails.
 	s.requireTxFails(s.manager.Redeem(signer(s.proposer), bigInt(1)))
+
+	s.assertManagerCollateralized()
+}
+
+// TestRedeemRequireStatements tests that `redeem` reverts for 0 RSV.
+func (s *ManagerSuite) TestRedeemRequireStatements() {
+	// Issue.
+	rsvAmount := shiftRight(1, 27) // 1 billion
+	s.requireTx(s.manager.Issue(signer(s.proposer), rsvAmount))
+
+	// Make sure we have the balance we expect to have.
+	rsvBalance, err := s.reserve.BalanceOf(nil, s.proposer.address())
+	s.Require().NoError(err)
+	s.Equal(rsvAmount.String(), rsvBalance.String())
+
+	// Approve the manager to spend our RSV.
+	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvAmount))(
+		abi.ReserveApproval{
+			Owner: s.proposer.address(),
+			Spender: s.managerAddress,
+			Value: rsvAmount,
+		},
+	)
+
+	// Redeem a tiny amount first to make sure it works.
+	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
+
+	// Confirm redeeming for 0 fails.
+	s.requireTxFails(s.manager.Redeem(signer(s.proposer), bigInt(0)))
 
 	s.assertManagerCollateralized()
 }
