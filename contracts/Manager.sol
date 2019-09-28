@@ -35,15 +35,35 @@ interface IVault {
  * useful when you want to fine-tune the Vault weights and accept the downside that it's
  * difficult to know what capital will be required when the proposal is executed.
  */
+
+/* On "unit" comments:
+ *
+ * The units in use around weight computations are fiddly, and it's pretty annoying to get them
+ * properly into the Solidity type system. So, there are many comments of the form "unit:
+ * ...". Where such a comment is describing a field, method, or return parameter, the comment means
+ * that the data in that place is to be interpreted to have that type. Many places also have
+ * comments with more complicated expressions; that's manually working out the dimensional analysis
+ * to ensure that the given expression has correct units.
+ *
+ * Some dimensions used in this analysis:
+ * - 1 RSV: 1 Reserve
+ * - 1 qRSV: 1 quantum of Reserve.
+ *      (RSV & qRSV are convertible by .mul(10**reserve.decimals() qRSV/RSV))
+ * - 1 qToken: 1 quantum of an external Token.
+ * - 1 aqToken: 1 atto-quantum of an external Token.
+ *      (qToken and aqToken are convertible by .mul(10**18 aqToken/qToken)
+ * - 1 BPS: 1 Basis Point. Effectively dimensionless; convertible with .mul(10000 BPS).
+ *
+ * Note that we _never_ reason in units of Tokens or attoTokens.
+ */
 contract Manager is Ownable {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
     // ROLES
 
-    // Manager is already Ownable, but in addition it also has an `operator`. 
-    address operator; 
-
+    // Manager is already Ownable, but in addition it also has an `operator`.
+    address operator;
 
     // DATA
 
@@ -55,15 +75,15 @@ contract Manager is Ownable {
     mapping(uint256 => Proposal) public proposals;
     uint256 public proposalsLength;
     uint256 public delay = 24 hours;
-    
+
     // Pausing
     bool public paused;
 
     // The spread between issuance and redemption in basis points (BPS).
-    uint256 public seigniorage;          // 0.1% spread -> 10 BPS
-    uint256 constant BPS_FACTOR = 10000; // This is what 100% looks like in BPS.
-    uint256 constant WEIGHT_FACTOR = 10**18;
-    
+    uint256 public seigniorage;              // 0.1% spread -> 10 BPS. unit: BPS
+    uint256 constant BPS_FACTOR = 10000;     // This is what 100% looks like in BPS. unit: BPS
+    uint256 constant WEIGHT_FACTOR = 10**18; // unit: aqToken/qToken
+
     event ProposalsCleared();
 
     // RSV traded events
@@ -90,11 +110,11 @@ contract Manager is Ownable {
                        address[] tokens,
                        uint256[] amounts,
                        bool[] toVault);
-    
+
     event ProposalAccepted(uint256 indexed id, address indexed proposer);
     event ProposalCanceled(uint256 indexed id, address indexed proposer, address indexed canceler);
-    event ProposalExecuted(uint256 indexed id, 
-                           address indexed proposer, 
+    event ProposalExecuted(uint256 indexed id,
+                           address indexed proposer,
                            address indexed executor,
                            address oldBasket,
                            address newBasket);
@@ -108,7 +128,7 @@ contract Manager is Ownable {
         seigniorage = seigniorage_;
         paused = true;
 
-        // Start with the empty basket. 
+        // Start with the empty basket.
         address[] memory tokens = new address[](0);
         uint256[] memory weights = new uint256[](0);
         basket = new Basket(Basket(0), tokens, weights);
@@ -122,7 +142,7 @@ contract Manager is Ownable {
         _;
     }
 
-    /// Modifies a function to run only when the caller is the operator account. 
+    /// Modifies a function to run only when the caller is the operator account.
     modifier onlyOperator() {
         require(_msgSender() == operator, "operator only");
         _;
@@ -149,7 +169,7 @@ contract Manager is Ownable {
         operator = _operator;
     }
 
-    /// Set the seigniorage, in BPS. 
+    /// Set the seigniorage, in BPS.
     function setSegniorage(uint256 _seigniorage) external onlyOwner {
         seigniorage = _seigniorage;
         emit SeigniorageChanged(seigniorage, _seigniorage);
@@ -161,7 +181,7 @@ contract Manager is Ownable {
         delay = _delay;
     }
 
-    /// Clear the list of proposals. 
+    /// Clear the list of proposals.
     function clearProposals() external onlyOwner {
         proposalsLength = 0;
         emit ProposalsCleared();
@@ -170,40 +190,52 @@ contract Manager is Ownable {
     /// Ensure that the Vault is fully collateralized.  That this is true should be an
     /// invariant of this contract: it's true before and after every txn.
     function isFullyCollateralized() public view returns(bool) {
+        uint256 scaleFactor = WEIGHT_FACTOR.mul(uint256(10) ** rsv.decimals);
+        // scaleFactor unit: aqToken/qToken * qRSV/RSV
+
         for (uint i = 0; i < basket.size(); i++) {
 
             address token = basket.tokens(i);
-            uint256 weight = basket.weights(token);
-            uint256 balance = IERC20(token).balanceOf(address(vault));
+            uint256 weight = basket.weights(token); // unit: aqToken/RSV
+            uint256 balance = IERC20(token).balanceOf(address(vault)); // unit: qRSV
 
-            // Return false if supply * weight / 10**18 < balance:
-            if (rsv.totalSupply().mul(weight) < balance.mul(uint256(10)**rsv.decimals()))
+            // Return false if this token is undercollateralized:
+            if (rsv.totalSupply().mul(weight) < balance.mul(scaleFactor) {
+                // checking units: [qRSV] * [aqToken/RSV] == [qToken] * [aqToken/qToken * qRSV/RSV]
                 return false;
+            }
         }
         return true;
     }
 
     /// Get amounts of basket tokens required to issue an amount of RSV.
     /// The returned array will be in the same order as the current basket.tokens.
+    /// return unit: qToken[]
     function toIssue(uint256 rsvAmount) public view returns (uint256[] memory) {
+        // rsvAmount unit: qRSV.
         uint256[] memory amounts = new uint256[](basket.size());
 
         uint256 feeRate = uint256(seigniorage.add(BPS_FACTOR));
+        // feeRate unit: BPS
         uint256 effectiveAmount = rsvAmount.mul(feeRate).div(BPS_FACTOR);
-        
+        // effectiveAmount unit: qRSV == qRSV*BPS/BPS
+
         // On issuance, amounts[i] of token i will enter the vault. To maintain full backing,
         // we have to round _up_ each amounts[i].
         for (uint i = 0; i < basket.size(); i++) {
             address token = basket.tokens(i);
             amounts[i] = _weighted(effectiveAmount, basket.weights(token), RoundingMode.UP);
+            // unit: qToken = _weighted(qRSV, aqToken/RSV, _)
         }
 
-        return amounts;
+        return amounts; // unit: qToken[]
     }
 
     /// Get amounts of basket tokens that would be sent upon redeeming an amount of RSV.
     /// The returned array will be in the same order as the current basket.tokens.
+    /// return unit: qToken[]
     function toRedeem(uint256 rsvAmount) public view returns (uint256[] memory) {
+        // rsvAmount unit: qRSV
         uint256[] memory amounts = new uint256[](basket.size());
 
         // On redemption, amounts[i] of token i will leave the vault. To maintain full backing,
@@ -211,39 +243,46 @@ contract Manager is Ownable {
         for (uint i = 0; i < basket.size(); i++) {
             address token = basket.tokens(i);
             amounts[i] = _weighted(rsvAmount, basket.weights(token), RoundingMode.DOWN);
+            // unit: qToken = _weighted(qRSV, aqToken/RSV, _)
         }
 
         return amounts;
     }
 
     /// Handles issuance.
+    /// rsvAmount unit: qRSV
     function issue(uint256 rsvAmount) public notPaused {
         require(rsvAmount > 0, "cannot issue zero RSV");
 
         // Accept collateral tokens.
-        uint256[] memory amounts = toIssue(rsvAmount);
+        uint256[] memory amounts = toIssue(rsvAmount); // unit: qToken[]
         for (uint i = 0; i < basket.size(); i++) {
             IERC20(basket.tokens(i)).safeTransferFrom(_msgSender(), address(vault), amounts[i]);
+            // unit check for amounts[i]: qToken.
         }
 
         // Compensate with RSV.
         rsv.mint(_msgSender(), rsvAmount);
+        // unit check for rsvAmount: qRSV.
 
         assert(isFullyCollateralized());
         emit Issuance(_msgSender(), rsvAmount);
     }
 
     /// Handles redemption.
+    /// rsvAmount unit: qRSV
     function redeem(uint256 rsvAmount) public notPaused {
         require(rsvAmount > 0, "cannot redeem 0 RSV");
 
         // Burn RSV tokens.
         rsv.burnFrom(_msgSender(), rsvAmount);
+        // unit check: rsvAmount is qRSV.
 
         // Compensate with collateral tokens.
-        uint256[] memory amounts = toRedeem(rsvAmount);
+        uint256[] memory amounts = toRedeem(rsvAmount); // unit: qToken[]
         for (uint i = 0; i < basket.size(); i++) {
             vault.withdrawTo(basket.tokens(i), amounts[i], _msgSender());
+            // unit check for amounts[i]: qToken.
         }
 
         assert(isFullyCollateralized());
@@ -252,33 +291,33 @@ contract Manager is Ownable {
 
     /**
      * Propose an exchange of current Vault tokens for new Vault tokens.
-     * 
+     *
      * These parameters are phyiscally a set of arrays because Solidity doesn't let you pass
      * around arrays of structs as parameters of transactions. Semantically, read these three
      * lists as a list of triples (token, amount, toVault), where:
      *
      * - token is the address of an ERC-20 token,
-     * - amount is the amount of the token that the proposer says they will trade with the vault, and
+     * - amount is the amount of the token that the proposer says they will trade with the vault,
      * - toVault is the direction of that trade. If toVault is true, the proposer offers to send
      *   `amount` of `token` to the vault. If toVault is false, the proposer expects to receive
      *   `amount` of `token` from the vault.
-     * 
+     *
      * If this proposal is accepted and executed, this set of absolute transfers will occur,
      * and the Vault's basket weights will be adjusted accordingly. (The expected behavior of
      * proposers is that they will aim to make proposals that move the basket weights towards
      * some target of Reserve's management while maintaining full backing; the expected
      * behavior of Reserve's management is to only accept such proposals.)
-     * 
+     *
      * Note: This type of proposal does not remove token addresses!
      * If you want to remove token addresses entirely, use proposeWeights.
-     * 
+     *
      * Returns the new proposal's ID.
      */
     function proposeSwap(
         address[] calldata tokens,
-        uint256[] calldata amounts,
+        uint256[] calldata amounts, // unit: qToken
         bool[] calldata toVault
-    ) 
+    )
         external returns(uint256)
     {
         require(tokens.length == amounts.length && amounts.length == toVault.length,
@@ -290,10 +329,10 @@ contract Manager is Ownable {
         return ++proposalsLength;
     }
 
-    
-    /** 
+
+    /**
      * Propose a new basket, defined by a list of tokens address, and their basket weights.
-     * 
+     *
      * Note: With this type of proposal, the allowances of tokens that will be required of the
      * proposer may change between proposition and execution. If the supply of RSV rises or falls,
      * then more or fewer tokens will be required to execute the proposal.
@@ -328,7 +367,7 @@ contract Manager is Ownable {
         require(
             _msgSender() == proposals[id].proposer() ||
             _msgSender() == _owner ||
-            _msgSender() == operator, 
+            _msgSender() == operator,
             "cannot cancel"
         );
         proposals[id].cancel();
@@ -343,8 +382,8 @@ contract Manager is Ownable {
 
         // Complete proposal and compute new basket
         basket = proposals[id].complete(rsv, oldBasket);
-        
-        // For each token in either basket, perform transfers between proposer and Vault 
+
+        // For each token in either basket, perform transfers between proposer and Vault
         for (uint i = 0; i < oldBasket.size(); i++) {
             address token = oldBasket.tokens(i);
             _executeBasketShift(oldBasket, basket, token, proposer);
@@ -355,11 +394,11 @@ contract Manager is Ownable {
                 _executeBasketShift(oldBasket, basket, token, proposer);
             }
         }
-        
+
         assert(isFullyCollateralized());
         emit ProposalExecuted(id, proposer, _msgSender(), address(oldBasket), address(basket));
     }
-        
+
 
     // ============================= Internal ================================
 
@@ -372,23 +411,25 @@ contract Manager is Ownable {
         address token,
         address proposer
     ) internal {
-        uint256 newWeight = newBasket.weights(token);
-        uint256 oldWeight = oldBasket.weights(token);
+        uint256 newWeight = newBasket.weights(token); // unit: aqTokens/RSV
+        uint256 oldWeight = oldBasket.weights(token); // unit: aqTokens/RSV
 
         if (newWeight > oldWeight) {
             // This token must increase in the vault, so transfer from proposer to vault.
-            // Add epsilon so that _weighted() rounds up instead of down.
             // (Transfer into vault: round up)
             uint256 transferAmount =
                 _weighted(rsv.totalSupply(), newWeight.sub(oldWeight), RoundingMode.UP);
-            if (transferAmount > 0) 
+                // transferAmount unit: qTokens
+            if (transferAmount > 0)
                 IERC20(token).safeTransferFrom(proposer, address(vault), transferAmount);
+
         } else if (newWeight < oldWeight) {
             // This token will decrease in the vault, so transfer from vault to proposer.
             // (Transfer out of vault: round down)
             uint256 transferAmount =
                 _weighted(rsv.totalSupply(), oldWeight.sub(newWeight), RoundingMode.DOWN);
-            if (transferAmount > 0) 
+                // transferAmount unit: qTokens
+            if (transferAmount > 0)
                 vault.withdrawTo(token, transferAmount, proposer);
         }
     }
@@ -400,19 +441,25 @@ contract Manager is Ownable {
 
     /// From a weighting of RSV (e.g., a basket weight) and an amount of RSV,
     /// compute the amount of the weighted token that matches that amount of RSV.
-    function _weighted(uint256 amount, uint256 weight, RoundingMode rnd)
-        internal view returns(uint256)
+    function _weighted(
+        uint256 amount, // unit: qRSV
+        uint256 weight, // unit: aqToken/RSV
+        RoundingMode rnd
+        ) internal view returns(uint256) // return unit: qTokens
     {
         // This wouldn't work properly with negative numbers, but we don't need them here.
         require(amount >= 0 && weight >= 0, "Weigh negative amounts");
-        // TODO: decimalsDivisor should be compile-time computable.        
+
         uint256 decimalsDivisor = WEIGHT_FACTOR.mul(uint256(10)**(rsv.decimals()));
+        // decimalsDivisor unit: aqTokens/qTokens * qRSV/RSV
         uint256 shiftedWeight = amount.mul(weight);
+        // shiftedWeight unit: qRSV/RSV * aqTokens
 
         // If the weighting is precise, or we're rounding down, then use normal division.
         if (rnd == RoundingMode.DOWN || shiftedWeight.mod(decimalsDivisor) == 0) {
             return shiftedWeight.div(decimalsDivisor);
+            // return unit: qTokens == qRSV/RSV * aqTokens * (qTokens/aqTokens * RSV/qRSV)
         }
-        return shiftedWeight.div(decimalsDivisor).add(1);
+        return shiftedWeight.div(decimalsDivisor).add(1); // return unit: qTokens
     }
 }

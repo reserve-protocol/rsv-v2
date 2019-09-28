@@ -19,9 +19,9 @@ import "./Basket.sol";
  * proposal is cancelled, it can no longer become Completed.
  *
  * This contract is intended to be used in one of two possible ways. Either:
- * - A target RSV basket is suggested, and quantities to be exchanged are  
+ * - A target RSV basket is suggested, and quantities to be exchanged are
  *     deduced at the time of proposal execution.
- * - A specific quantity of tokens to be exchanged is suggested, and the 
+ * - A specific quantity of tokens to be exchanged is suggested, and the
  *     resultant RSV basket is determined at the time of proposal execution.
  *
  */
@@ -35,7 +35,7 @@ contract Proposal is Ownable {
 
     enum State { Created, Accepted, Cancelled, Completed }
     State public state;
-    
+
     event BasketCreated(address indexed basketAddress);
 
     constructor(address _proposer) public {
@@ -43,14 +43,14 @@ contract Proposal is Ownable {
         state = State.Created;
     }
 
-    /// Moves a proposal from the Created to Accepted state. 
+    /// Moves a proposal from the Created to Accepted state.
     function accept(uint256 _time) external onlyOwner {
         require(state == State.Created, "proposal not created");
         time = _time;
         state = State.Accepted;
     }
 
-    /// Cancels a proposal if it has not been completed. 
+    /// Cancels a proposal if it has not been completed.
     function cancel() external onlyOwner {
         require(state != State.Completed);
         state = State.Cancelled;
@@ -58,7 +58,7 @@ contract Proposal is Ownable {
 
     /// Moves a proposal from the Accepted to Completed state.
     /// Returns the tokens, quantitiesIn, and quantitiesOut, required to implement the proposal.
-    function complete(IRSV rsv, Basket oldBasket) 
+    function complete(IRSV rsv, Basket oldBasket)
         external onlyOwner returns(Basket)
     {
         require(state == State.Accepted, "proposal must be accepted");
@@ -77,11 +77,11 @@ contract Proposal is Ownable {
 
 /**
  * A WeightProposal represents a suggestion to change the backing for RSV to a new distribution
- * of tokens. You can think of it as designating what a _single RSV_ should be backed by, but 
- * deferring on the precise quantities of tokens that will be need to be exchanged until a later 
+ * of tokens. You can think of it as designating what a _single RSV_ should be backed by, but
+ * deferring on the precise quantities of tokens that will be need to be exchanged until a later
  * point in time.
  *
- * When this proposal is completed, it simply returns the target basket. 
+ * When this proposal is completed, it simply returns the target basket.
  */
 contract WeightProposal is Proposal {
     Basket public basket;
@@ -98,24 +98,26 @@ contract WeightProposal is Proposal {
 
 /**
  * A SwapProposal represents a suggestion to transfer fixed amounts of tokens into and out of the
- * vault. Whereas a WeightProposal designates how much a _single RSV_ should be backed by, 
- * a SwapProposal first designates what quantities of tokens to transfer in total and then 
- * solves for the new resultant basket later. 
+ * vault. Whereas a WeightProposal designates how much a _single RSV_ should be backed by,
+ * a SwapProposal first designates what quantities of tokens to transfer in total and then
+ * solves for the new resultant basket later.
  *
  * When this proposal is completed, it calculates what the weights for the new basket will be
- * and returns it. 
+ * and returns it.
  */
+
+// On "unit" comments, see comment at top of Manager.sol.
 contract SwapProposal is Proposal {
     address public proposer;
     address[] public tokens;
-    uint256[] public amounts;
+    uint256[] public amounts; // unit: qToken
     bool[] public toVault;
 
-    uint256 constant WEIGHT_FACTOR = 10**18;
-    
+    uint256 constant WEIGHT_FACTOR = 10**18; // unit: aqToken / qToken
+
     constructor(address _proposer,
                 address[] memory _tokens,
-                uint256[] memory _amounts,
+                uint256[] memory _amounts, // unit: qToken
                 bool[] memory _toVault )
         Proposal(_proposer) public
     {
@@ -130,21 +132,29 @@ contract SwapProposal is Proposal {
     function _newBasket(IRSV rsv, Basket oldBasket) internal returns(Basket) {
 
         uint256[] memory weights = new uint256[](tokens.length);
-        // TODO: divisor should be compile-time computable.
+        // unit: aqToken/RSV
+
         uint256 divisor = WEIGHT_FACTOR.mul(uint256(10)**(rsv.decimals()));
+        // unit: aqToken/qToken * qRSV/RSV
+
         uint256 rsvSupply = rsv.totalSupply();
-        
+        // unit: qRSV
+
         for (uint i = 0; i < tokens.length; i++) {
             address token = tokens[i];
             uint256 oldWeight = oldBasket.weights(token);
+            // unit: aqToken/RSV
 
             if (toVault[i]) {
                 weights[i] = oldWeight.add( amounts[i].mul(divisor).div(rsvSupply) );
+                //unit: aqToken/RSV == aqToken/RSV == [qToken] * [aqToken/qToken*qRSV/RSV] / [qRSV]
             } else {
                 weights[i] = oldWeight.sub( amounts[i].mul(divisor).div(rsvSupply) );
+                // unit: aqToken/RSV (ditto previous)
             }
         }
 
         return new Basket(oldBasket, tokens, weights);
+        // unit check for weights: aqToken/RSV
     }
 }
