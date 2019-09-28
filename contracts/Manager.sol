@@ -265,7 +265,7 @@ contract Manager is Ownable {
         rsv.mint(_msgSender(), rsvAmount);
         // unit check for rsvAmount: qRSV.
 
-        // assert(isFullyCollateralized());
+        assert(isFullyCollateralized());
         emit Issuance(_msgSender(), rsvAmount);
     }
 
