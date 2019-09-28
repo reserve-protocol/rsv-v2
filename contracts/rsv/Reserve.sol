@@ -9,7 +9,7 @@ import "./ReserveEternalStorage.sol";
  * @title An interface representing a contract that calculates transaction fees
  */
  interface ITXFee {
-    function calculateFee(address, uint256) external returns (uint256);
+     function calculateFee(address from, address to, uint256 amount) external returns (uint256);
  }
 
 /**
@@ -270,7 +270,7 @@ contract Reserve is IERC20, Ownable {
         uint256 fee = 0;
 
         if (address(txFee) != address(0)) {
-            fee = txFee.calculateFee(from, value);
+            fee = txFee.calculateFee(from, to, value);
             require((fee >= 0) && (fee <= value), "transaction fee out of bounds");
 
             data.addBalance(feeRecipient, fee);
