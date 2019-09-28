@@ -251,7 +251,7 @@ contract Manager is Ownable {
 
     /// Handles issuance.
     /// rsvAmount unit: qRSV
-    function issue(uint256 rsvAmount) public notPaused {
+    function issue(uint256 rsvAmount) external notPaused {
         require(rsvAmount > 0, "cannot issue zero RSV");
 
         // Accept collateral tokens.
@@ -271,7 +271,7 @@ contract Manager is Ownable {
 
     /// Handles redemption.
     /// rsvAmount unit: qRSV
-    function redeem(uint256 rsvAmount) public notPaused {
+    function redeem(uint256 rsvAmount) external notPaused {
         require(rsvAmount > 0, "cannot redeem 0 RSV");
 
         // Burn RSV tokens.
