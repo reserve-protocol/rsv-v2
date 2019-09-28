@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
 	"os/exec"
 	"testing"
 
@@ -23,6 +24,7 @@ type WeightProposalSuite struct {
 	proposer        account
 	proposal        *abi.WeightProposal
 	proposalAddress common.Address
+	basketAddress   common.Address
 }
 
 type SwapProposalSuite struct {
@@ -31,6 +33,9 @@ type SwapProposalSuite struct {
 	proposer        account
 	proposal        *abi.SwapProposal
 	proposalAddress common.Address
+	tokens          []common.Address
+	amounts         []*big.Int
+	toVault         []bool
 }
 
 var (
@@ -106,10 +111,10 @@ func (s *SwapProposalSuite) TearDownSuite() {
 func (s *WeightProposalSuite) BeforeTest(suiteName, testName string) {
 	s.owner = s.account[0]
 	s.proposer = s.account[1]
-	basketAddress := s.account[2].address()
+	s.basketAddress = s.account[2].address()
 
 	// Deploy a Weight Proposal.
-	proposalAddress, tx, proposal, err := abi.DeployWeightProposal(s.signer, s.node, s.proposer.address(), basketAddress)
+	proposalAddress, tx, proposal, err := abi.DeployWeightProposal(s.signer, s.node, s.proposer.address(), s.basketAddress)
 
 	s.logParsers = map[common.Address]logParser{
 		proposalAddress: proposal,
@@ -139,7 +144,7 @@ func (s *WeightProposalSuite) BeforeTest(suiteName, testName string) {
 	// Check that the basket was set.
 	foundBasketAddress, err := proposal.Basket(nil)
 	s.Require().NoError(err)
-	s.Equal(basketAddress, foundBasketAddress)
+	s.Equal(s.basketAddress, foundBasketAddress)
 
 	s.proposal = proposal
 	s.proposalAddress = proposalAddress
@@ -219,84 +224,292 @@ func (s *WeightProposalSuite) TestCancelIsProtected() {
 func (s *WeightProposalSuite) TestComplete() {
 	time := bigInt(100)
 	rsvAddress := s.account[2].address()
-	basketAddress := s.account[3].address()
 
 	// Accept proposal.
 	s.requireTxStrongly(s.proposal.Accept(s.signer, time))()
 
-	// Complete the proposal.
-	s.requireTxWeakly(s.proposal.Complete(s.signer, rsvAddress, basketAddress))(
-		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: basketAddress},
+	// Complete the proposal and check the right basket is returned.
+	s.requireTxStrongly(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))(
+		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
 	)
 
 	// Check that State is Completed.
 	state, err := s.proposal.State(nil)
 	s.Require().NoError(err)
 	s.Equal(uint8(3), state)
+
 }
 
 // TestCompleteIsProtected tests that `complete` changes the state as expected.
 func (s *WeightProposalSuite) TestCompleteIsProtected() {
 	time := bigInt(100)
 	rsvAddress := s.account[2].address()
-	basketAddress := s.account[3].address()
 
 	// Accept proposal.
 	s.requireTxStrongly(s.proposal.Accept(s.signer, time))()
 
 	// Try to complete the proposal with the wrong signer..
-	s.requireTxFails(s.proposal.Complete(signer(s.proposer), rsvAddress, basketAddress))
+	s.requireTxFails(s.proposal.Complete(signer(s.proposer), rsvAddress, s.basketAddress))
 }
 
 // TestCompleteRequiresAccepted tests that `complete` changes the state as expected.
 func (s *WeightProposalSuite) TestCompleteRequiresAccepted() {
 	rsvAddress := s.account[2].address()
-	basketAddress := s.account[3].address()
 
 	// Try to complete the proposal without accepting it first.
-	s.requireTxFails(s.proposal.Complete(s.signer, rsvAddress, basketAddress))
+	s.requireTxFails(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))
 
 	// Cancel the proposal.
 	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
 
 	// Try to complete the proposal after it has been cancelled.
-	s.requireTxFails(s.proposal.Complete(s.signer, rsvAddress, basketAddress))
+	s.requireTxFails(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))
+}
+
+// TestCompleteCanOnlyHappenOnce tests that `complete` changes the state as expected.
+func (s *WeightProposalSuite) TestCompleteCanOnlyHappenOnce() {
+	time := bigInt(100)
+	rsvAddress := s.account[2].address()
+
+	// Accept proposal.
+	s.requireTxStrongly(s.proposal.Accept(s.signer, time))()
+
+	// Complete the proposal and check the right basket is returned.
+	s.requireTxStrongly(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))(
+		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
+	)
+
+	// Check that State is Completed.
+	state, err := s.proposal.State(nil)
+	s.Require().NoError(err)
+	s.Equal(uint8(3), state)
+
+	// Check that the proposal can't be completed a second time.
+	s.requireTxFails(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))
 }
 
 // ========================= SwapProposal Tests =================================
 
 // BeforeTest runs before each test in the suite.
 func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
-	// s.owner = s.account[0]
-	// s.proposer = s.account[1]
-	// basketAddress := s.account[2].address()
+	s.owner = s.account[0]
+	s.proposer = s.account[1]
 
-	// // Deploy a Weight Proposal.
-	// proposalAddress, tx, proposal, err := abi.DeployWeightProposal(s.signer, proposer.address(), basketAddress)
-	// s.requireTxStrongly(tx, err)(
-	//     abi.ProposalOwnershipTransferred{
-	//         PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
-	//     },
+	s.tokens = []common.Address{s.account[3].address(), s.account[4].address()}
+	s.amounts = []*big.Int{bigInt(1), bigInt(2)}
+	s.toVault = []bool{true, true}
+
+	// Deploy a Weight Proposal.
+	proposalAddress, tx, proposal, err := abi.DeploySwapProposal(
+		s.signer, s.node, s.proposer.address(), s.tokens, s.amounts, s.toVault)
+
+	s.logParsers = map[common.Address]logParser{
+		proposalAddress: proposal,
+	}
+
+	s.requireTxStrongly(tx, err)(
+		abi.SwapProposalOwnershipTransferred{
+			PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
+		},
+	)
+
+	// Check that proposer was set.
+	proposer, err := proposal.Proposer(nil)
+	s.Require().NoError(err)
+	s.Equal(s.proposer.address(), proposer)
+
+	// Check that time was not set.
+	time, err := proposal.Time(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(0).String(), time.String())
+
+	// Check that the initial state is Created.
+	state, err := proposal.State(nil)
+	s.Require().NoError(err)
+	s.Equal(uint8(0), state)
+
+	for i := 0; i < len(s.tokens); i++ {
+		index := bigInt(uint32(i))
+		// Check that tokens was set.
+		token, err := proposal.Tokens(nil, index)
+		s.Require().NoError(err)
+		s.Equal(s.tokens[i], token)
+
+		// Check that amounts was set.
+		amount, err := proposal.Amounts(nil, index)
+		s.Require().NoError(err)
+		s.Equal(s.amounts[i], amount)
+
+		// Check that toVault was set.
+		toVault, err := proposal.ToVault(nil, index)
+		s.Require().NoError(err)
+		s.Equal(s.toVault[i], toVault)
+	}
+
+	s.proposal = proposal
+	s.proposalAddress = proposalAddress
+
+}
+
+func (s *SwapProposalSuite) TestDeploy() {
+
+}
+
+// TestAccept tests that `accept` changes state as expected.
+func (s *SwapProposalSuite) TestAccept() {
+	time := bigInt(100)
+
+	// Accept proposal.
+	s.requireTxStrongly(s.proposal.Accept(s.signer, time))()
+
+	// Check that the time was set.
+	foundTime, err := s.proposal.Time(nil)
+	s.Require().NoError(err)
+	s.Equal(time.String(), foundTime.String())
+
+	// Check that the state is Accepted.
+	state, err := s.proposal.State(nil)
+	s.Require().NoError(err)
+	s.Equal(uint8(1), state)
+}
+
+// TestAcceptIsProtected tests that `accept` is protected.
+func (s *SwapProposalSuite) TestAcceptIsProtected() {
+	time := bigInt(100)
+
+	// Accept proposal.
+	s.requireTxFails(s.proposal.Accept(signer(s.proposer), time))
+}
+
+// TestAcceptRequiresCreated tests that `accept` reverts in the require case.
+func (s *SwapProposalSuite) TestAcceptRequiresCreated() {
+	time := bigInt(100)
+
+	// Cancel the proposal.
+	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+
+	// Confirm it's cancelled.
+	state, err := s.proposal.State(nil)
+	s.Require().NoError(err)
+	s.Equal(uint8(2), state)
+
+	// Now try to accept.
+	s.requireTxFails(s.proposal.Accept(s.signer, time))
+}
+
+// TestCancel tests that `cancel` changes the state as expected.
+func (s *SwapProposalSuite) TestCancel() {
+	// Cancel the proposal.
+	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+
+	// Confirm it's cancelled.
+	state, err := s.proposal.State(nil)
+	s.Require().NoError(err)
+	s.Equal(uint8(2), state)
+}
+
+// TestCancelIsProtected tests that `cancel` is protected.
+func (s *SwapProposalSuite) TestCancelIsProtected() {
+	// Cancel the proposal.
+	s.requireTxFails(s.proposal.Cancel(signer(s.proposer)))
+}
+
+// // Test that `cancel` reverts if the state is completed..
+// func (s *SwapProposalSuite) TestCancelRequiresNotCompleted() {
+// 	// Cancel the proposal.
+// 	s.requireTxFails(s.proposal.Cancel(s.signer))
+// }
+
+// TestComplete tests that `complete` changes the state as expected.
+func (s *SwapProposalSuite) TestComplete() {
+	time := bigInt(100)
+	rsvAddress := s.account[2].address()
+
+	// // Set up basket that the Swap Proposal will be extended from.
+	// // Deploy collateral ERC20s
+	// s.erc20s = make([]*abi.BasicERC20, 3)
+	// s.erc20Addresses = make([]common.Address, 3)
+	// for i := 0; i < 3; i++ {
+	// 	erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
+	// 	s.Require().NoError(err)
+	// 	s.erc20s[i] = erc20
+	// 	s.erc20Addresses[i] = erc20Address
+	// }
+
+	// s.weights = makeLinearWeights(bigInt(1), len(s.erc20s))
+
+	// // Make a simple basket
+	// basketAddress, tx, basket, err := abi.DeployBasket(
+	// 	s.signer,
+	// 	s.node,
+	// 	zeroAddress(),
+	// 	s.erc20Addresses,
+	// 	s.weights,
 	// )
 
-	// // Check that state was constructed correctly
-	// proposer, err := proposal.Proposer(nil)
-	// s.Require().NoError(err)
-	// s.Equal(s.proposer, proposer)
+	// s.requireTxStrongly(tx, err)()
+	// s.basketAddress = basketAddress
+	// s.basket = basket
 
-	// time, err := proposal.Time(nil)
-	// s.Require().NoError(err)
-	// s.Equal(bigInt(0).String, time)
+	// Accept proposal.
+	s.requireTxStrongly(s.proposal.Accept(s.signer, time))()
 
-	// state, err := proposal.State(nil)
-	// s.Require().NoError(err)
-	// s.Equal(0, state)
+	// Complete the proposal and check the right basket is returned.
+	s.requireTxStrongly(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))(
+		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
+	)
 
-	// foundBasketAddress, err := proposal.Basket(nil)
-	// s.Require().NoError(err)
-	// s.Equal(basketAddress, foundBasketAddress)
+	// Check that State is Completed.
+	state, err := s.proposal.State(nil)
+	s.Require().NoError(err)
+	s.Equal(uint8(3), state)
 
-	// s.proposal = proposal
-	// s.proposalAddress = proposalAddress
+}
 
+// TestCompleteIsProtected tests that `complete` changes the state as expected.
+func (s *SwapProposalSuite) TestCompleteIsProtected() {
+	time := bigInt(100)
+	rsvAddress := s.account[2].address()
+
+	// Accept proposal.
+	s.requireTxStrongly(s.proposal.Accept(s.signer, time))()
+
+	// Try to complete the proposal with the wrong signer..
+	s.requireTxFails(s.proposal.Complete(signer(s.proposer), rsvAddress, s.basketAddress))
+}
+
+// TestCompleteRequiresAccepted tests that `complete` changes the state as expected.
+func (s *SwapProposalSuite) TestCompleteRequiresAccepted() {
+	rsvAddress := s.account[2].address()
+
+	// Try to complete the proposal without accepting it first.
+	s.requireTxFails(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))
+
+	// Cancel the proposal.
+	s.requireTxStrongly(s.proposal.Cancel(s.signer))()
+
+	// Try to complete the proposal after it has been cancelled.
+	s.requireTxFails(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))
+}
+
+// TestCompleteCanOnlyHappenOnce tests that `complete` changes the state as expected.
+func (s *SwapProposalSuite) TestCompleteCanOnlyHappenOnce() {
+	time := bigInt(100)
+	rsvAddress := s.account[2].address()
+
+	// Accept proposal.
+	s.requireTxStrongly(s.proposal.Accept(s.signer, time))()
+
+	// Complete the proposal and check the right basket is returned.
+	s.requireTxStrongly(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))(
+		abi.WeightProposalCompletedProposalWithBasket{BasketAddress: s.basketAddress},
+	)
+
+	// Check that State is Completed.
+	state, err := s.proposal.State(nil)
+	s.Require().NoError(err)
+	s.Equal(uint8(3), state)
+
+	// Check that the proposal can't be completed a second time.
+	s.requireTxFails(s.proposal.Complete(s.signer, rsvAddress, s.basketAddress))
 }
