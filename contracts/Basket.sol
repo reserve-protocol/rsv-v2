@@ -29,6 +29,9 @@ contract Basket {
     // SECURITY PROPERTY: The value of prev is always a Basket, and cannot be set by any user.
     // SECURITY PROPERTY: A basket can be of size 0. It is the Manager's responsibility
     //                    to ensure Issuance does not happen against an empty basket.
+
+    /// Construct a new basket from an old Basket `prev`, and a list of tokens and weights with
+    /// which to update `prev`. If `prev == address(0)`, act like it's an empty basket.
     constructor(Basket prev, address[] memory _tokens, uint256[] memory _weights) public {
         require(_tokens.length == _weights.length, "Basket: unequal array lengths");
         require(_tokens.length <= 100, "Basket: bad length");
