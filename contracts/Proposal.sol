@@ -111,7 +111,7 @@ contract SwapProposal is Proposal {
     uint256[] public amounts; // unit: qToken
     bool[] public toVault;
 
-    uint256 constant WEIGHT_FACTOR = 10**18; // unit: aqToken / qToken
+    uint256 constant WEIGHT_FACTOR = uint256(10)**18; // unit: aqToken / qToken
 
     constructor(address _proposer,
                 address[] memory _tokens,
