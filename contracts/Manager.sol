@@ -170,7 +170,7 @@ contract Manager is Ownable {
     }
 
     /// Set the seigniorage, in BPS.
-    function setSegniorage(uint256 _seigniorage) external onlyOwner {
+    function setSeigniorage(uint256 _seigniorage) external onlyOwner {
         seigniorage = _seigniorage;
         emit SeigniorageChanged(seigniorage, _seigniorage);
     }
