@@ -200,7 +200,7 @@ contract Manager is Ownable {
             uint256 balance = IERC20(token).balanceOf(address(vault)); // unit: qRSV
 
             // Return false if this token is undercollateralized:
-            if (rsv.totalSupply().mul(weight) < balance.mul(scaleFactor)) {
+            if (rsv.totalSupply().mul(weight) > balance.mul(scaleFactor)) {
                 // checking units: [qRSV] * [aqToken/RSV] == [qToken] * [aqToken/qToken * qRSV/RSV]
                 return false;
             }
