@@ -609,7 +609,7 @@ func (s *ReserveSuite) TestUpgrade() {
 	newTokenAddress, tx, newToken, err := abi.DeployReserveV2(signer(newKey), s.node)
 	s.logParsers[newTokenAddress] = newToken
 	s.requireTxWithEvents(tx, err)(abi.ReserveV2OwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.account[2].address(),
+		PreviousOwner: zeroAddress(), NewOwner: newKey.address(),
 	})
 
 	// Make the switch.
