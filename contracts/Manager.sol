@@ -63,7 +63,7 @@ contract Manager is Ownable {
     // ROLES
 
     // Manager is already Ownable, but in addition it also has an `operator`.
-    address operator;
+    address public operator;
 
     // DATA
 
