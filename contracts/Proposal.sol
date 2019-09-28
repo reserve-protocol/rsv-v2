@@ -36,6 +36,8 @@ contract Proposal is Ownable {
     enum State { Created, Accepted, Cancelled, Completed }
     State public state;
     
+    event BasketCreated(address indexed basketAddress);
+
     constructor(address _proposer) public {
         proposer = _proposer;
         state = State.Created;
@@ -63,7 +65,9 @@ contract Proposal is Ownable {
         require(now > time, "wait to execute");
         state = State.Completed;
 
-        return _newBasket(rsv, oldBasket);
+        Basket b = _newBasket(rsv, oldBasket);
+        emit BasketCreated(address(b));
+        return b;
     }
 
     /// Returns the newly-proposed basket. This varies for different types of proposals,
