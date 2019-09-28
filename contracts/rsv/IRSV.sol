@@ -1,4 +1,4 @@
-pragma solidity ^0.5.8;
+pragma solidity 0.5.7;
 
 interface IRSV {
     // Standard ERC20 functions
