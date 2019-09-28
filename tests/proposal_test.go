@@ -393,6 +393,11 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 
+	// Unpause.
+	s.requireTxWithEvents(s.reserve.Unpause(s.signer))(
+		abi.ReserveUnpaused{Account: s.owner.address()},
+	)
+
 	// Make RSV supply nonzero so weights can be calculated.
 	s.requireTxWithEvents(s.reserve.ChangeMinter(s.signer, s.owner.address()))(
 		abi.ReserveMinterChanged{NewMinter: s.owner.address()},

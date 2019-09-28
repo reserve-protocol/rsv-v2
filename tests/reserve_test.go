@@ -67,6 +67,12 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	s.requireTxWithEvents(tx, err)(abi.ReserveOwnershipTransferred{
 		PreviousOwner: zeroAddress(), NewOwner: s.account[0].address(),
 	})
+
+	// Unpause.
+	s.requireTxWithEvents(reserve.Unpause(s.signer))(
+		abi.ReserveUnpaused{Account: s.account[0].address()},
+	)
+
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 

@@ -79,6 +79,11 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 
+	// Unpause Reserve.
+	s.requireTxWithEvents(s.reserve.Unpause(s.signer))(
+		abi.ReserveUnpaused{Account: s.owner.address()},
+	)
+
 	// Get the Go binding and contract address for the new ReserveEternalStorage contract.
 	s.eternalStorageAddress, err = s.reserve.GetEternalStorageAddress(nil)
 	s.Require().NoError(err)
