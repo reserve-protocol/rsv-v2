@@ -1,4 +1,4 @@
-pragma solidity ^0.5.8;
+pragma solidity 0.5.7;
 
 import "../zeppelin/GSN/Context.sol";
 /**
@@ -56,7 +56,7 @@ contract Ownable is Context {
      * @dev Accepts ownership of the contract.
      */
     function acceptOwnership() external {
-        require(_nominatedOwner == _msgSender() || _owner == _msgSender(), "unauthorized");
+        require(_nominatedOwner == _msgSender(), "unauthorized");
         require(_nominatedOwner != address(0), "cannot accept for 0 address");
         emit OwnershipTransferred(_owner, _nominatedOwner);
         _owner = _nominatedOwner;

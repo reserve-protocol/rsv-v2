@@ -1,4 +1,4 @@
-pragma solidity ^0.5.8;
+pragma solidity 0.5.7;
 
 import "../zeppelin/token/ERC20/IERC20.sol";
 import "../zeppelin/math/SafeMath.sol";
@@ -9,7 +9,7 @@ import "./ReserveEternalStorage.sol";
  * @title An interface representing a contract that calculates transaction fees
  */
  interface ITXFee {
-    function calculateFee(address, uint256) external returns (uint256);
+     function calculateFee(address from, address to, uint256 amount) external returns (uint256);
  }
 
 /**
@@ -17,11 +17,13 @@ import "./ReserveEternalStorage.sol";
  * @dev An ERC-20 token with minting, burning, pausing, and user freezing.
  * Based on OpenZeppelin's [implementation](https://github.com/OpenZeppelin/openzeppelin-solidity/blob/41aa39afbc13f0585634061701c883fe512a5469/contracts/token/ERC20/ERC20.sol).
  *
- * Non-constant-sized data is held in ReserveEternalStorage,
- * to facilitate potential future upgrades.
+ * Non-constant-sized data is held in ReserveEternalStorage, to facilitate potential future upgrades.
  */
 contract Reserve is IERC20, Ownable {
     using SafeMath for uint256;
+
+
+    // ==== State ====
 
 
     // Non-constant-sized data
@@ -31,9 +33,6 @@ contract Reserve is IERC20, Ownable {
     ITXFee public txFee;
 
     // Basic token data
-    string public constant name = "Reserve";
-    string public constant symbol = "RSV";
-    uint8 public constant decimals = 18;
     uint256 public totalSupply;
     uint256 public maxSupply;
 
@@ -45,6 +44,10 @@ contract Reserve is IERC20, Ownable {
     address public pauser;
     address public feeRecipient;
 
+
+    // ==== Events, Constants, and Constructor ====
+
+
     // Auth role change events
     event MinterChanged(address indexed newMinter);
     event PauserChanged(address indexed newPauser);
@@ -55,15 +58,22 @@ contract Reserve is IERC20, Ownable {
     event Paused(address indexed account);
     event Unpaused(address indexed account);
 
+    // Basic information as constants
+    string public constant name = "Reserve";
+    string public constant symbol = "RSV";
+    uint8 public constant decimals = 18;
 
     /// Initialize critical fields.
     constructor() public {
         data = new ReserveEternalStorage(msg.sender);
         txFee = ITXFee(address(0));
+
         pauser = msg.sender;
         feeRecipient = msg.sender;
+        // minter defaults to the zero address.
+
         maxSupply = 2 ** 256 - 1;
-        // Other roles deliberately default to the zero address.
+        paused = true;
     }
 
     /// Accessor for eternal storage contract address.
@@ -108,10 +118,11 @@ contract Reserve is IERC20, Ownable {
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
     function transferEternalStorage(address newOwner) external onlyOwner {
+        require(paused);
         data.transferOwnership(newOwner);
     }
 
-    /// Change the contract that helps with transaction fee calculation. 
+    /// Change the contract that helps with transaction fee calculation.
     function changeTxFeeHelper(address newTxFee) external onlyOwner {
         txFee = ITXFee(newTxFee);
     }
@@ -140,20 +151,21 @@ contract Reserve is IERC20, Ownable {
         _;
     }
 
+
     // ==== Token transfers, allowances, minting, and burning ====
 
 
-    /// @return how many attotokens are held by `holder`.
+    /// @return how many attoRSV are held by `holder`.
     function balanceOf(address holder) external view returns (uint256) {
         return data.balance(holder);
     }
 
-    /// @return how many attotokens `holder` has allowed `spender` to control.
+    /// @return how many attoRSV `holder` has allowed `spender` to control.
     function allowance(address holder, address spender) external view returns (uint256) {
         return data.allowed(holder, spender);
     }
 
-    /// Transfer `value` attotokens from `msg.sender` to `to`.
+    /// Transfer `value` attoRSV from `msg.sender` to `to`.
     function transfer(address to, uint256 value)
         external
         notPaused
@@ -257,18 +269,16 @@ contract Reserve is IERC20, Ownable {
         data.subBalance(from, value);
         uint256 fee = 0;
 
-        // This is a first-pass implementation and could be totally broken
         if (address(txFee) != address(0)) {
-            fee = txFee.calculateFee(from, value);
-            require((fee > 0) && (fee < value), "fee cannot be greater than the total amount");
+            fee = txFee.calculateFee(from, to, value);
+            require((fee >= 0) && (fee <= value), "transaction fee out of bounds");
 
             data.addBalance(feeRecipient, fee);
             emit Transfer(from, feeRecipient, fee);
         }
 
-
-        data.addBalance(to, value - fee);
-        emit Transfer(from, to, value - fee);
+        data.addBalance(to, value.sub(fee));
+        emit Transfer(from, to, value.sub(fee));
     }
 
     /// @dev Burn `value` attotokens from `account`.

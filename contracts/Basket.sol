@@ -1,21 +1,23 @@
-pragma solidity ^0.5.8;
+pragma solidity 0.5.7;
 
 
 /**
  * This Basket contract is essentially just a data structure; it represents the tokens and weights
  * in some Reserve-backing basket, either proposed or accepted.
  *
- * Each `weights` value has the unit aqToken/RSV. That is, atto-quantum-Tokens per
- * RSV. (Alternately, you can think about this as if the weights value is itself an 18-decimal
- * fixed-point value with unit qToken/RSV. It'd certainly be prettier if these we just
+ * @dev Each `weights` value is an integer, with unit aqToken/RSV. (That is, atto-quantum-Tokens
+ * per RSV). If you prefer, you can think about this as if the weights value is itself an
+ * 18-decimal fixed-point value with unit qToken/RSV. (It would be prettier if these were just
  * straightforwardly qTokens/RSV, but that introduces unacceptable rounding error in some of our
  * basket computations.)
  *
- * For example, let's say we have the token USDX in the vault, and it's represented to 6 decimal
- * places, and the RSV basket should include 3/10ths of a USDX for each RSV. Then the corresponding
- * basket weight will be represented as 3*(10**23), because:
+ * @dev For example, let's say we have the token USDX in the vault, and it's represented to 6
+ * decimal places, and the RSV basket should include 3/10ths of a USDX for each RSV. Then the
+ * corresponding basket weight will be represented as 3*(10**23), because:
  *
- * 3*(10**23) aqToken/RSV == 0.3 Token/RSV * (10**6 qToken/Token) * (10**18 aqToken/qToken)
+ * @dev 3*(10**23) aqToken/RSV == 0.3 Token/RSV * (10**6 qToken/Token) * (10**18 aqToken/qToken)
+ *
+ * @dev For further notes on units, see the header comment for Manager.sol.
 */
 
 contract Basket {
@@ -27,6 +29,9 @@ contract Basket {
     // SECURITY PROPERTY: The value of prev is always a Basket, and cannot be set by any user.
     // SECURITY PROPERTY: A basket can be of size 0. It is the Manager's responsibility
     //                    to ensure Issuance does not happen against an empty basket.
+
+    /// Construct a new basket from an old Basket `prev`, and a list of tokens and weights with
+    /// which to update `prev`. If `prev == address(0)`, act like it's an empty basket.
     constructor(Basket prev, address[] memory _tokens, uint256[] memory _weights) public {
         require(_tokens.length == _weights.length, "Basket: unequal array lengths");
         require(_tokens.length <= 100, "Basket: bad length");

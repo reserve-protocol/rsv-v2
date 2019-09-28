@@ -1,4 +1,4 @@
-pragma solidity ^0.5.8;
+pragma solidity 0.5.7;
 
 import "./zeppelin/token/ERC20/SafeERC20.sol";
 import "./zeppelin/token/ERC20/IERC20.sol";
@@ -20,18 +20,10 @@ contract Vault is Ownable {
         address indexed newManager
     );
 
-    event BatchWithdrawal(address[] tokens, uint256[] quantities, address indexed to);
-
     constructor() public {
         // Initialize manager as _msgSender()
         manager = _msgSender();
         emit ManagerTransferred(address(0), manager);
-    }
-
-    /// Modifies a function to only run when the `manager` account calls it. 
-    modifier onlyManager() {
-        require(_msgSender() == manager, "must be manager");
-        _;
     }
 
     /// Changes the manager account. 
@@ -41,7 +33,9 @@ contract Vault is Ownable {
         manager = newManager;
     }
 
-    function withdrawTo(address token, uint256 amount, address to) external onlyManager {
+    /// Withdraw `amount` of `token` to address `to`. Only callable by `manager`.
+    function withdrawTo(address token, uint256 amount, address to) external {
+        require(_msgSender() == manager, "must be manager");
         IERC20(token).safeTransfer(to, amount);
     }
 }

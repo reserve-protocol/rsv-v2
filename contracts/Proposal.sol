@@ -1,4 +1,4 @@
-pragma solidity ^0.5.8;
+pragma solidity 0.5.7;
 
 import "./zeppelin/token/ERC20/IERC20.sol";
 import "./zeppelin/token/ERC20/SafeERC20.sol";
@@ -14,16 +14,15 @@ import "./Basket.sol";
  * 2. Acceptance
  * 3. Completion
  *
- * A time can be set during acceptance to determine when completion is
- * eligible.  A proposal can also be cancelled before it is completed. If a
- * proposal is cancelled, it can no longer become Completed.
+ * A time can be set during acceptance to determine when completion is eligible.  A proposal can
+ * also be cancelled before it is completed. If a proposal is cancelled, it can no longer become
+ * Completed.
  *
  * This contract is intended to be used in one of two possible ways. Either:
- * - A target RSV basket is suggested, and quantities to be exchanged are
- *     deduced at the time of proposal execution.
- * - A specific quantity of tokens to be exchanged is suggested, and the
- *     resultant RSV basket is determined at the time of proposal execution.
- *
+ * - A target RSV basket is proposed, and quantities to be exchanged are deduced at the time of
+ *   proposal execution.
+ * - A specific quantity of tokens to be exchanged is proposed, and the resultant RSV basket is
+ *   determined at the time of proposal execution.
  */
 
 contract Proposal is Ownable {
@@ -112,7 +111,7 @@ contract SwapProposal is Proposal {
     uint256[] public amounts; // unit: qToken
     bool[] public toVault;
 
-    uint256 constant WEIGHT_FACTOR = 10**18; // unit: aqToken / qToken
+    uint256 constant WEIGHT_FACTOR = uint256(10)**18; // unit: aqToken / qToken
 
     constructor(address _proposer,
                 address[] memory _tokens,
@@ -145,11 +144,18 @@ contract SwapProposal is Proposal {
             // unit: aqToken/RSV
 
             if (toVault[i]) {
-                weights[i] = oldWeight.add( amounts[i].mul(divisor).div(rsvSupply) );
+                // We require that the execution of a SwapProposal takes in no more than the funds
+                // offered in its proposal -- that's part of the premise. It turns out that,
+                // because we're rounding down _here_ and rounding up in
+                // Manager._executeBasketShift(), it's possible for the naive implementation of
+                // this mechanism to overspend the proposer's tokens by 1 qToken. We avoid that,
+                // here, by making the effective proposal one less. Yeah, it's pretty fiddly.
+                
+                weights[i] = oldWeight.add( (amounts[i].sub(1)).mul(divisor).div(rsvSupply) );
                 //unit: aqToken/RSV == aqToken/RSV == [qToken] * [aqToken/qToken*qRSV/RSV] / [qRSV]
             } else {
                 weights[i] = oldWeight.sub( amounts[i].mul(divisor).div(rsvSupply) );
-                // unit: aqToken/RSV (ditto previous)
+                //unit: aqToken/RSV
             }
         }
 

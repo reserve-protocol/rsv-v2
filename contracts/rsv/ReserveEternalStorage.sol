@@ -1,4 +1,4 @@
-pragma solidity ^0.5.8;
+pragma solidity 0.5.7;
 
 import "../zeppelin/math/SafeMath.sol";
 
@@ -7,7 +7,7 @@ import "../zeppelin/math/SafeMath.sol";
  *
  * @dev Eternal Storage facilitates future upgrades.
  *
- * If Reserve chooses to release an upgraded contract for the Reserve  in the future, Reserve
+ * If Reserve chooses to release an upgraded contract for the Reserve in the future, Reserve
  * will have the option of reusing the deployed version of this data contract to simplify migration.
  *
  * The use of this contract does not imply that Reserve will choose to do a future upgrade, nor that
@@ -87,19 +87,5 @@ contract ReserveEternalStorage {
     /// Set `to`'s allowance of `from`'s tokens to `value`.
     function setAllowed(address from, address to, uint256 value) external onlyOwner {
         allowed[from][to] = value;
-    }
-
-
-
-    // ===== frozenTime =====
-
-    /// @dev When `frozenTime[addr] == 0`, `addr` is not frozen. This is the normal state.
-    /// When `frozenTime[addr] == t` and `t > 0`, `addr` was last frozen at timestamp `t`.
-    /// So, to unfreeze an address `addr`, set `frozenTime[addr] = 0`.
-    mapping(address => uint256) public frozenTime;
-
-    /// Set `frozenTime[who]` to `time`.
-    function setFrozenTime(address who, uint256 time) external onlyOwner {
-        frozenTime[who] = time;
     }
 }
