@@ -24,6 +24,7 @@ type ManagerSuite struct {
 
 	operator account
 	proposer account
+	weights  []*big.Int
 }
 
 var (
@@ -148,7 +149,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.basketAddress = basketAddress
 	s.basket = basket
 
-	// Deploy collateral ERC20s and set allowances
+	// Deploy collateral ERC20s.
 	s.erc20s = make([]*abi.BasicERC20, 3)
 	s.erc20Addresses = make([]common.Address, 3)
 	for i := 0; i < 3; i++ {
@@ -158,21 +159,28 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 		s.erc20s[i] = erc20
 		s.erc20Addresses[i] = erc20Address
 		s.logParsers[erc20Address] = erc20
-
-		// Transfer all of the ERC20 tokens to `proposer`.
-		s.requireTxWithEvents(erc20.Transfer(s.signer, s.proposer.address(), shiftRight(1, 36)))(
-			abi.BasicERC20Transfer{
-				From: s.owner.address(), To: s.proposer.address(), Value: shiftRight(1, 36),
-			},
-		)
-		// Have `proposer` approve the Manager to spend its funds.
-		s.requireTxWithEvents(erc20.Approve(signer(s.proposer), s.managerAddress, shiftRight(1, 36)))(
-			abi.BasicERC20Approval{
-				Owner: s.proposer.address(), Spender: s.managerAddress, Value: shiftRight(1, 36),
-			},
-		)
-
 	}
+
+	// Fund and set allowances.
+	amounts := []*big.Int{shiftRight(1, 46), shiftRight(1, 46), shiftRight(1, 46)}
+	s.fundAccountWithErc20sAndApprove(s.proposer, amounts)
+
+	// Confirm wshiftRight(1, 48),e are paused.
+	paused, err := s.manager.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
+
+	// Pass a WeightProposal so we are able to Unpause.
+	s.weights = []*big.Int{shiftRight(1, 35), shiftRight(3, 35), shiftRight(6, 35)}
+	s.changeBasketUsingWeightProposal(s.erc20Addresses, s.weights)
+	s.requireTxWithEvents(s.manager.Unpause(s.signer))(
+		abi.ManagerUnpaused{Account: s.owner.address()},
+	)
+
+	// Confirm we are unpaused.
+	paused, err = s.manager.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(false, paused)
 }
 
 func (s *ManagerSuite) TestDeploy() {}
@@ -191,34 +199,268 @@ func (s *ManagerSuite) TestConstructor() {
 	s.Require().NoError(err)
 	s.Equal(bigInt(0).String(), seigniorage.String())
 
+	// Checking that we begin paused is covered by `BeforeTest`
+}
+
+// TestPause tests that `Pause` changes the state as expected.
+func (s *ManagerSuite) TestPause() {
+	// Pause.
+	s.requireTxWithEvents(s.manager.Pause(s.signer))(
+		abi.ManagerPaused{Account: s.owner.address()},
+	)
+
+	// Confirm we are Paused.
 	paused, err := s.manager.Paused(nil)
 	s.Require().NoError(err)
 	s.Equal(true, paused)
 }
 
-// TestProposeWeightsUseCase sets a basket, issues RSV, changes the basket, and redeems RSV.
-func (s *ManagerSuite) TestProposeWeightsFullUsecase() {
-	tokens := s.erc20Addresses
-	weights := []*big.Int{shiftRight(1, 36), shiftRight(2, 36), shiftRight(3, 36)}
+// TestPauseIsProtected tests that `Pause` can only be called by owner.
+func (s *ManagerSuite) TestPauseIsProtected() {
+	s.requireTxFails(s.manager.Pause(signer(s.account[2])))
+	s.requireTxFails(s.manager.Pause(signer(s.operator)))
+}
 
-	// Change the basket using a weight proposal.
-	s.changeBasketUsingWeightProposal(tokens, weights)
+// TestUnpause tests that `Unpause` changes the state as expected.
+func (s *ManagerSuite) TestUnpause() {
+	// This is already tested by `BeforeTest`.
+}
 
-	// Now we should be able to unpause.
-	s.requireTxWithEvents(s.manager.Unpause(s.signer))(
-		abi.ManagerUnpaused{
-			Account: s.owner.address(),
+// TestUnpauseIsProtected tests that `Unpause` can only be called by owner.
+func (s *ManagerSuite) TestUnpauseIsProtected() {
+	s.requireTxFails(s.manager.Unpause(signer(s.account[2])))
+	s.requireTxFails(s.manager.Unpause(signer(s.operator)))
+}
+
+// TestSetOperator tests that `setOperator` manipulates state correctly.
+func (s *ManagerSuite) TestSetOperator() {
+	operator := s.account[4].address()
+	s.requireTxWithEvents(s.manager.SetOperator(s.signer, operator))(
+		abi.ManagerOperatorChanged{
+			OldAccount: s.operator.address(), NewAccount: operator,
 		},
 	)
 
+	// Check that state is correct.
+	foundOperator, err := s.manager.Operator(nil)
+	s.Require().NoError(err)
+	s.Equal(operator, foundOperator)
+}
+
+// TestSetOperatorIsProtected tests that `setOperator` can only be called by owner.
+func (s *ManagerSuite) TestSetOperatorIsProtected() {
+	s.requireTxFails(s.manager.SetOperator(signer(s.account[2]), s.account[4].address()))
+	s.requireTxFails(s.manager.SetOperator(signer(s.operator), s.account[4].address()))
+}
+
+// TestSetSeigniorage tests that `setSeigniorage` manipulates state correctly.
+func (s *ManagerSuite) TestSetSeigniorage() {
+	seigniorage := bigInt(1)
+	s.requireTxWithEvents(s.manager.SetSeigniorage(s.signer, seigniorage))(
+		abi.ManagerSeigniorageChanged{
+			OldVal: bigInt(0), NewVal: seigniorage,
+		},
+	)
+
+	// Check that state is correct.
+	foundSeigniorage, err := s.manager.Seigniorage(nil)
+	s.Require().NoError(err)
+	s.Equal(seigniorage.String(), foundSeigniorage.String())
+}
+
+// TestSetSeigniorageIsProtected tests that `setSeigniorage` can only be called by owner.
+func (s *ManagerSuite) TestSetSeigniorageIsProtected() {
+	seigniorage := bigInt(1)
+	s.requireTxFails(s.manager.SetSeigniorage(signer(s.account[2]), seigniorage))
+	s.requireTxFails(s.manager.SetSeigniorage(signer(s.operator), seigniorage))
+}
+
+// TestSetDelay tests that `setDelay` manipulates state correctly.
+func (s *ManagerSuite) TestSetDelay() {
+	delay := bigInt(172800) // 48 hours
+	s.requireTxWithEvents(s.manager.SetDelay(s.signer, delay))(
+		abi.ManagerDelayChanged{
+			OldVal: bigInt(86400), NewVal: delay,
+		},
+	)
+
+	// Check that state is correct.
+	foundDelay, err := s.manager.Delay(nil)
+	s.Require().NoError(err)
+	s.Equal(delay.String(), foundDelay.String())
+}
+
+// TestSetDelayIsProtected tests that `setDelay` can only be called by owner.
+func (s *ManagerSuite) TestSetDelayIsProtected() {
+	delay := bigInt(1)
+	s.requireTxFails(s.manager.SetDelay(signer(s.account[2]), delay))
+	s.requireTxFails(s.manager.SetDelay(signer(s.operator), delay))
+}
+
+// TestClearProposals tests that `clearProposals` manipulates state correctly.
+func (s *ManagerSuite) TestClearProposals() {
+	// ProposalsLength should start at 1.
+	proposalsLength, err := s.manager.ProposalsLength(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(1).String(), proposalsLength.String())
+
+	// Clear it.
+	s.requireTxWithEvents(s.manager.ClearProposals(s.signer))(
+		abi.ManagerProposalsCleared{},
+	)
+
+	// Check that the length is now 0.
+	proposalsLength, err = s.manager.ProposalsLength(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(0).String(), proposalsLength.String())
+}
+
+// TestClearProposalsIsProtected tests that `clearProposals` can only be called by owner.
+func (s *ManagerSuite) TestClearProposalsIsProtected() {
+	s.requireTxFails(s.manager.ClearProposals(signer(s.account[2])))
+	s.requireTxFails(s.manager.ClearProposals(signer(s.operator)))
+}
+
+// TestIssue tests that `issue` costs the correct amounts given basket + seigniorage.
+func (s *ManagerSuite) TestIssue() {
+	buyer := s.account[4]
+
+	//First set seigniorage, in BPS
+	seigniorage := bigInt(10) // 0.1%
+	s.requireTxWithEvents(s.manager.SetSeigniorage(s.signer, seigniorage))(
+		abi.ManagerSeigniorageChanged{
+			OldVal: bigInt(0), NewVal: seigniorage,
+		},
+	)
+
+	rsvAmount := shiftRight(1, 27) // 1 billion
+	expectedAmounts := s.computeExpectedIssueAmounts(seigniorage, rsvAmount)
+	fmt.Println(expectedAmounts)
+	s.fundAccountWithErc20sAndApprove(buyer, expectedAmounts)
+
+	// Issue.
+	s.requireTx(s.manager.Issue(signer(buyer), rsvAmount))
+
+	// Expect RSV balance.
+	balance, err := s.reserve.BalanceOf(nil, buyer.address())
+	s.Require().NoError(err)
+	s.Equal(rsvAmount.String(), balance.String())
+
+	for i, erc20 := range s.erc20s {
+		// Expect no leftover tokens.
+		balance, err = erc20.BalanceOf(nil, buyer.address())
+		s.Require().NoError(err)
+		s.Equal(bigInt(0).String(), balance.String())
+
+		// Expect tokens are all in the vault.
+		balance, err = erc20.BalanceOf(nil, s.vaultAddress)
+		s.Require().NoError(err)
+		s.Equal(expectedAmounts[i].String(), balance.String())
+	}
+
+	s.assertManagerCollateralized()
+}
+
+// TestIssueIsProtected tests that `issue` reverts when Paused. 
+func (s *ManagerSuite) TestIssueIsProtected() {
+	amount := bigInt(1)
+
+	// Issue should succeed first, while unpaused.
+	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
+	s.assertManagerCollateralized()
+
+	// Pause.
+	s.requireTxWithEvents(s.manager.Pause(s.signer))(
+		abi.ManagerPaused{Account: s.owner.address()},
+	)
+
+	// Confirm we are Paused.
+	paused, err := s.manager.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
+
+	// Issue should fail now. 
+	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
+	s.assertManagerCollateralized()
+}
+
+// TestRedeem tests that `redeem` compensates the person with the correct amounts.
+func (s *ManagerSuite) TestRedeem() {
+	// Issue.
+	rsvAmount := shiftRight(1, 27) // 1 billion
+	s.requireTx(s.manager.Issue(signer(s.proposer), rsvAmount))
+
+	// Send the RSV to someone else who doesn't have any Erc20s.
+	redeemer := s.account[4]
+	s.requireTx(s.reserve.Transfer(signer(s.proposer), redeemer.address(), rsvAmount))
+
+	// Redeem that RSV.
+	s.requireTx(s.reserve.Approve(signer(redeemer), s.managerAddress, rsvAmount))
+	s.requireTx(s.manager.Redeem(signer(redeemer), rsvAmount))
+
+	// Figure out what to expect back.
+	amounts := s.computeExpectedRedeemAmounts(rsvAmount)
+
+	// Assert our balances are what we expected.
+	for i, erc20 := range s.erc20s {
+		// Expect no leftover tokens.
+		balance, err := erc20.BalanceOf(nil, redeemer.address())
+		s.Require().NoError(err)
+		s.Equal(amounts[i].String(), balance.String())
+	}
+
+	s.assertManagerCollateralized()
+}
+
+// TestRedeemIsProtected tests that `redeem` compensates the person with the correct amounts.
+func (s *ManagerSuite) TestRedeemIsProtected() {
+	// Issue.
+	rsvAmount := shiftRight(1, 27) // 1 billion
+	s.requireTx(s.manager.Issue(signer(s.proposer), rsvAmount))
+
+	// Make sure we have the balance we expect to have.
+	rsvBalance, err := s.reserve.BalanceOf(nil, s.proposer.address())
+	s.Require().NoError(err)
+	s.Equal(rsvAmount.String(), rsvBalance.String())
+
+	// Approve the manager to spend our RSV.
+	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvAmount))(
+		abi.ReserveApproval{
+			Owner: s.proposer.address(),
+			Spender: s.managerAddress,
+			Value: rsvAmount,
+		},
+	)
+
+	// Redeem a tiny amount first to make sure it works.
+	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
+
+	// Pause.
+	s.requireTxWithEvents(s.manager.Pause(s.signer))(
+		abi.ManagerPaused{Account: s.owner.address()},
+	)
+
+	// Confirm we're paused.
+	paused, err := s.manager.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
+
+	// Confirm the same redemption now fails.
+	s.requireTxFails(s.manager.Redeem(signer(s.proposer), bigInt(1)))
+
+	s.assertManagerCollateralized()
+}
+
+// TestProposeWeightsUseCase sets a basket, issues RSV, changes the basket, and redeems RSV.
+func (s *ManagerSuite) TestProposeWeightsFullUsecase() {
 	// Issue a billion RSV.
-	rsvToIssue := shiftRight(1, 9) // 1 billion
+	rsvToIssue := shiftRight(1, 27) // 1 billion
 	s.requireTx(s.manager.Issue(signer(s.proposer), rsvToIssue))
 	s.assertManagerCollateralized()
 
 	// Change to a new basket.
-	newWeights := []*big.Int{shiftRight(2, 36), shiftRight(3, 36), shiftRight(1, 36)}
-	s.changeBasketUsingWeightProposal(tokens, newWeights)
+	newWeights := []*big.Int{shiftRight(2, 48), shiftRight(3, 48), shiftRight(1, 48)}
+	s.changeBasketUsingWeightProposal(s.erc20Addresses, newWeights)
 
 	// Approve the manager to spend a billion RSV.
 	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvToIssue))(
@@ -237,28 +479,15 @@ func (s *ManagerSuite) TestProposeWeightsFullUsecase() {
 // TestProposeSwapFullUsecase sets up a basket with a WeightProposal, issues RSV,
 // changes the basket using a SwapProposal, and redeems the RSV.
 func (s *ManagerSuite) TestProposeSwapFullUsecase() {
-	tokens := s.erc20Addresses
-	weights := []*big.Int{shiftRight(1, 48), shiftRight(2, 48), shiftRight(3, 48)}
-
-	// Change the basket using a weight proposal.
-	s.changeBasketUsingWeightProposal(tokens, weights)
-
-	// Now we should be able to unpause.
-	s.requireTxWithEvents(s.manager.Unpause(s.signer))(
-		abi.ManagerUnpaused{
-			Account: s.owner.address(),
-		},
-	)
-
 	// Issue a billion RSV.
-	rsvToIssue := shiftRight(1, 9) // 1 billion
+	rsvToIssue := shiftRight(1, 27) // 1 billion
 	s.requireTx(s.manager.Issue(signer(s.proposer), rsvToIssue))
 	s.assertManagerCollateralized()
 
 	// Change to a new basket using a SwapProposal
 	amounts := []*big.Int{shiftRight(2, 18), shiftRight(3, 18), shiftRight(1, 18)}
 	toVault := []bool{true, false, true}
-	s.changeBasketUsingSwapProposal(tokens, amounts, toVault)
+	s.changeBasketUsingSwapProposal(s.erc20Addresses, amounts, toVault)
 
 	// Approve the manager to spend a billion RSV.
 	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvToIssue))(
@@ -273,13 +502,7 @@ func (s *ManagerSuite) TestProposeSwapFullUsecase() {
 	s.assertRSVTotalSupply(bigInt(0))
 }
 
-// TestPauseIsProtected tests that pause can only be called by owner.
-func (s *ManagerSuite) TestPauseIsProtected() {
-	s.requireTxFails(s.manager.Pause(signer(s.account[2])))
-	s.requireTxFails(s.manager.Pause(signer(s.operator)))
-}
-
-// Helpers
+// ===================================== Helpers ===========================================
 
 func (s *ManagerSuite) changeBasketUsingWeightProposal(tokens []common.Address, weights []*big.Int) {
 	// Propose the new basket.
@@ -379,21 +602,6 @@ func (s *ManagerSuite) changeBasketUsingSwapProposal(tokens []common.Address, am
 	// Advance 24h.
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
 
-	// DEBUGGING
-	oldBasketAddress, err := s.manager.Basket(nil)
-	s.Require().NoError(err)
-	oldBasket, err := abi.NewBasket(oldBasketAddress, s.node)
-	s.Require().NoError(err)
-	for i, erc20Address := range s.erc20Addresses {
-		weight, err := oldBasket.Weights(nil, erc20Address)
-		s.Require().NoError(err)
-		fmt.Println(weight)
-
-		amount, err := proposal.Amounts(nil, bigInt(uint32(i)))
-		s.Require().NoError(err)
-		fmt.Println(amount)
-	}
-
 	// Execute Proposal.
 	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
 
@@ -402,6 +610,62 @@ func (s *ManagerSuite) changeBasketUsingSwapProposal(tokens []common.Address, am
 
 	// Assert that the vault is still collateralized.
 	s.assertManagerCollateralized()
+}
+
+func (s *ManagerSuite) computeExpectedIssueAmounts(
+	seigniorage *big.Int, rsvSupply *big.Int,
+) []*big.Int {
+	BPS_FACTOR := bigInt(10000)
+
+	// Get current basket.
+	basketAddress, err := s.manager.Basket(nil)
+	s.Require().NoError(err)
+	basket, err := abi.NewBasket(basketAddress, s.node)
+	s.Require().NoError(err)
+	size, err := basket.Size(nil)
+	s.Require().NoError(err)
+
+	// Compute expected amounts.
+	var expectedAmounts []*big.Int
+	for i := bigInt(0); i.Cmp(size) == -1; i.Add(i, bigInt(1)) {
+		token, err := basket.Tokens(nil, i)
+		s.Require().NoError(err)
+		weight, err := basket.Weights(nil, token)
+		s.Require().NoError(err)
+
+		// Compute expectedAmount.
+		sum := bigInt(0).Add(BPS_FACTOR, seigniorage)
+		effectiveAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, sum), BPS_FACTOR)
+		expectedAmount := bigInt(0).Div(bigInt(0).Mul(effectiveAmount, weight), shiftRight(1, 36))
+		expectedAmounts = append(expectedAmounts, expectedAmount)
+	}
+
+	return expectedAmounts
+}
+
+func (s *ManagerSuite) computeExpectedRedeemAmounts(rsvSupply *big.Int) []*big.Int {
+	// Get current basket.
+	basketAddress, err := s.manager.Basket(nil)
+	s.Require().NoError(err)
+	basket, err := abi.NewBasket(basketAddress, s.node)
+	s.Require().NoError(err)
+	size, err := basket.Size(nil)
+	s.Require().NoError(err)
+
+	// Compute expected amounts.
+	var expectedAmounts []*big.Int
+	for i := bigInt(0); i.Cmp(size) == -1; i.Add(i, bigInt(1)) {
+		token, err := basket.Tokens(nil, i)
+		s.Require().NoError(err)
+		weight, err := basket.Weights(nil, token)
+		s.Require().NoError(err)
+
+		// Compute expectedAmount.
+		expectedAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, weight), shiftRight(1, 36))
+		expectedAmounts = append(expectedAmounts, expectedAmount)
+	}
+
+	return expectedAmounts
 }
 
 func (s *ManagerSuite) newWeights(
@@ -433,4 +697,21 @@ func (s *ManagerSuite) newWeights(
 	}
 
 	return newWeights
+}
+
+func (s *ManagerSuite) fundAccountWithErc20sAndApprove(acc account, amounts []*big.Int) {
+	// Transfer all of the ERC20 tokens to `proposer`.
+	for i, amount := range amounts {
+		s.requireTxWithEvents(s.erc20s[i].Transfer(s.signer, acc.address(), amount))(
+			abi.BasicERC20Transfer{
+				From: s.owner.address(), To: acc.address(), Value: amount,
+			},
+		)
+		// Have `proposer` approve the Manager to spend its funds.
+		s.requireTxWithEvents(s.erc20s[i].Approve(signer(acc), s.managerAddress, amount))(
+			abi.BasicERC20Approval{
+				Owner: acc.address(), Spender: s.managerAddress, Value: amount,
+			},
+		)
+	}
 }
