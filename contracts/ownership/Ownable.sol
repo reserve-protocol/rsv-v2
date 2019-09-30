@@ -14,7 +14,7 @@ import "../zeppelin/GSN/Context.sol";
  * requires new owners to accept ownership before the transition occurs. 
  */
 contract Ownable is Context {
-    address public _owner;
+    address private _owner;
     address public _nominatedOwner;
 
     event NewOwnerNominated(address indexed previousOwner, address indexed newOwner);
@@ -27,6 +27,13 @@ contract Ownable is Context {
         address msgSender = _msgSender();
         _owner = msgSender;
         emit OwnershipTransferred(address(0), msgSender);
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view returns (address) {
+        return _owner;
     }
 
     /**
