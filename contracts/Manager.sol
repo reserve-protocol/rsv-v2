@@ -448,7 +448,7 @@ contract Manager is Ownable {
         ) internal view returns(uint256) // return unit: qTokens
     {
         // This wouldn't work properly with negative numbers, but we don't need them here.
-        require(amount >= 0 && weight >= 0, "Weigh negative amounts");
+        require(amount >= 0 && weight >= 0, "weight or amount negative");
 
         uint256 decimalsDivisor = WEIGHT_FACTOR.mul(uint256(10)**(rsv.decimals()));
         // decimalsDivisor unit: aqTokens/qTokens * qRSV/RSV
