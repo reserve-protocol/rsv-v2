@@ -1,5 +1,6 @@
 pragma solidity 0.5.7;
 
+import "../ownership/Ownable.sol";
 import "../zeppelin/math/SafeMath.sol";
 
 /**
@@ -13,37 +14,31 @@ import "../zeppelin/math/SafeMath.sol";
  * The use of this contract does not imply that Reserve will choose to do a future upgrade, nor that
  * any future upgrades will necessarily re-use this storage. It merely provides option value.
  */
-contract ReserveEternalStorage {
+contract ReserveEternalStorage is Ownable {
 
     using SafeMath for uint256;
 
 
-
     // ===== auth =====
 
-    address public owner;
     address public escapeHatch;
 
-    event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
     event EscapeHatchTransferred(address indexed oldEscapeHatch, address indexed newEscapeHatch);
 
     /// On construction, set auth fields.
     constructor(address escapeHatchAddress) public {
-        owner = msg.sender;
+        address msgSender = _msgSender();
+        address prevOwner = _owner;
+        _owner = msgSender;
         escapeHatch = escapeHatchAddress;
-    }
-
-    /// Only run modified function if sent by `owner`.
-    modifier onlyOwner() {
-        require(msg.sender == owner, "onlyOwner");
-        _;
+        emit OwnershipTransferred(prevOwner, msgSender)
     }
 
     /// Set `owner`.
     function transferOwnership(address newOwner) external {
-        require(msg.sender == owner || msg.sender == escapeHatch, "not authorized");
+        require(msg.sender == _owner || msg.sender == escapeHatch, "not authorized");
         emit OwnershipTransferred(owner, newOwner);
-        owner = newOwner;
+        _owner = newOwner;
     }
 
     /// Set `escape hatch`.
