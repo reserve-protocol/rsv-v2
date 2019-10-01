@@ -1,7 +1,7 @@
 export REPO_DIR = $(shell pwd)
 export SOLC_VERSION = 0.5.7
 
-root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory
+root_contracts := Basket Manager SwapProposal WeightProposal Vault 
 rsv_contracts := Reserve ReserveEternalStorage
 test_contracts := BasicOwnable ReserveV2 BasicERC20
 contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
@@ -49,9 +49,6 @@ evm/Basket.json : contracts/Basket.sol $(sol)
 	$(call solc,1)
 
 evm/Manager.json: contracts/Manager.sol $(sol)
-	$(call solc,1)
-
-evm/ProposalFactory.json: contracts/Proposal.sol $(sol)
 	$(call solc,1)
 
 evm/SwapProposal.json: contracts/Proposal.sol $(sol)

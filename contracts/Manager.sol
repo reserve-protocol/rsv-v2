@@ -70,10 +70,9 @@ contract Manager is Ownable {
     Basket public basket;
     IVault public vault;
     IRSV public rsv;
-    IProposalFactory public proposalFactory;
-    
+
     // Proposals
-    mapping(uint256 => IProposal) public proposals;
+    mapping(uint256 => Proposal) public proposals;
     uint256 public proposalsLength;
     uint256 public delay = 24 hours;
 
@@ -122,14 +121,10 @@ contract Manager is Ownable {
     // ============================ Constructor ===============================
 
     /// Begins in `emergency` state.
-    constructor(address vaultAddr,
-                address rsvAddr,
-                address proposalFactoryAddr,
-                uint256 seigniorage_) public {
+    constructor(address vaultAddr, address rsvAddress, uint256 seigniorage_) public {
         vault = IVault(vaultAddr);
-        rsv = IRSV(rsvAddr);
+        rsv = IRSV(rsvAddress);
         seigniorage = seigniorage_;
-        proposalFactory = IProposalFactory(proposalFactoryAddr);
         emergency = true; // it's not an emergency, but we want everything to start paused.
 
         // Start with the empty basket.
@@ -354,8 +349,7 @@ contract Manager is Ownable {
         require(tokens.length == amounts.length && amounts.length == toVault.length,
                 "proposeSwap: unequal lengths");
 
-        proposals[proposalsLength] =
-            proposalFactory.createSwapProposal(_msgSender(), tokens, amounts, toVault);
+        proposals[proposalsLength] = new SwapProposal(_msgSender(), tokens, amounts, toVault);
 
         emit SwapProposed(proposalsLength, _msgSender(), tokens, amounts, toVault);
         return ++proposalsLength;
@@ -379,8 +373,7 @@ contract Manager is Ownable {
         require(tokens.length > 0, "proposeWeights: zero length");
 
         proposals[proposalsLength] =
-            proposalFactory.createWeightProposal(
-                _msgSender(), new Basket(Basket(0), tokens, weights));
+            new WeightProposal(_msgSender(), new Basket(Basket(0), tokens, weights));
 
         emit WeightsProposed(proposalsLength, _msgSender(), tokens, weights);
 
