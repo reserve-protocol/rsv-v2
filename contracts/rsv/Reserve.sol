@@ -65,7 +65,8 @@ contract Reserve is IERC20, Ownable {
 
     /// Initialize critical fields.
     constructor() public {
-        data = new ReserveEternalStorage(msg.sender);
+        data = new ReserveEternalStorage();
+        data.nominateNewOwner(msg.sender);
         txFee = ITXFee(address(0));
 
         pauser = msg.sender;
@@ -119,7 +120,7 @@ contract Reserve is IERC20, Ownable {
     /// abandoning this contract, e.g., for an upgrade.
     function transferEternalStorage(address newOwner) external onlyOwner {
         require(paused);
-        data.transferOwnership(newOwner);
+        data.nominateNewOwner(newOwner);
     }
 
     /// Change the contract that helps with transaction fee calculation.

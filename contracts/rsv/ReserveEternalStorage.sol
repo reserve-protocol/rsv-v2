@@ -27,20 +27,19 @@ contract ReserveEternalStorage is Ownable {
 
     /// On construction, set auth fields.
     constructor() public {
-        address msgSender = _msgSender();
-        reserveAddress = msgSender;
-        emit ReserveAddressTransferred(address(0), msgSender);
+        reserveAddress = _msgSender();
+        emit ReserveAddressTransferred(address(0), reserveAddress);
     }
 
     /// Only run modified function if sent by `reserveAddress`.
     modifier onlyReserveAddress() {
-        require(msg.sender == reserveAddress, "onlyReserveAddress");
+        require(_msgSender() == reserveAddress, "onlyReserveAddress");
         _;
     }
 
     /// Set `reserveAddress`.
     function updateReserveAddress(address newReserveAddress) external {
-        require(msg.sender == reserveAddress || msg.sender == owner(), "not authorized");
+        require(_msgSender() == reserveAddress || _msgSender() == owner(), "not authorized");
         emit ReserveAddressTransferred(reserveAddress, newReserveAddress);
         reserveAddress = newReserveAddress;
     }

@@ -166,19 +166,19 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.fundAccountWithErc20sAndApprove(s.proposer, amounts)
 
 	// Confirm wshiftRight(1, 48),e are paused.
-	paused, err := s.manager.Paused(nil)
+	paused, err := s.manager.Emergency(nil)
 	s.Require().NoError(err)
 	s.Equal(true, paused)
 
 	// Pass a WeightProposal so we are able to Unpause.
 	s.weights = []*big.Int{shiftRight(1, 35), shiftRight(3, 35), shiftRight(6, 35)}
 	s.changeBasketUsingWeightProposal(s.erc20Addresses, s.weights)
-	s.requireTxWithEvents(s.manager.Unpause(s.signer))(
-		abi.ManagerUnpaused{Account: s.owner.address()},
+	s.requireTxWithEvents(s.manager.UnpauseForEmergency(s.signer))(
+		abi.ManagerUnpausedFromEmergency{Account: s.owner.address()},
 	)
 
 	// Confirm we are unpaused.
-	paused, err = s.manager.Paused(nil)
+	paused, err = s.manager.Emergency(nil)
 	s.Require().NoError(err)
 	s.Equal(false, paused)
 }
@@ -202,34 +202,120 @@ func (s *ManagerSuite) TestConstructor() {
 	// Checking that we begin paused is covered by `BeforeTest`
 }
 
-// TestPause tests that `Pause` changes the state as expected.
-func (s *ManagerSuite) TestPause() {
+// TestPauseIssuance tests that `pauseIssuance` changes the state as expected.
+func (s *ManagerSuite) TestPauseIssuance() {
+	// Confirm Issuance is Unpaused.
+	paused, err := s.manager.IssuancePaused(nil)
+	s.Require().NoError(err)
+	s.Equal(false, paused)
+
 	// Pause.
-	s.requireTxWithEvents(s.manager.Pause(s.signer))(
-		abi.ManagerPaused{Account: s.owner.address()},
+	s.requireTxWithEvents(s.manager.PauseIssuance(s.signer))(
+		abi.ManagerIssuancePaused{Account: s.owner.address()},
 	)
 
-	// Confirm we are Paused.
-	paused, err := s.manager.Paused(nil)
+	// Confirm Issuance is Paused.
+	paused, err = s.manager.IssuancePaused(nil)
 	s.Require().NoError(err)
 	s.Equal(true, paused)
 }
 
-// TestPauseIsProtected tests that `Pause` can only be called by owner.
-func (s *ManagerSuite) TestPauseIsProtected() {
-	s.requireTxFails(s.manager.Pause(signer(s.account[2])))
-	s.requireTxFails(s.manager.Pause(signer(s.operator)))
+// TestPauseIssuanceIsProtected tests that `pauseIssuance` can only be called by owner.
+func (s *ManagerSuite) TestPauseIssuanceIsProtected() {
+	s.requireTxFails(s.manager.PauseIssuance(signer(s.account[2])))
+	s.requireTxFails(s.manager.PauseIssuance(signer(s.operator)))
 }
 
-// TestUnpause tests that `Unpause` changes the state as expected.
-func (s *ManagerSuite) TestUnpause() {
-	// This is already tested by `BeforeTest`.
+// TestPauseForEmergency tests that `Pause` changes the state as expected.
+func (s *ManagerSuite) TestPauseForEmergency() {
+	// Confirm we being not in an emergency.
+	emergency, err := s.manager.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(false, emergency)
+
+	// Pause for emergency.
+	s.requireTxWithEvents(s.manager.PauseForEmergency(s.signer))(
+		abi.ManagerPausedForEmergency{Account: s.owner.address()},
+	)
+
+	// Confirm we are in an emergency.
+	emergency, err = s.manager.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(true, emergency)
 }
 
-// TestUnpauseIsProtected tests that `Unpause` can only be called by owner.
-func (s *ManagerSuite) TestUnpauseIsProtected() {
-	s.requireTxFails(s.manager.Unpause(signer(s.account[2])))
-	s.requireTxFails(s.manager.Unpause(signer(s.operator)))
+// TestPauseForEmergencyIsProtected tests that `Pause` can only be called by owner.
+func (s *ManagerSuite) TestPauseForEmergencyIsProtected() {
+	s.requireTxFails(s.manager.PauseForEmergency(signer(s.account[2])))
+	s.requireTxFails(s.manager.PauseForEmergency(signer(s.operator)))
+}
+
+// TestUnpauseIssuance tests that `Unpause` changes the state as expected.
+func (s *ManagerSuite) TestUnpauseIssuance() {
+	// Confirm Issuance is Unpaused.
+	paused, err := s.manager.IssuancePaused(nil)
+	s.Require().NoError(err)
+	s.Equal(false, paused)
+
+	// Pause.
+	s.requireTxWithEvents(s.manager.PauseIssuance(s.signer))(
+		abi.ManagerIssuancePaused{Account: s.owner.address()},
+	)
+
+	// Confirm Issuance is Paused.
+	paused, err = s.manager.IssuancePaused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
+
+	// Unpause.
+	s.requireTxWithEvents(s.manager.PauseIssuance(s.signer))(
+		abi.ManagerIssuancePaused{Account: s.owner.address()},
+	)
+
+	// Confirm Issuance is Unpaused.
+	paused, err = s.manager.IssuancePaused(nil)
+	s.Require().NoError(err)
+	s.Equal(false, paused)
+}
+
+// TestUnpauseIssuanceIsProtected tests that `Unpause` can only be called by owner.
+func (s *ManagerSuite) TestUnpauseIssuanceIsProtected() {
+	s.requireTxFails(s.manager.PauseIssuance(signer(s.account[2])))
+	s.requireTxFails(s.manager.PauseIssuance(signer(s.operator)))
+}
+
+// TestUnpauseForEmergency tests that `Unpause` changes the state as expected.
+func (s *ManagerSuite) TestUnpauseForEmergency() {
+	// Confirm we are Unpaused.
+	emergency, err := s.manager.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(false, emergency)
+
+	// Pause.
+	s.requireTxWithEvents(s.manager.PauseForEmergency(s.signer))(
+		abi.ManagerPausedForEmergency{Account: s.owner.address()},
+	)
+
+	// Confirm we are paused.
+	emergency, err = s.manager.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(true, emergency)
+
+	// Unpause.
+	s.requireTxWithEvents(s.manager.UnpauseForEmergency(s.signer))(
+		abi.ManagerUnpausedFromEmergency{Account: s.owner.address()},
+	)
+
+	// Confirm we are unpaused.
+	emergency, err = s.manager.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(false, emergency)
+}
+
+// TestUnpauseForEmergencyIsProtected tests that `Unpause` can only be called by owner.
+func (s *ManagerSuite) TestUnpauseForEmergencyIsProtected() {
+	s.requireTxFails(s.manager.UnpauseForEmergency(signer(s.account[2])))
+	s.requireTxFails(s.manager.UnpauseForEmergency(signer(s.operator)))
 }
 
 // TestSetOperator tests that `setOperator` manipulates state correctly.
@@ -361,21 +447,41 @@ func (s *ManagerSuite) TestIssue() {
 	s.assertManagerCollateralized()
 }
 
-// TestIssueIsProtected tests that `issue` reverts when Paused. 
+// TestIssueIsProtected tests that `issue` reverts when in an emergency or it is paused.
 func (s *ManagerSuite) TestIssueIsProtected() {
 	amount := bigInt(1)
 
-	// Issue should succeed first, while unpaused.
+	// We should be able to issue initially.
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
-	s.assertManagerCollateralized()
 
-	// Pause.
-	s.requireTxWithEvents(s.manager.Pause(s.signer))(
-		abi.ManagerPaused{Account: s.owner.address()},
+	// Set `emergency` to true.
+	s.requireTxWithEvents(s.manager.PauseForEmergency(s.signer))(
+		abi.ManagerPausedFromEmergency{Account: s.owner.address()},
+	)
+
+	// Confirm `emergency` is true.
+	emergency, err := s.manager.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(true, emergency)
+
+	// Issue should fail.
+	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
+
+	// Set `emergency` to false.
+	s.requireTxWithEvents(s.manager.UnpauseForEmergency(s.signer))(
+		abi.ManagerUnpausedFromEmergency{Account: s.owner.address()},
+	)
+
+	// Now we should be able to issue.
+	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
+
+	// Pause just issuance.
+	s.requireTxWithEvents(s.manager.PauseIssuance(s.signer))(
+		abi.ManagerIssuancePaused{Account: s.owner.address()},
 	)
 
 	// Confirm we are Paused.
-	paused, err := s.manager.Paused(nil)
+	paused, err := s.manager.IssuancePaused(nil)
 	s.Require().NoError(err)
 	s.Equal(true, paused)
 
@@ -449,12 +555,12 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
 
 	// Pause.
-	s.requireTxWithEvents(s.manager.Pause(s.signer))(
-		abi.ManagerPaused{Account: s.owner.address()},
+	s.requireTxWithEvents(s.manager.PauseForEmergency(s.signer))(
+		abi.ManagerPausedForEmergency{Account: s.owner.address()},
 	)
 
 	// Confirm we're paused.
-	paused, err := s.manager.Paused(nil)
+	paused, err := s.manager.Emergency(nil)
 	s.Require().NoError(err)
 	s.Equal(true, paused)
 

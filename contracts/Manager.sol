@@ -77,7 +77,8 @@ contract Manager is Ownable {
     uint256 public delay = 24 hours;
 
     // Pausing
-    bool public paused;
+    bool public issuancePaused;
+    bool public emergency;
 
     // The spread between issuance and redemption in basis points (BPS).
     uint256 public seigniorage;              // 0.1% spread -> 10 BPS. unit: BPS
@@ -91,8 +92,10 @@ contract Manager is Ownable {
     event Redemption(address indexed user, uint256 indexed amount);
 
     // Pause events
-    event Paused(address indexed account);
-    event Unpaused(address indexed account);
+    event IssuancePaused(address indexed account);
+    event IssuanceUnpaused(address indexed account);
+    event PausedForEmergency(address indexed account);
+    event UnpausedFromEmergency(address indexed account);
 
     // Changes
     event OperatorChanged(address indexed oldAccount, address indexed newAccount);
@@ -126,7 +129,7 @@ contract Manager is Ownable {
         vault = IVault(vaultAddr);
         rsv = IRSV(rsvAddress);
         seigniorage = seigniorage_;
-        paused = true;
+        emergency = true; // it's not an emergency, but we want everything to start paused.
 
         // Start with the empty basket.
         address[] memory tokens = new address[](0);
@@ -136,9 +139,15 @@ contract Manager is Ownable {
 
     // ============================= Modifiers ================================
 
-    /// Modifies a function to run only when the contract is not paused.
-    modifier notPaused() {
-        require(!paused, "contract is paused");
+    /// Modifies a function to run only when issuance is not paused.
+    modifier issuanceNotPaused() {
+        require(!issuancePaused, "issuance is paused");
+        _;
+    }
+
+    /// Modifies a function to run only when there is not some emergency that requires upgrades.
+    modifier notEmergency() {
+        require(!emergency, "contract is paused");
         _;
     }
 
@@ -150,20 +159,33 @@ contract Manager is Ownable {
 
     // ========================= Public + External ============================
 
-    /// Pause the contract.
-    function pause() external onlyOwner {
-        paused = true;
-        emit Paused(_msgSender());
+    /// Pause issuance.
+    function pauseIssuance() external onlyOwner {
+        issuancePaused = true;
+        emit IssuancePaused(_msgSender());
     }
 
-    /// Unpause the contract.
-    function unpause() external onlyOwner {
+    /// Unpause issuance.
+    function unpauseIssuance() external onlyOwner {
         require(basket.size() > 0, "basket cannot be empty");
-        paused = false;
-        emit Unpaused(_msgSender());
+        issuancePaused = false;
+        emit IssuanceUnpaused(_msgSender());
     }
 
-    /// Set the operator
+    /// Pause contract.
+    function pauseForEmergency() external onlyOwner {
+        emergency = true;
+        emit PausedForEmergency(_msgSender());
+    }
+
+    /// Unpause contract.
+    function unpauseForEmergency() external onlyOwner {
+        require(basket.size() > 0, "basket cannot be empty");
+        emergency = false;
+        emit UnpausedFromEmergency(_msgSender());
+    }
+
+    /// Set the operator.
     function setOperator(address _operator) external onlyOwner {
         emit OperatorChanged(operator, _operator);
         operator = _operator;
@@ -251,7 +273,7 @@ contract Manager is Ownable {
 
     /// Handles issuance.
     /// rsvAmount unit: qRSV
-    function issue(uint256 rsvAmount) external notPaused {
+    function issue(uint256 rsvAmount) external issuanceNotPaused notEmergency {
         require(rsvAmount > 0, "cannot issue zero RSV");
 
         // Accept collateral tokens.
@@ -271,7 +293,7 @@ contract Manager is Ownable {
 
     /// Handles redemption.
     /// rsvAmount unit: qRSV
-    function redeem(uint256 rsvAmount) external notPaused {
+    function redeem(uint256 rsvAmount) external notEmergency {
         require(rsvAmount > 0, "cannot redeem 0 RSV");
 
         // Burn RSV tokens.
@@ -318,7 +340,7 @@ contract Manager is Ownable {
         uint256[] calldata amounts, // unit: qToken
         bool[] calldata toVault
     )
-        external returns(uint256)
+        external notEmergency returns(uint256)
     {
         require(tokens.length == amounts.length && amounts.length == toVault.length,
                 "proposeSwap: unequal lengths");
@@ -341,7 +363,7 @@ contract Manager is Ownable {
      */
 
     function proposeWeights(address[] calldata tokens, uint256[] calldata weights)
-        external returns(uint256)
+        external notEmergency returns(uint256)
     {
         require(tokens.length == weights.length, "proposeWeights: unequal lengths");
         require(tokens.length > 0, "proposeWeights: zero length");
@@ -355,7 +377,7 @@ contract Manager is Ownable {
     }
 
     /// Accepts a proposal for a new basket, beginning the required delay.
-    function acceptProposal(uint256 id) external onlyOperator {
+    function acceptProposal(uint256 id) external onlyOperator notEmergency {
         require(proposalsLength > id, "proposals length < id");
         proposals[id].accept(now + delay);
         emit ProposalAccepted(id, proposals[id].proposer());
@@ -363,7 +385,7 @@ contract Manager is Ownable {
 
     /// Cancels a proposal. This can be done anytime before it is enacted by any of:
     /// 1. Proposer 2. Operator 3. Owner
-    function cancelProposal(uint256 id) external {
+    function cancelProposal(uint256 id) external notEmergency {
         require(
             _msgSender() == proposals[id].proposer() ||
             _msgSender() == owner() ||
@@ -375,7 +397,7 @@ contract Manager is Ownable {
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
-    function executeProposal(uint256 id) external onlyOperator {
+    function executeProposal(uint256 id) external onlyOperator notEmergency {
         require(proposalsLength > id, "proposals length < id");
         address proposer = proposals[id].proposer();
         Basket oldBasket = basket;
@@ -386,12 +408,17 @@ contract Manager is Ownable {
         // For each token in either basket, perform transfers between proposer and Vault
         for (uint i = 0; i < oldBasket.size(); i++) {
             address token = oldBasket.tokens(i);
-            _executeBasketShift(oldBasket, basket, token, proposer);
+            _executeBasketShift(oldBasket.weights(token), basket.weights(token), token, proposer);
         }
         for (uint i = 0; i < basket.size(); i++) {
             address token = basket.tokens(i);
             if (!oldBasket.has(token)) {
-                _executeBasketShift(oldBasket, basket, token, proposer);
+                _executeBasketShift(
+                    oldBasket.weights(token), 
+                    basket.weights(token), 
+                    token, 
+                    proposer
+                );
             }
         }
 
@@ -406,14 +433,11 @@ contract Manager is Ownable {
     /// to rebalance the vault's balance of token, as it goes from oldBasket to newBasket.
     /// @dev To carry out a proposal, this is executed once per relevant token.
     function _executeBasketShift(
-        Basket oldBasket,
-        Basket newBasket,
+        uint256 oldWeight, // unit: aqTokens/RSV
+        uint256 newWeight, // unit: aqTokens/RSV
         address token,
         address proposer
     ) internal {
-        uint256 newWeight = newBasket.weights(token); // unit: aqTokens/RSV
-        uint256 oldWeight = oldBasket.weights(token); // unit: aqTokens/RSV
-
         if (newWeight > oldWeight) {
             // This token must increase in the vault, so transfer from proposer to vault.
             // (Transfer into vault: round up)
