@@ -83,7 +83,7 @@ contract Manager is Ownable {
     // The spread between issuance and redemption in basis points (BPS).
     uint256 public seigniorage;              // 0.1% spread -> 10 BPS. unit: BPS
     uint256 constant BPS_FACTOR = 10000;     // This is what 100% looks like in BPS. unit: BPS
-    uint256 constant WEIGHT_FACTOR = 10**18; // unit: aqToken/qToken
+    uint256 constant WEIGHT_SCALE = 10**18; // unit: aqToken/qToken
 
     event ProposalsCleared();
 
@@ -216,7 +216,7 @@ contract Manager is Ownable {
     /// Ensure that the Vault is fully collateralized.  That this is true should be an
     /// invariant of this contract: it's true before and after every txn.
     function isFullyCollateralized() public view returns(bool) {
-        uint256 scaleFactor = WEIGHT_FACTOR.mul(uint256(10) ** rsv.decimals());
+        uint256 scaleFactor = WEIGHT_SCALE.mul(uint256(10) ** rsv.decimals());
         // scaleFactor unit: aqToken/qToken * qRSV/RSV
 
         for (uint i = 0; i < basket.size(); i++) {
@@ -477,17 +477,17 @@ contract Manager is Ownable {
         // This wouldn't work properly with negative numbers, but we don't need them here.
         require(amount >= 0 && weight >= 0, "weight or amount negative");
 
-        uint256 decimalsDivisor = WEIGHT_FACTOR.mul(uint256(10)**(rsv.decimals()));
+        uint256 scaleFactor = WEIGHT_SCALE.mul(uint256(10)**(rsv.decimals()));
         // decimalsDivisor unit: aqTokens/qTokens * qRSV/RSV
         uint256 shiftedWeight = amount.mul(weight);
         // shiftedWeight unit: qRSV/RSV * aqTokens
 
         // If the weighting is precise, or we're rounding down, then use normal division.
-        if (rnd == RoundingMode.DOWN || shiftedWeight.mod(decimalsDivisor) == 0) {
-            return shiftedWeight.div(decimalsDivisor);
+        if (rnd == RoundingMode.DOWN || shiftedWeight.mod(scaleFactor) == 0) {
+            return shiftedWeight.div(scaleFactor);
             // return unit: qTokens == qRSV/RSV * aqTokens * (qTokens/aqTokens * RSV/qRSV)
         }
-        return shiftedWeight.div(decimalsDivisor).add(1); // return unit: qTokens
+        return shiftedWeight.div(scaleFactor).add(1); // return unit: qTokens
     }
 }
 

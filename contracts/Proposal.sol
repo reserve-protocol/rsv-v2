@@ -111,7 +111,7 @@ contract SwapProposal is Proposal {
     uint256[] public amounts; // unit: qToken
     bool[] public toVault;
 
-    uint256 constant WEIGHT_FACTOR = uint256(10)**18; // unit: aqToken / qToken
+    uint256 constant WEIGHT_SCALE = uint256(10)**18; // unit: aqToken / qToken
 
     constructor(address _proposer,
                 address[] memory _tokens,
@@ -130,7 +130,7 @@ contract SwapProposal is Proposal {
         uint256[] memory weights = new uint256[](tokens.length);
         // unit: aqToken/RSV
 
-        uint256 divisor = WEIGHT_FACTOR.mul(uint256(10)**(rsv.decimals()));
+        uint256 scaleFactor = WEIGHT_SCALE.mul(uint256(10)**(rsv.decimals()));
         // unit: aqToken/qToken * qRSV/RSV
 
         uint256 rsvSupply = rsv.totalSupply();
@@ -148,10 +148,10 @@ contract SwapProposal is Proposal {
                 // this mechanism to overspend the proposer's tokens by 1 qToken. We avoid that,
                 // here, by making the effective proposal one less. Yeah, it's pretty fiddly.
                 
-                weights[i] = oldWeight.add( (amounts[i].sub(1)).mul(divisor).div(rsvSupply) );
+                weights[i] = oldWeight.add( (amounts[i].sub(1)).mul(scaleFactor).div(rsvSupply) );
                 //unit: aqToken/RSV == aqToken/RSV == [qToken] * [aqToken/qToken*qRSV/RSV] / [qRSV]
             } else {
-                weights[i] = oldWeight.sub( amounts[i].mul(divisor).div(rsvSupply) );
+                weights[i] = oldWeight.sub( amounts[i].mul(scaleFactor).div(rsvSupply) );
                 //unit: aqToken/RSV
             }
         }
