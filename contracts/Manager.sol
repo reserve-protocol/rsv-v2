@@ -124,7 +124,7 @@ contract Manager is Ownable {
 
     // ============================ Constructor ===============================
 
-    /// Begins paused.
+    /// Begins in `emergency` state.
     constructor(address vaultAddr, address rsvAddress, uint256 seigniorage_) public {
         vault = IVault(vaultAddr);
         rsv = IRSV(rsvAddress);
@@ -141,20 +141,34 @@ contract Manager is Ownable {
 
     /// Modifies a function to run only when issuance is not paused.
     modifier issuanceNotPaused() {
-        require(!issuancePaused, "issuance is paused");
+        _issuanceNotPaused();
         _;
     }
 
     /// Modifies a function to run only when there is not some emergency that requires upgrades.
     modifier notEmergency() {
-        require(!emergency, "contract is paused");
+        _notEmergency();
         _;
     }
 
     /// Modifies a function to run only when the caller is the operator account.
     modifier onlyOperator() {
-        require(_msgSender() == operator, "operator only");
+        _onlyOperator();
         _;
+    }
+
+    // This internal view pattern is required to stay under the bytecode limit.
+
+    function _issuanceNotPaused() internal view {
+        require(!issuancePaused, "issuance is paused");
+    }
+
+    function _notEmergency() internal view {
+        require(!emergency, "contract is paused");
+    }
+
+    function _onlyOperator() internal view {
+        require(_msgSender() == operator, "operator only");
     }
 
     // ========================= Public + External ============================
@@ -167,7 +181,6 @@ contract Manager is Ownable {
 
     /// Unpause issuance.
     function unpauseIssuance() external onlyOwner {
-        require(basket.size() > 0, "basket cannot be empty");
         issuancePaused = false;
         emit IssuanceUnpaused(_msgSender());
     }
@@ -180,7 +193,6 @@ contract Manager is Ownable {
 
     /// Unpause contract.
     function unpauseForEmergency() external onlyOwner {
-        require(basket.size() > 0, "basket cannot be empty");
         emergency = false;
         emit UnpausedFromEmergency(_msgSender());
     }
@@ -275,6 +287,7 @@ contract Manager is Ownable {
     /// rsvAmount unit: qRSV
     function issue(uint256 rsvAmount) external issuanceNotPaused notEmergency {
         require(rsvAmount > 0, "cannot issue zero RSV");
+        require(basket.size() > 0, "basket cannot be empty");
 
         // Accept collateral tokens.
         uint256[] memory amounts = toIssue(rsvAmount); // unit: qToken[]
@@ -295,6 +308,8 @@ contract Manager is Ownable {
     /// rsvAmount unit: qRSV
     function redeem(uint256 rsvAmount) external notEmergency {
         require(rsvAmount > 0, "cannot redeem 0 RSV");
+        require(basket.size() > 0, "basket cannot be empty");
+
 
         // Burn RSV tokens.
         rsv.burnFrom(_msgSender(), rsvAmount);

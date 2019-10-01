@@ -74,9 +74,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 		reserveAddress: reserve,
 	}
 
-	s.requireTxWithEvents(tx, err)(abi.ReserveOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
-	})
+	s.requireTx(tx, err)
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 
@@ -92,6 +90,13 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.Require().NoError(err)
 
 	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
+
+	// Accept ownership of eternal storage.
+	s.requireTxWithEvents(s.eternalStorage.AcceptOwnership(s.signer))(
+		abi.ReserveEternalStorageOwnershipTransferred{
+			PreviousOwner: s.reserveAddress, NewOwner: s.account[0].address(),
+		},
+	)
 
 	// Vault.
 	vaultAddress, tx, vault, err := abi.DeployVault(s.signer, s.node)
@@ -119,6 +124,21 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	})
 	s.manager = manager
 	s.managerAddress = managerAddress
+
+	// Confirm we start in emergency state.
+	emergency, err := s.manager.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(true, emergency)
+
+	// Unpause from emergency.
+	s.requireTxWithEvents(s.manager.UnpauseForEmergency(s.signer))(
+		abi.ManagerUnpausedFromEmergency{Account: s.owner.address()},
+	)
+
+	// Confirm we are unpaused from emergency.
+	emergency, err = s.manager.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(false, emergency)
 
 	// Set all auths to Manager.
 	s.requireTxWithEvents(s.reserve.ChangeMinter(s.signer, managerAddress))(
@@ -165,22 +185,9 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	amounts := []*big.Int{shiftRight(1, 46), shiftRight(1, 46), shiftRight(1, 46)}
 	s.fundAccountWithErc20sAndApprove(s.proposer, amounts)
 
-	// Confirm wshiftRight(1, 48),e are paused.
-	paused, err := s.manager.Emergency(nil)
-	s.Require().NoError(err)
-	s.Equal(true, paused)
-
-	// Pass a WeightProposal so we are able to Unpause.
+	// Pass a WeightProposal so we are able to Issue/Redeem.
 	s.weights = []*big.Int{shiftRight(1, 35), shiftRight(3, 35), shiftRight(6, 35)}
 	s.changeBasketUsingWeightProposal(s.erc20Addresses, s.weights)
-	s.requireTxWithEvents(s.manager.UnpauseForEmergency(s.signer))(
-		abi.ManagerUnpausedFromEmergency{Account: s.owner.address()},
-	)
-
-	// Confirm we are unpaused.
-	paused, err = s.manager.Emergency(nil)
-	s.Require().NoError(err)
-	s.Equal(false, paused)
 }
 
 func (s *ManagerSuite) TestDeploy() {}
@@ -268,8 +275,8 @@ func (s *ManagerSuite) TestUnpauseIssuance() {
 	s.Equal(true, paused)
 
 	// Unpause.
-	s.requireTxWithEvents(s.manager.PauseIssuance(s.signer))(
-		abi.ManagerIssuancePaused{Account: s.owner.address()},
+	s.requireTxWithEvents(s.manager.UnpauseIssuance(s.signer))(
+		abi.ManagerIssuanceUnpaused{Account: s.owner.address()},
 	)
 
 	// Confirm Issuance is Unpaused.
@@ -456,7 +463,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 
 	// Set `emergency` to true.
 	s.requireTxWithEvents(s.manager.PauseForEmergency(s.signer))(
-		abi.ManagerPausedFromEmergency{Account: s.owner.address()},
+		abi.ManagerPausedForEmergency{Account: s.owner.address()},
 	)
 
 	// Confirm `emergency` is true.

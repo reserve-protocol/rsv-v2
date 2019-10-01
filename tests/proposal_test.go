@@ -387,9 +387,7 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 		reserveAddress: reserve,
 	}
 
-	s.requireTxWithEvents(tx, err)(abi.ReserveOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
-	})
+	s.requireTx(tx, err)
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 
