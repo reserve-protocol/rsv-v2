@@ -21,31 +21,28 @@ contract ReserveEternalStorage is Ownable {
 
     // ===== auth =====
 
-    address public escapeHatch;
+    address public reserveAddress;
 
-    event EscapeHatchTransferred(address indexed oldEscapeHatch, address indexed newEscapeHatch);
+    event ReserveAddressTransferred(address indexed oldReserveAddress, address indexed newReserveAddress);
 
     /// On construction, set auth fields.
-    constructor(address escapeHatchAddress) public {
+    constructor() public {
         address msgSender = _msgSender();
-        address prevOwner = _owner;
-        _owner = msgSender;
-        escapeHatch = escapeHatchAddress;
-        emit OwnershipTransferred(prevOwner, msgSender)
+        reserveAddress = msgSender;
+        emit ReserveAddressTransferred(address(0), msgSender);
     }
 
-    /// Set `owner`.
-    function transferOwnership(address newOwner) external {
-        require(msg.sender == _owner || msg.sender == escapeHatch, "not authorized");
-        emit OwnershipTransferred(owner, newOwner);
-        _owner = newOwner;
+    /// Only run modified function if sent by `reserveAddress`.
+    modifier onlyReserveAddress() {
+        require(msg.sender == reserveAddress, "onlyReserveAddress");
+        _;
     }
 
-    /// Set `escape hatch`.
-    function transferEscapeHatch(address newEscapeHatch) external {
-        require(msg.sender == escapeHatch, "not authorized");
-        emit EscapeHatchTransferred(escapeHatch, newEscapeHatch);
-        escapeHatch = newEscapeHatch;
+    /// Set `reserveAddress`.
+    function updateReserveAddress(address newReserveAddress) external {
+        require(msg.sender == reserveAddress || msg.sender == owner(), "not authorized");
+        emit ReserveAddressTransferred(reserveAddress, newReserveAddress);
+        reserveAddress = newReserveAddress;
     }
 
 
@@ -59,17 +56,17 @@ contract ReserveEternalStorage is Ownable {
     /// @dev This is a slight divergence from the strict Eternal Storage pattern, but it reduces the gas
     /// for the by-far most common token usage, it's a *very simple* divergence, and `setBalance` is
     /// available anyway.
-    function addBalance(address key, uint256 value) external onlyOwner {
+    function addBalance(address key, uint256 value) external onlyReserveAddress {
         balance[key] = balance[key].add(value);
     }
 
     /// Subtract `value` from `balance[key]`, unless this causes integer underflow.
-    function subBalance(address key, uint256 value) external onlyOwner {
+    function subBalance(address key, uint256 value) external onlyReserveAddress {
         balance[key] = balance[key].sub(value);
     }
 
     /// Set `balance[key]` to `value`.
-    function setBalance(address key, uint256 value) external onlyOwner {
+    function setBalance(address key, uint256 value) external onlyReserveAddress {
         balance[key] = value;
     }
 
@@ -80,7 +77,7 @@ contract ReserveEternalStorage is Ownable {
     mapping(address => mapping(address => uint256)) public allowed;
 
     /// Set `to`'s allowance of `from`'s tokens to `value`.
-    function setAllowed(address from, address to, uint256 value) external onlyOwner {
+    function setAllowed(address from, address to, uint256 value) external onlyReserveAddress {
         allowed[from][to] = value;
     }
 }

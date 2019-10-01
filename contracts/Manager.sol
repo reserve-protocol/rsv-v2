@@ -366,7 +366,7 @@ contract Manager is Ownable {
     function cancelProposal(uint256 id) external {
         require(
             _msgSender() == proposals[id].proposer() ||
-            _msgSender() == _owner ||
+            _msgSender() == owner() ||
             _msgSender() == operator,
             "cannot cancel"
         );
