@@ -157,7 +157,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	)
 
 	// Set the basket.
-	basketAddress, err := s.manager.Basket(nil)
+	basketAddress, err := s.manager.TrustedBasket(nil)
 	s.Require().NoError(err)
 	s.NotEqual(zeroAddress(), basketAddress)
 
@@ -192,11 +192,11 @@ func (s *ManagerSuite) TestDeploy() {}
 
 // TestConstructor tests that the constructor sets initial state appropriately.
 func (s *ManagerSuite) TestConstructor() {
-	vaultAddr, err := s.manager.Vault(nil)
+	vaultAddr, err := s.manager.TrustedVault(nil)
 	s.Require().NoError(err)
 	s.Equal(s.vaultAddress, vaultAddr)
 
-	rsvAddr, err := s.manager.Rsv(nil)
+	rsvAddr, err := s.manager.TrustedRSV(nil)
 	s.Require().NoError(err)
 	s.Equal(s.reserveAddress, rsvAddr)
 
@@ -619,7 +619,7 @@ func (s *ManagerSuite) changeBasketUsingWeightProposal(tokens []common.Address, 
 	proposalID := bigInt(0).Sub(proposalsLength, bigInt(1))
 
 	// Construct Proposal binding.
-	proposalAddress, err := s.manager.Proposals(nil, proposalID)
+	proposalAddress, err := s.manager.TrustedProposals(nil, proposalID)
 	s.Require().NoError(err)
 	proposal, err := abi.NewWeightProposal(proposalAddress, s.node)
 	s.Require().NoError(err)
@@ -627,7 +627,7 @@ func (s *ManagerSuite) changeBasketUsingWeightProposal(tokens []common.Address, 
 	s.logParsers[proposalAddress] = proposal
 
 	// Get Proposal Basket.
-	proposalBasketAddress, err := proposal.Basket(nil)
+	proposalBasketAddress, err := proposal.TrustedBasket(nil)
 	s.Require().NoError(err)
 	s.NotEqual(zeroAddress(), proposalBasketAddress)
 
@@ -687,7 +687,7 @@ func (s *ManagerSuite) changeBasketUsingSwapProposal(tokens []common.Address, am
 	proposalID := bigInt(0).Sub(proposalsLength, bigInt(1))
 
 	// Construct Proposal binding.
-	proposalAddress, err := s.manager.Proposals(nil, proposalID)
+	proposalAddress, err := s.manager.TrustedProposals(nil, proposalID)
 	s.Require().NoError(err)
 	proposal, err := abi.NewSwapProposal(proposalAddress, s.node)
 	s.Require().NoError(err)
@@ -723,7 +723,7 @@ func (s *ManagerSuite) computeExpectedIssueAmounts(
 	BPS_FACTOR := bigInt(10000)
 
 	// Get current basket.
-	basketAddress, err := s.manager.Basket(nil)
+	basketAddress, err := s.manager.TrustedBasket(nil)
 	s.Require().NoError(err)
 	basket, err := abi.NewBasket(basketAddress, s.node)
 	s.Require().NoError(err)
@@ -750,7 +750,7 @@ func (s *ManagerSuite) computeExpectedIssueAmounts(
 
 func (s *ManagerSuite) computeExpectedRedeemAmounts(rsvSupply *big.Int) []*big.Int {
 	// Get current basket.
-	basketAddress, err := s.manager.Basket(nil)
+	basketAddress, err := s.manager.TrustedBasket(nil)
 	s.Require().NoError(err)
 	basket, err := abi.NewBasket(basketAddress, s.node)
 	s.Require().NoError(err)

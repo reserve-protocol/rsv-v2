@@ -168,7 +168,7 @@ func (s *WeightProposalSuite) BeforeTest(suiteName, testName string) {
 	s.Equal(uint8(0), state)
 
 	// Check that the basket was set.
-	foundBasketAddress, err := proposal.Basket(nil)
+	foundBasketAddress, err := proposal.TrustedBasket(nil)
 	s.Require().NoError(err)
 	s.Equal(s.basketAddress, foundBasketAddress)
 

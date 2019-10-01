@@ -129,16 +129,16 @@ contract Proposal is IProposal, Ownable {
  * When this proposal is completed, it simply returns the target basket.
  */
 contract WeightProposal is Proposal {
-    Basket public basket;
+    Basket public trustedBasket;
 
-    constructor(address _proposer, Basket _basket) Proposal(_proposer) public {
-        require(_basket.size() > 0, "proposal cannot be empty");
-        basket = _basket;
+    constructor(address _proposer, Basket _trustedBasket) Proposal(_proposer) public {
+        require(_trustedBasket.size() > 0, "proposal cannot be empty");
+        trustedBasket = _trustedBasket;
     }
 
     /// Returns the newly-proposed basket
     function _newBasket(IRSV, Basket) internal returns(Basket) {
-        return basket;
+        return trustedBasket;
     }
 }
 
@@ -173,7 +173,7 @@ contract SwapProposal is Proposal {
     }
 
     /// Return the newly-proposed basket, based on the current vault and the old basket.
-    function _newBasket(IRSV rsv, Basket oldBasket) internal returns(Basket) {
+    function _newBasket(IRSV rsv, Basket trustedOldBasket) internal returns(Basket) {
 
         uint256[] memory weights = new uint256[](tokens.length);
         // unit: aqToken/RSV
@@ -185,7 +185,7 @@ contract SwapProposal is Proposal {
         // unit: qRSV
 
         for (uint i = 0; i < tokens.length; i++) {
-            uint256 oldWeight = oldBasket.weights(tokens[i]);
+            uint256 oldWeight = trustedOldBasket.weights(tokens[i]);
             // unit: aqToken/RSV
 
             if (toVault[i]) {
@@ -204,7 +204,7 @@ contract SwapProposal is Proposal {
             }
         }
 
-        return new Basket(oldBasket, tokens, weights);
+        return new Basket(trustedOldBasket, tokens, weights);
         // unit check for weights: aqToken/RSV
     }
 }
