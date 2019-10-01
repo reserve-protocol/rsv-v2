@@ -118,8 +118,7 @@ contract Reserve is IERC20, Ownable {
     /// Make a different address the EternalStorage contract's reserveAddress.
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
-    function transferEternalStorage(address newReserveAddress) external onlyOwner {
-        require(paused);
+    function transferEternalStorage(address newReserveAddress) external onlyOwner isPaused {
         data.updateReserveAddress(newReserveAddress);
     }
 
@@ -144,6 +143,12 @@ contract Reserve is IERC20, Ownable {
     function unpause() external only(pauser) {
         paused = false;
         emit Unpaused(pauser);
+    }
+
+    /// Modifies a function to run only when the contract is paused.
+    modifier isPaused() {
+        require(paused, "contract is not paused");
+        _;
     }
 
     /// Modifies a function to run only when the contract is not paused.
