@@ -92,12 +92,8 @@ contract Manager is Ownable {
     event Redemption(address indexed user, uint256 indexed amount);
 
     // Pause events
-    event IssuancePaused(address indexed account);
-    event IssuanceUnpaused(address indexed account);
-    event PausedForEmergency(address indexed account);
-    event UnpausedFromEmergency(address indexed account);
-
-    // Changes
+    event IssuancePausedChanged(bool indexed oldVal, bool indexed newVal);
+    event EmergencyChanged(bool indexed oldVal, bool indexed newVal);
     event OperatorChanged(address indexed oldAccount, address indexed newAccount);
     event SeigniorageChanged(uint256 oldVal, uint256 newVal);
     event DelayChanged(uint256 oldVal, uint256 newVal);
@@ -181,28 +177,16 @@ contract Manager is Ownable {
 
     // ========================= Public + External ============================
 
-    /// Pause issuance.
-    function pauseIssuance() external onlyOwner {
-        issuancePaused = true;
-        emit IssuancePaused(_msgSender());
+    /// Set if issuance should be paused. 
+    function setIssuancePaused(bool val) external onlyOwner {
+        emit IssuancePausedChanged(issuancePaused, val);
+        issuancePaused = val;
     }
 
-    /// Unpause issuance.
-    function unpauseIssuance() external onlyOwner {
-        issuancePaused = false;
-        emit IssuanceUnpaused(_msgSender());
-    }
-
-    /// Pause contract.
-    function pauseForEmergency() external onlyOwner {
-        emergency = true;
-        emit PausedForEmergency(_msgSender());
-    }
-
-    /// Unpause contract.
-    function unpauseForEmergency() external onlyOwner {
-        emergency = false;
-        emit UnpausedFromEmergency(_msgSender());
+    /// Set if all contract actions should be paused.
+    function setEmergency(bool val) external onlyOwner {
+        emit EmergencyChanged(emergency, val);
+        emergency = val;
     }
 
     /// Set the operator.
