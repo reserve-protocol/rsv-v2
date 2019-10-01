@@ -183,6 +183,7 @@ func (s *WeightProposalSuite) TestDeploy() {
 
 }
 
+// TestBadConstruction tests that the requires in the constructor exist.
 func (s *WeightProposalSuite) TestBadConstruction() {
 	// A basket can't even be created if it is empty, so we should fail here:
 	basketAddress, tx, _, err := abi.DeployBasket(
@@ -499,6 +500,7 @@ func (s *SwapProposalSuite) TestDeploy() {
 
 }
 
+// TestBadConstruction tests that the requires in the SwapProposal constructor exist.
 func (s *SwapProposalSuite) TestBadConstruction() {
 	// Test that we cannot create a SwapProposal with tokens.length equal to 0.
 	_, tx, _, err := abi.DeploySwapProposal(

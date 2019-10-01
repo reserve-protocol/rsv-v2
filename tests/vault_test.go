@@ -125,6 +125,12 @@ func (s *VaultSuite) TestChangeManager() {
 	s.Equal(manager.address(), managerAddress)
 }
 
+// TestChangeManagerRequires tests that the requires in `changeManager` work.
+func (s *VaultSuite) TestChangeManagerRequires() {
+	// Try changing manager to the zero address.
+	s.requireTxFails(s.vault.ChangeManager(s.signer, zeroAddress()))
+}
+
 // TestChangeManagerProtected makes sure changeManager is protected.
 func (s *VaultSuite) TestChangeManagerProtected() {
 	manager := s.account[1]
