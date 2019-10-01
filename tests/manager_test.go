@@ -120,7 +120,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 
 	// Manager.
 	managerAddress, tx, manager, err := abi.DeployManager(
-		s.signer, s.node, vaultAddress, reserveAddress, propFactoryAddress, bigInt(0),
+		s.signer, s.node, vaultAddress, reserveAddress, propFactoryAddress, s.operator.address(), bigInt(0),
 	)
 
 	s.logParsers[managerAddress] = manager
@@ -154,13 +154,6 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	)
 	s.requireTxWithStrictEvents(s.vault.ChangeManager(s.signer, managerAddress))(
 		abi.VaultManagerTransferred{PreviousManager: s.owner.address(), NewManager: managerAddress},
-	)
-
-	// Set the operator.
-	s.requireTxWithStrictEvents(s.manager.SetOperator(s.signer, s.operator.address()))(
-		abi.ManagerOperatorChanged{
-			OldAccount: zeroAddress(), NewAccount: s.operator.address(),
-		},
 	)
 
 	// Set the basket.

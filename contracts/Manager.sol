@@ -125,11 +125,13 @@ contract Manager is Ownable {
     constructor(address vaultAddr,
                 address rsvAddr,
                 address proposalFactoryAddr,
+                address operatorAddr,
                 uint256 seigniorage_) public {
         vault = IVault(vaultAddr);
         rsv = IRSV(rsvAddr);
-        seigniorage = seigniorage_;
         proposalFactory = IProposalFactory(proposalFactoryAddr);
+        operator = operatorAddr;
+        seigniorage = seigniorage_;
         emergency = true; // it's not an emergency, but we want everything to start paused.
 
         // Start with the empty basket.
