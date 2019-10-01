@@ -1,18 +1,16 @@
 export REPO_DIR = $(shell pwd)
 export SOLC_VERSION = 0.5.7
 
-# All the contracts we're building.
 root_contracts := Basket Manager SwapProposal WeightProposal Vault 
 rsv_contracts := Reserve ReserveEternalStorage
 test_contracts := BasicOwnable ReserveV2 BasicERC20
-contracts := $(root_contracts) $(rsv_contracts) $(test_contracts)
+contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
 
-sol := $(shell find contracts -name '*.sol')
-json := $(foreach contract,$(contracts),evm/$(contract).json)
-abi := $(foreach contract,$(contracts),abi/$(contract).go)
+sol := $(shell find contracts -name '*.sol') ## All Solidity files
+json := $(foreach contract,$(contracts),evm/$(contract).json) ## All JSON files
+abi := $(foreach contract,$(contracts),abi/$(contract).go) ## All ABI files
 
-.PHONY: clean json abi test fmt run-geth
-.DEFAULT: test
+all: test json abi
 
 abi: $(abi)
 json: $(json)
@@ -30,6 +28,7 @@ fmt:
 run-geth:
 	docker run -it --rm -p 8545:8501 0xorg/devnet
 
+# Pattern rule: generate ABI files
 abi/%.go: evm/%.json genABI.go
 	go run genABI.go $*
 
@@ -72,3 +71,7 @@ evm/ReserveV2.json: contracts/test/ReserveV2.sol $(sol)
 
 evm/BasicERC20.json: contracts/test/BasicERC20.sol $(sol)
 	$(call solc,1000000)
+
+
+# Mark "action" targets PHONY, to save occasional headaches.
+.PHONY: all clean json abi test fmt run-geth
