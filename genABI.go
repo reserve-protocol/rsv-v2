@@ -20,10 +20,7 @@ func outputGoFile(contractName string) string {
 	return fmt.Sprintf("abi/%v.go", contractName)
 }
 
-const (
-	combinedJsonDir = "evm"
-	solCovDir       = "sol-coverage-evm"
-)
+const combinedJsonDir = "evm"
 
 func combinedJsonFilename(contractName string) string {
 	return fmt.Sprintf("%v/%v.json", combinedJsonDir, contractName)
@@ -90,12 +87,11 @@ func main() {
 		// Write to .go file.
 		name := outputGoFile(contractName)
 		check(ioutil.WriteFile(name, []byte(code), 0644), "writing "+name)
+
 		// Generate event bindings.
 		//
 		// We generate a String() function for each event and a
 		// Parse<ContractName>Log(*types.Log) function for each contract.
-		fmt.Printf("abigen %s\n", contractName)
-
 		buf := new(bytes.Buffer)
 		parsedABI, err := abi.JSON(bytes.NewReader([]byte(output.ABI)))
 		check(err, "parsing ABI JSON")

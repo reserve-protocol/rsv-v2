@@ -1,6 +1,5 @@
 export REPO_DIR = $(shell pwd)
 export SOLC_VERSION = 0.5.7
-export OPT_RUNS = 1000
 
 # All the contracts we're building.
 root_contracts := Basket Manager SwapProposal WeightProposal Vault 
@@ -12,23 +11,17 @@ sol := $(shell find contracts -name '*.sol')
 json := $(foreach contract,$(contracts),evm/$(contract).json)
 abi := $(foreach contract,$(contracts),abi/$(contract).go)
 
-.PHONY: clean contracts test fmt run-geth
+.PHONY: clean json abi test fmt run-geth
+.DEFAULT: test
+
+abi: $(abi)
+json: $(json)
+
+test: abi
+	go test ./tests
 
 clean:
 	rm -rf abi evm sol-coverage-evm
-
-# previously:
-# contracts: generate.go contracts/*.sol
-# 	go run generate.go
-
-# debug:
-# 	echo $(json)
-# 	echo $(abi)
-json: $(json)
-abi: $(abi)
-
-test: 
-	go test ./tests
 
 fmt:
 	npx solium -d contracts/ --fix
@@ -37,44 +30,45 @@ fmt:
 run-geth:
 	docker run -it --rm -p 8545:8501 0xorg/devnet
 
-
 abi/%.go: evm/%.json genABI.go
 	go run genABI.go $*
 
-# solc recipe. 
-define run_solc
+# solc recipe template for building all the JSON outputs.
+# To use as a build recipe, optimized for (e.g.) 1000 runs,
+# use "$(call solc,1000)" in your recipe.
+define solc
 @mkdir -p evm
-solc --allow-paths $(REPO_DIR)/contracts --optimize --optimize-runs $(OPT_RUNS) \
+solc --allow-paths $(REPO_DIR)/contracts --optimize --optimize-runs $1 \
      --combined-json=abi,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc \
      $< > $@
 endef
 
 evm/Basket.json : contracts/Basket.sol $(sol)
-	$(run_solc)
+	$(call solc,1)
 
 evm/Manager.json: contracts/Manager.sol $(sol)
-	$(run_solc)
+	$(call solc,1)
 
 evm/SwapProposal.json: contracts/Proposal.sol $(sol)
-	$(run_solc)
+	$(call solc,1)
 
 evm/WeightProposal.json: contracts/Proposal.sol $(sol)
-	$(run_solc)
+	$(call solc,1)
 
 evm/Vault.json: contracts/Vault.sol $(sol)
-	$(run_solc)
+	$(call solc,1)
 
 evm/Reserve.json: contracts/rsv/Reserve.sol $(sol)
-	$(run_solc)
+	$(call solc,1000000)
 
 evm/ReserveEternalStorage.json: contracts/rsv/ReserveEternalStorage.sol $(sol)
-	$(run_solc)
+	$(call solc,1000000)
 
 evm/BasicOwnable.json: contracts/test/BasicOwnable.sol $(sol)
-	$(run_solc)
+	$(call solc,1)
 
 evm/ReserveV2.json: contracts/test/ReserveV2.sol $(sol)
-	$(run_solc)
+	$(call solc,1000000)
 
 evm/BasicERC20.json: contracts/test/BasicERC20.sol $(sol)
-	$(run_solc)
+	$(call solc,1000000)
