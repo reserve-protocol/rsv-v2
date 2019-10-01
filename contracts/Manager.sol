@@ -333,13 +333,25 @@ contract Manager is Ownable {
      *   `amount` of `token` to the vault. If toVault is false, the proposer expects to receive
      *   `amount` of `token` from the vault.
      *
-     * If this proposal is accepted and executed, this set of absolute transfers will occur,
-     * and the Vault's basket weights will be adjusted accordingly. (The expected behavior of
-     * proposers is that they will aim to make proposals that move the basket weights towards
-     * some target of Reserve's management while maintaining full backing; the expected
-     * behavior of Reserve's management is to only accept such proposals.)
+     * If and when this proposal is accepted and executed, then:
      *
-     * Note: This type of proposal does not remove token addresses!
+     * 1. The Manager checks that the proposer has allowed adequate funds, for the proposed
+     *    transfers from the proposer to the vault.
+     * 2. The proposed set of token transfers occur between the Vault and the proposer.
+     * 3. The Vault's basket weights are raised and lowered, based on these token transfers and the
+     *    total supply of RSV **at the time when the proposal is executed**.
+     *
+     * Note that the set of token transfers will almost always be at very slightly lower volumes
+     * than requested, due to the rounding error involved in (a) adjusting the weights at execution
+     * time and (b) keeping the Vault fully collateralized. The contracts should never attempt to
+     * trade at higher volumes than requested.
+     *
+     * The intended behavior of proposers is that they will make proposals that shift the Vault
+     * composition towards some known target of Reserve's management while maintaining full
+     * backing; the expected behavior of Reserve's management is to accept only such proposals,
+     * excepting during dire emergencies.
+     *
+     * Note: This type of proposal does not reliably remove token addresses!
      * If you want to remove token addresses entirely, use proposeWeights.
      *
      * Returns the new proposal's ID.
