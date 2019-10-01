@@ -132,9 +132,7 @@ contract Manager is Ownable {
         emergency = true; // it's not an emergency, but we want everything to start paused.
 
         // Start with the empty basket.
-        address[] memory tokens = new address[](0);
-        uint256[] memory weights = new uint256[](0);
-        basket = new Basket(Basket(0), tokens, weights);
+        basket = new Basket(Basket(0), new address[](0), new uint256[](0));
     }
 
     // ============================= Modifiers ================================
@@ -157,6 +155,12 @@ contract Manager is Ownable {
         _;
     }
 
+    /// Modifies a function to run and complete only if the vault is collateralized.
+    modifier vaultCollateralized() {
+        _vaultCollateralized();
+        _;
+    }
+
     // This internal view pattern is required to stay under the bytecode limit.
 
     function _issuanceNotPaused() internal view {
@@ -169,6 +173,10 @@ contract Manager is Ownable {
 
     function _onlyOperator() internal view {
         require(_msgSender() == operator, "operator only");
+    }
+
+    function _vaultCollateralized() internal view {
+        require(isFullyCollateralized(), "undercollateralized");
     }
 
     // ========================= Public + External ============================
@@ -285,7 +293,7 @@ contract Manager is Ownable {
 
     /// Handles issuance.
     /// rsvAmount unit: qRSV
-    function issue(uint256 rsvAmount) external issuanceNotPaused notEmergency {
+    function issue(uint256 rsvAmount) external issuanceNotPaused notEmergency vaultCollateralized {
         require(rsvAmount > 0, "cannot issue zero RSV");
         require(basket.size() > 0, "basket cannot be empty");
 
@@ -300,16 +308,14 @@ contract Manager is Ownable {
         rsv.mint(_msgSender(), rsvAmount);
         // unit check for rsvAmount: qRSV.
 
-        assert(isFullyCollateralized());
         emit Issuance(_msgSender(), rsvAmount);
     }
 
     /// Handles redemption.
     /// rsvAmount unit: qRSV
-    function redeem(uint256 rsvAmount) external notEmergency {
+    function redeem(uint256 rsvAmount) external notEmergency vaultCollateralized {
         require(rsvAmount > 0, "cannot redeem 0 RSV");
         require(basket.size() > 0, "basket cannot be empty");
-
 
         // Burn RSV tokens.
         rsv.burnFrom(_msgSender(), rsvAmount);
@@ -322,7 +328,6 @@ contract Manager is Ownable {
             // unit check for amounts[i]: qToken.
         }
 
-        assert(isFullyCollateralized());
         emit Redemption(_msgSender(), rsvAmount);
     }
 
@@ -355,7 +360,7 @@ contract Manager is Ownable {
         uint256[] calldata amounts, // unit: qToken
         bool[] calldata toVault
     )
-        external notEmergency returns(uint256)
+        external notEmergency vaultCollateralized returns(uint256)
     {
         require(tokens.length == amounts.length && amounts.length == toVault.length,
                 "proposeSwap: unequal lengths");
@@ -378,7 +383,7 @@ contract Manager is Ownable {
      */
 
     function proposeWeights(address[] calldata tokens, uint256[] calldata weights)
-        external notEmergency returns(uint256)
+        external notEmergency vaultCollateralized returns(uint256)
     {
         require(tokens.length == weights.length, "proposeWeights: unequal lengths");
         require(tokens.length > 0, "proposeWeights: zero length");
@@ -392,7 +397,7 @@ contract Manager is Ownable {
     }
 
     /// Accepts a proposal for a new basket, beginning the required delay.
-    function acceptProposal(uint256 id) external onlyOperator notEmergency {
+    function acceptProposal(uint256 id) external onlyOperator notEmergency vaultCollateralized {
         require(proposalsLength > id, "proposals length < id");
         proposals[id].accept(now + delay);
         emit ProposalAccepted(id, proposals[id].proposer());
@@ -412,7 +417,7 @@ contract Manager is Ownable {
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
-    function executeProposal(uint256 id) external onlyOperator notEmergency {
+    function executeProposal(uint256 id) external onlyOperator notEmergency vaultCollateralized {
         require(proposalsLength > id, "proposals length < id");
         address proposer = proposals[id].proposer();
         Basket oldBasket = basket;
@@ -437,7 +442,6 @@ contract Manager is Ownable {
             }
         }
 
-        assert(isFullyCollateralized());
         emit ProposalExecuted(id, proposer, _msgSender(), address(oldBasket), address(basket));
     }
 
@@ -502,3 +506,4 @@ contract Manager is Ownable {
         return shiftedWeight.div(decimalsDivisor).add(1); // return unit: qTokens
     }
 }
+

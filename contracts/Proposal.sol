@@ -121,9 +121,7 @@ contract SwapProposal is Proposal {
     {
         require(_tokens.length == _amounts.length && _amounts.length == _toVault.length,
                 "unequal array lengths");
-        tokens = _tokens;
-        amounts = _amounts;
-        toVault = _toVault;
+        (tokens, amounts, toVault) = (_tokens, _amounts, _toVault);
     }
 
     /// Return the newly-proposed basket, based on the current vault and the old basket.
@@ -139,8 +137,7 @@ contract SwapProposal is Proposal {
         // unit: qRSV
 
         for (uint i = 0; i < tokens.length; i++) {
-            address token = tokens[i];
-            uint256 oldWeight = oldBasket.weights(token);
+            uint256 oldWeight = oldBasket.weights(tokens[i]);
             // unit: aqToken/RSV
 
             if (toVault[i]) {
