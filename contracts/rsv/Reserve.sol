@@ -115,12 +115,12 @@ contract Reserve is IERC20, Ownable {
         emit FeeRecipientChanged(newFeeRecipient);
     }
 
-    /// Make a different address own the EternalStorage contract.
+    /// Make a different address the EternalStorage contract's reserveAddress.
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
-    function transferEternalStorage(address newOwner) external onlyOwner {
+    function transferEternalStorage(address newReserveAddress) external onlyOwner {
         require(paused);
-        data.nominateNewOwner(newOwner);
+        data.updateReserveAddress(newReserveAddress);
     }
 
     /// Change the contract that helps with transaction fee calculation.

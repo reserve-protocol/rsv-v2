@@ -64,9 +64,7 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 		reserveAddress: reserve,
 	}
 
-	s.requireTxWithEvents(tx, err)(abi.ReserveOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.account[0].address(),
-	})
+	s.requireTx(tx, err) // too many events to care about.
 
 	// Unpause.
 	s.requireTxWithEvents(reserve.Unpause(s.signer))(
@@ -83,6 +81,13 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	s.Require().NoError(err)
 
 	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
+
+	// Accept ownership.
+	s.requireTxWithEvents(s.eternalStorage.AcceptOwnership(s.signer))(
+		abi.ReserveEternalStorageOwnershipTransferred{
+			PreviousOwner: s.reserveAddress, NewOwner: s.account[0].address(),
+		},
+	)
 
 	deployerAddress := s.account[0].address()
 
@@ -608,17 +613,13 @@ func (s *ReserveSuite) TestUpgrade() {
 	newKey := s.account[2]
 	newTokenAddress, tx, newToken, err := abi.DeployReserveV2(signer(newKey), s.node)
 	s.logParsers[newTokenAddress] = newToken
-	s.requireTxWithEvents(tx, err)(abi.ReserveV2OwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: newKey.address(),
-	})
+	s.requireTx(tx, err)
 
 	// Make the switch.
 	s.requireTxWithEvents(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
 		PreviousOwner: s.account[0].address(), NewOwner: newTokenAddress,
 	})
-	s.requireTxWithEvents(newToken.CompleteHandoff(signer(newKey), s.reserveAddress)) /*
-		not asserting events because there are a lot and we don't care much about them
-	*/
+	s.requireTx(newToken.CompleteHandoff(signer(newKey), s.reserveAddress))
 
 	// Old token should not be functional.
 	s.requireTxFails(s.reserve.Mint(s.signer, recipient.address(), big.NewInt(1500)))
@@ -657,60 +658,68 @@ func (s *ReserveSuite) TestUpgrade() {
 	assertRSVBalance(s.account[3].address(), big.NewInt(10))
 }
 
-// Test that we can use the escape hatch in ReserveEternalStorage.
-func (s *ReserveSuite) TestEternalStorageEscapeHatch() {
+// Test that we can use the owner in ReserveEternalStorage.
+func (s *ReserveSuite) TestEternalStorageOwner() {
+	assertReserveAddress := func(expected common.Address) {
+		reserveAddress, err := s.eternalStorage.ReserveAddress(nil)
+		s.NoError(err)
+		s.Equal(expected, reserveAddress)
+	}
+
 	assertOwner := func(expected common.Address) {
 		owner, err := s.eternalStorage.Owner(nil)
 		s.NoError(err)
 		s.Equal(expected, owner)
 	}
 
-	assertEscapeHatch := func(expected common.Address) {
-		escapeHatch, err := s.eternalStorage.EscapeHatch(nil)
-		s.NoError(err)
-		s.Equal(expected, escapeHatch)
-	}
+	// Check that owner and reserveAddress are initialized in the way we expect.
+	assertReserveAddress(s.reserveAddress)
+	assertOwner(s.account[0].address())
 
-	// Check that owner and escapeHatch are initialized in the way we expect.
-	assertOwner(s.reserveAddress)
-	assertEscapeHatch(s.account[0].address())
+	newOwner := s.account[3]
 
-	newEscapeHatch := s.account[3]
-
-	// Change escapeHatch address and check it is what we expect.
-	s.requireTxWithEvents(s.eternalStorage.TransferEscapeHatch(s.signer, newEscapeHatch.address()))(
-		abi.ReserveEternalStorageEscapeHatchTransferred{
-			OldEscapeHatch: s.account[0].address(),
-			NewEscapeHatch: newEscapeHatch.address(),
-		},
-	)
-
-	// Check that escapeHatch changed and owner didn't.
-	assertOwner(s.reserveAddress)
-	assertEscapeHatch(newEscapeHatch.address())
-
-	newOwner := s.account[4]
-
-	// Change owner as escapeHatch account.
-	s.requireTxWithEvents(s.eternalStorage.TransferOwnership(signer(newEscapeHatch), newOwner.address()))(
-		abi.ReserveEternalStorageOwnershipTransferred{
-			OldOwner: s.reserveAddress,
+	// Nominate a new owner.
+	s.requireTxWithEvents(s.eternalStorage.NominateNewOwner(s.signer, newOwner.address()))(
+		abi.ReserveEternalStorageNewOwnerNominated{
+			PreviousOwner: s.account[0].address(),
 			NewOwner: newOwner.address(),
 		},
 	)
 
-	// Check that owner changed and escapeHatch didn't.
+	// Accept ownership.
+	s.requireTxWithEvents(s.eternalStorage.AcceptOwnership(signer(newOwner)))(
+		abi.ReserveEternalStorageOwnershipTransferred{
+			PreviousOwner: s.account[0].address(),
+			NewOwner: newOwner.address(),
+		},
+	)
+
+	// Check that owner changed and reserveAddress didn't.
+	assertReserveAddress(s.reserveAddress)
 	assertOwner(newOwner.address())
-	assertEscapeHatch(newEscapeHatch.address())
 
-	// Check that owner cannot change escapeHatch.
-	s.requireTxFails(s.eternalStorage.TransferEscapeHatch(signer(newOwner), s.account[5].address()))
+	newReserveAccount := s.account[4]
 
-	// Check that escapeHatch can make the change the owner could not.
-	s.requireTxWithEvents(s.eternalStorage.TransferEscapeHatch(signer(newEscapeHatch), s.account[5].address()))(
-		abi.ReserveEternalStorageEscapeHatchTransferred{
-			OldEscapeHatch: newEscapeHatch.address(),
-			NewEscapeHatch: s.account[5].address(),
+	// Change reserveAddress as owner account.
+	s.requireTxWithEvents(s.eternalStorage.UpdateReserveAddress(signer(newOwner), newReserveAccount.address()))(
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: s.reserveAddress,
+			NewReserveAddress: newReserveAccount.address(),
+		},
+	)
+
+	// Check that reserveAddress changed and owner didn't.
+	assertReserveAddress(newReserveAccount.address())
+	assertOwner(newOwner.address())
+
+	// Check that reserveAddress cannot change owner.
+	s.requireTxFails(s.eternalStorage.NominateNewOwner(signer(newReserveAccount), s.account[5].address()))
+
+	// Check that owner can make the change the reserveAddress could not.
+	s.requireTxWithEvents(s.eternalStorage.NominateNewOwner(signer(newOwner), s.account[5].address()))(
+		abi.ReserveEternalStorageNewOwnerNominated{
+			PreviousOwner: newOwner.address(),
+			NewOwner: s.account[5].address(),
 		},
 	)
 }
@@ -725,16 +734,16 @@ func (s *ReserveSuite) TestEternalStorageSetBalance() {
 	// Check that we can't call setBalance before becoming the owner.
 	s.requireTxFails(s.eternalStorage.SetBalance(signer(newOwner), newOwner.address(), amount))
 
-	// Transfer ownership of Eternal Storage to external account.
-	s.requireTxWithEvents(s.eternalStorage.TransferOwnership(s.signer, newOwner.address()))(
-		abi.ReserveEternalStorageOwnershipTransferred{
-			OldOwner: s.reserveAddress,
-			NewOwner: newOwner.address(),
+	// Set reserveAddress to newOwner. 
+	s.requireTxWithEvents(s.eternalStorage.UpdateReserveAddress(s.signer, newOwner.address()))(
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: s.reserveAddress,
+			NewReserveAddress: newOwner.address(),
 		},
 	)
 
 	// Check that we can now call setBalance.
-	s.requireTxWithEvents(s.eternalStorage.SetBalance(signer(newOwner), newOwner.address(), amount))( /* assert zero events */ )
+	s.requireTx(s.eternalStorage.SetBalance(signer(newOwner), newOwner.address(), amount))
 
 	// Balance should have changed.
 	balance, err := s.eternalStorage.Balance(nil, newOwner.address())

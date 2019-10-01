@@ -13,7 +13,7 @@ contract ReserveV2 is Reserve {
         data = ReserveEternalStorage(previous.getEternalStorageAddress());
         previous.acceptOwnership();
 
-        // Take control of Eternal Storage.
+        //Take control of Eternal Storage.
         previous.changePauser(address(this));
         previous.pause();
         previous.transferEternalStorage(address(this));
