@@ -1,0 +1,9 @@
+#!/bin/bash -e
+
+# This is admittedly quick, but it is also dirty.
+# If we want to maintain this, we should probably put together a Python script instead.
+
+jq '.contracts | map_values(."bin-runtime" | length / 2 )' "$@" \
+  | jq --slurp 'reduce .[] as $item ({}; . * $item)' \
+  | sed -ne 's/.*:\(.*\)":/\1/ p' \
+  | tr -d ',' | awk '{ print $2, $1 }' | sort -gr | awk '{ print $2, $1 }' 
