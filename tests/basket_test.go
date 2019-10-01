@@ -267,7 +267,7 @@ func (s *BasketSuite) TestNegativeCases() {
 	// Case 3: Basket is too big.
 	var longTokens []common.Address
 	var longWeights []*big.Int
-	for i := 0; i < 101; i++ {
+	for i := 0; i < 99; i++ {
 		longTokens = append(longTokens, s.account[2].address())
 		longWeights = append(longWeights, bigInt(1))
 	}

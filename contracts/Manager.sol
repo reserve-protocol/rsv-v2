@@ -71,7 +71,7 @@ contract Manager is Ownable {
     IVault public trustedVault;
     IRSV public trustedRSV;
     IProposalFactory public trustedProposalFactory;
-    
+
     // Proposals
     mapping(uint256 => IProposal) public trustedProposals;
     uint256 public proposalsLength;
@@ -101,32 +101,32 @@ contract Manager is Ownable {
 
     // Proposals
     event WeightsProposed(uint256 indexed id,
-                          address indexed proposer,
-                          address[] tokens,
-                          uint256[] weights);
+        address indexed proposer,
+        address[] tokens,
+        uint256[] weights);
 
     event SwapProposed(uint256 indexed id,
-                       address indexed proposer,
-                       address[] tokens,
-                       uint256[] amounts,
-                       bool[] toVault);
+        address indexed proposer,
+        address[] tokens,
+        uint256[] amounts,
+        bool[] toVault);
 
     event ProposalAccepted(uint256 indexed id, address indexed proposer);
     event ProposalCanceled(uint256 indexed id, address indexed proposer, address indexed canceler);
     event ProposalExecuted(uint256 indexed id,
-                           address indexed proposer,
-                           address indexed executor,
-                           address oldBasket,
-                           address newBasket);
+        address indexed proposer,
+        address indexed executor,
+        address oldBasket,
+        address newBasket);
 
     // ============================ Constructor ===============================
 
     /// Begins in `emergency` state.
     constructor(address vaultAddr,
-                address rsvAddr,
-                address proposalFactoryAddr,
-                address operatorAddr,
-                uint256 seigniorage_) public {
+        address rsvAddr,
+        address proposalFactoryAddr,
+        address operatorAddr,
+        uint256 seigniorage_) public {
         trustedVault = IVault(vaultAddr);
         trustedRSV = IRSV(rsvAddr);
         trustedProposalFactory = IProposalFactory(proposalFactoryAddr);
@@ -363,13 +363,13 @@ contract Manager is Ownable {
         uint256[] calldata amounts, // unit: qToken
         bool[] calldata toVault
     )
-        external notEmergency vaultCollateralized returns(uint256)
+    external notEmergency vaultCollateralized returns(uint256)
     {
         require(tokens.length == amounts.length && amounts.length == toVault.length,
-                "proposeSwap: unequal lengths");
+            "proposeSwap: unequal lengths");
 
         trustedProposals[proposalsLength] =
-            trustedProposalFactory.createSwapProposal(_msgSender(), tokens, amounts, toVault);
+        trustedProposalFactory.createSwapProposal(_msgSender(), tokens, amounts, toVault);
         trustedProposals[proposalsLength].acceptOwnership();
 
         emit SwapProposed(proposalsLength, _msgSender(), tokens, amounts, toVault);
@@ -388,14 +388,14 @@ contract Manager is Ownable {
      */
 
     function proposeWeights(address[] calldata tokens, uint256[] calldata weights)
-        external notEmergency vaultCollateralized returns(uint256)
+    external notEmergency vaultCollateralized returns(uint256)
     {
         require(tokens.length == weights.length, "proposeWeights: unequal lengths");
         require(tokens.length > 0, "proposeWeights: zero length");
 
         trustedProposals[proposalsLength] =
-            trustedProposalFactory.createWeightProposal(
-                _msgSender(), new Basket(Basket(0), tokens, weights));
+        trustedProposalFactory.createWeightProposal(
+            _msgSender(), new Basket(Basket(0), tokens, weights));
         trustedProposals[proposalsLength].acceptOwnership();
 
         emit WeightsProposed(proposalsLength, _msgSender(), tokens, weights);
@@ -436,9 +436,9 @@ contract Manager is Ownable {
         for (uint i = 0; i < trustedOldBasket.size(); i++) {
             address trustedToken = trustedOldBasket.tokens(i);
             _executeBasketShift(
-                trustedOldBasket.weights(trustedToken), 
-                trustedBasket.weights(trustedToken), 
-                trustedToken, 
+                trustedOldBasket.weights(trustedToken),
+                trustedBasket.weights(trustedToken),
+                trustedToken,
                 proposer
             );
         }
@@ -446,19 +446,19 @@ contract Manager is Ownable {
             address trustedToken = trustedBasket.tokens(i);
             if (!trustedOldBasket.has(trustedToken)) {
                 _executeBasketShift(
-                    trustedOldBasket.weights(trustedToken), 
-                    trustedBasket.weights(trustedToken), 
-                    trustedToken, 
+                    trustedOldBasket.weights(trustedToken),
+                    trustedBasket.weights(trustedToken),
+                    trustedToken,
                     proposer
                 );
             }
         }
 
         emit ProposalExecuted(
-            id, 
-            proposer, 
-            _msgSender(), 
-            address(trustedOldBasket), 
+            id,
+            proposer,
+            _msgSender(),
+            address(trustedOldBasket),
             address(trustedBasket)
         );
     }
@@ -479,19 +479,22 @@ contract Manager is Ownable {
             // This token must increase in the vault, so transfer from proposer to vault.
             // (Transfer into vault: round up)
             uint256 transferAmount =
-                _weighted(trustedRSV.totalSupply(), newWeight.sub(oldWeight), RoundingMode.UP);
-                // transferAmount unit: qTokens
-            if (transferAmount > 0)
+            _weighted(trustedRSV.totalSupply(), newWeight.sub(oldWeight), RoundingMode.UP);
+            // transferAmount unit: qTokens
+
+            if (transferAmount > 0) {
                 IERC20(trustedToken).safeTransferFrom(proposer, address(trustedVault), transferAmount);
+            }
 
         } else if (newWeight < oldWeight) {
             // This token will decrease in the vault, so transfer from vault to proposer.
             // (Transfer out of vault: round down)
             uint256 transferAmount =
-                _weighted(trustedRSV.totalSupply(), oldWeight.sub(newWeight), RoundingMode.DOWN);
-                // transferAmount unit: qTokens
-            if (transferAmount > 0)
+            _weighted(trustedRSV.totalSupply(), oldWeight.sub(newWeight), RoundingMode.DOWN);
+            // transferAmount unit: qTokens
+            if (transferAmount > 0) {
                 trustedVault.withdrawTo(trustedToken, transferAmount, proposer);
+            }
         }
     }
 
@@ -506,7 +509,7 @@ contract Manager is Ownable {
         uint256 amount, // unit: qRSV
         uint256 weight, // unit: aqToken/RSV
         RoundingMode rnd
-        ) internal view returns(uint256) // return unit: qTokens
+    ) internal view returns(uint256) // return unit: qTokens
     {
         // This wouldn't work properly with negative numbers, but we don't need them here.
         require(amount >= 0 && weight >= 0, "weight or amount negative");
