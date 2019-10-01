@@ -383,7 +383,7 @@ contract Manager is Ownable {
     /// Accepts a proposal for a new basket, beginning the required delay.
     function acceptProposal(uint256 id) external onlyOperator notEmergency vaultCollateralized {
         require(proposalsLength > id, "proposals length < id");
-        proposals[id].accept(now + delay);
+        proposals[id].accept(now.add(delay));
         emit ProposalAccepted(id, proposals[id].proposer());
     }
 
