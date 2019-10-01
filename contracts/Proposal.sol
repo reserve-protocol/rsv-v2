@@ -132,6 +132,7 @@ contract WeightProposal is Proposal {
     Basket public basket;
 
     constructor(address _proposer, Basket _basket) Proposal(_proposer) public {
+        require(_basket.size() > 0, "proposal cannot be empty");
         basket = _basket;
     }
 
@@ -165,6 +166,7 @@ contract SwapProposal is Proposal {
                 bool[] memory _toVault )
         Proposal(_proposer) public
     {
+        require(_tokens.length > 0, "proposal cannot be empty");
         require(_tokens.length == _amounts.length && _amounts.length == _toVault.length,
                 "unequal array lengths");
         (tokens, amounts, toVault) = (_tokens, _amounts, _toVault);

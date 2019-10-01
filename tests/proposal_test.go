@@ -26,6 +26,7 @@ type WeightProposalSuite struct {
 	proposal        *abi.WeightProposal
 	proposalAddress common.Address
 	basketAddress   common.Address
+	weights         []*big.Int
 }
 
 type SwapProposalSuite struct {
@@ -108,14 +109,39 @@ func (s *SwapProposalSuite) TearDownSuite() {
 func (s *WeightProposalSuite) BeforeTest(suiteName, testName string) {
 	s.owner = s.account[0]
 	s.proposer = s.account[1]
-	s.basketAddress = s.account[2].address()
+
+	s.logParsers = map[common.Address]logParser{}
+
+	// Deploy collateral ERC20s for a basket.
+	s.erc20s = make([]*abi.BasicERC20, 3)
+	s.erc20Addresses = make([]common.Address, 3)
+	s.weights = make([]*big.Int, 3)
+	for i := 0; i < 3; i++ {
+		erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
+		s.Require().NoError(err)
+		s.erc20s[i] = erc20
+		s.erc20Addresses[i] = erc20Address
+		s.weights[i] = bigInt(uint32(i + 1))
+		s.logParsers[erc20Address] = erc20
+	}
+
+	// Make a non-empty basket
+	basketAddress, tx, basket, err := abi.DeployBasket(
+		s.signer,
+		s.node,
+		zeroAddress(),
+		s.erc20Addresses,
+		s.weights,
+	)
+
+	s.requireTxWithStrictEvents(tx, err)()
+	s.basketAddress = basketAddress
+	s.basket = basket
 
 	// Deploy a Weight Proposal.
 	proposalAddress, tx, proposal, err := abi.DeployWeightProposal(s.signer, s.node, s.proposer.address(), s.basketAddress)
 
-	s.logParsers = map[common.Address]logParser{
-		proposalAddress: proposal,
-	}
+	s.logParsers[proposalAddress] = proposal
 
 	s.requireTxWithStrictEvents(tx, err)(
 		abi.WeightProposalOwnershipTransferred{
@@ -155,6 +181,22 @@ func (s *WeightProposalSuite) BeforeTest(suiteName, testName string) {
 
 func (s *WeightProposalSuite) TestDeploy() {
 
+}
+
+func (s *WeightProposalSuite) TestBadConstruction() {
+	// A basket can't even be created if it is empty, so we should fail here:
+	basketAddress, tx, _, err := abi.DeployBasket(
+		s.signer,
+		s.node,
+		s.account[5].address(),
+		[]common.Address{},
+		[]*big.Int{},
+	)
+	s.requireTxFails(tx, err)
+
+	// However, if we get here, we should fail anyway.
+	_, tx, _, err = abi.DeployWeightProposal(s.signer, s.node, s.proposer.address(), basketAddress)
+	s.requireTxFails(tx, err)
 }
 
 // TestAccept tests that `accept` changes state as expected.
@@ -455,6 +497,28 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 
 func (s *SwapProposalSuite) TestDeploy() {
 
+}
+
+func (s *SwapProposalSuite) TestBadConstruction() {
+	// Test that we cannot create a SwapProposal with tokens.length equal to 0.
+	_, tx, _, err := abi.DeploySwapProposal(
+		s.signer, s.node, s.proposer.address(), []common.Address{}, []*big.Int{}, []bool{})
+	s.requireTxFails(tx, err)
+
+	// Test that we cannot create a SwapProposal with bad token length.
+	_, tx, _, err = abi.DeploySwapProposal(
+		s.signer, s.node, s.proposer.address(), []common.Address{s.account[4].address()}, []*big.Int{}, []bool{})
+	s.requireTxFails(tx, err)
+
+	// Test that we cannot create a SwapProposal with bad amounts length.
+	_, tx, _, err = abi.DeploySwapProposal(
+		s.signer, s.node, s.proposer.address(), []common.Address{}, []*big.Int{bigInt(0)}, []bool{})
+	s.requireTxFails(tx, err)
+
+	// Test that we cannot create a SwapProposal with bad toVault length.
+	_, tx, _, err = abi.DeploySwapProposal(
+		s.signer, s.node, s.proposer.address(), []common.Address{}, []*big.Int{}, []bool{true})
+	s.requireTxFails(tx, err)
 }
 
 // TestAccept tests that `accept` changes state as expected.
