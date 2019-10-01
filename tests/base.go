@@ -72,7 +72,9 @@ var coverageEnabled = os.Getenv("COVERAGE_ENABLED") != ""
 // be more natural to pass the events in to the `requireTxWithEvents` call itself -- but
 // this is the cleanest way that is compatible with directly wrapping the abigen'd
 // calls, without using intermediate placeholder variables in calling code.
-func (s *TestSuite) requireTxWithEvents(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
+//
+// Note: This closure asserts exactly the set of expected events and no more.
+func (s *TestSuite) requireTxWithStrictEvents(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
 	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
 
 	// return a closure that can take a varargs list of events,
@@ -92,12 +94,38 @@ func (s *TestSuite) requireTxWithEvents(tx *types.Transaction, err error) func(a
 	}
 }
 
-// requireTx is like requireTxWithEvents but does not parse events for correctness.
-// LogParsers are keyed by contract address. Contracts that deploy other contracts
-// instrumentally will end up emitting events that cannot be parsed without making assumption
-// In these cases, instead use requireTx to simply do a comparison of event counts.
-func (s *TestSuite) requireTx(tx *types.Transaction, err error) {
-	s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
+// requireTxWithEvents requires that a transaction is successfully mined and does
+// not revert. It also takes an extra error argument, and checks that the
+// error is nil. This signature allows the function to directly wrap our
+// abigen'd mutator calls.
+//
+// requireTxWithEvents returns a closure that can be used to assert the list of events
+// that were emitted during the transaction. This API is a bit weird -- it would
+// be more natural to pass the events in to the `requireTxWithEvents` call itself -- but
+// this is the cleanest way that is compatible with directly wrapping the abigen'd
+// calls, without using intermediate placeholder variables in calling code.
+//
+// Note: This closure asserts that the found events contain all of the expected events.
+func (s *TestSuite) requireTx(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
+	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
+
+	// return a closure that can take a varargs list of events,
+	// and assert that the transaction generates at least that set of events.
+	return func(assertEvent ...fmt.Stringer) {
+		for _, wantEvent := range assertEvent {
+			found := false
+			for _, log := range receipt.Logs {
+				parser := s.logParsers[log.Address]
+				if parser != nil {
+					gotEvent, err := parser.ParseLog(log)
+					if err == nil && wantEvent.String() == gotEvent.String() {
+						found = true
+					}
+				}
+			}
+			s.Truef(found, "event not found: %v", wantEvent)
+		}
+	}
 }
 
 // requireTxFails is like requireTxWithEvents, but it requires that the transaction either
@@ -266,7 +294,7 @@ func (s *TestSuite) setup() {
 	s.Require().NoError(err)
 
 	_, tx, utilContract, err := bind.DeployContract(s.signer, utilABI, code, s.node)
-	s.requireTxWithEvents(tx, err)( /* assert zero events */ )
+	s.requireTx(tx, err)( /* assert zero events */ )
 	s.utilContract = utilContract
 }
 

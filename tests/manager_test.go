@@ -79,7 +79,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.reserveAddress = reserveAddress
 
 	// Unpause Reserve.
-	s.requireTxWithEvents(s.reserve.Unpause(s.signer))(
+	s.requireTxWithStrictEvents(s.reserve.Unpause(s.signer))(
 		abi.ReserveUnpaused{Account: s.owner.address()},
 	)
 
@@ -92,7 +92,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
 
 	// Accept ownership of eternal storage.
-	s.requireTxWithEvents(s.eternalStorage.AcceptOwnership(s.signer))(
+	s.requireTxWithStrictEvents(s.eternalStorage.AcceptOwnership(s.signer))(
 		abi.ReserveEternalStorageOwnershipTransferred{
 			PreviousOwner: s.reserveAddress, NewOwner: s.account[0].address(),
 		},
@@ -102,7 +102,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	vaultAddress, tx, vault, err := abi.DeployVault(s.signer, s.node)
 
 	s.logParsers[vaultAddress] = vault
-	s.requireTxWithEvents(tx, err)(
+	s.requireTxWithStrictEvents(tx, err)(
 		abi.VaultOwnershipTransferred{
 			PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 		},
@@ -124,7 +124,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	)
 
 	s.logParsers[managerAddress] = manager
-	s.requireTxWithEvents(tx, err)(abi.ManagerOwnershipTransferred{
+	s.requireTx(tx, err)(abi.ManagerOwnershipTransferred{
 		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 	})
 	s.manager = manager
@@ -136,7 +136,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.Equal(true, emergency)
 
 	// Unpause from emergency.
-	s.requireTxWithEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -146,18 +146,18 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.Equal(false, emergency)
 
 	// Set all auths to Manager.
-	s.requireTxWithEvents(s.reserve.ChangeMinter(s.signer, managerAddress))(
+	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, managerAddress))(
 		abi.ReserveMinterChanged{NewMinter: managerAddress},
 	)
-	s.requireTxWithEvents(s.reserve.ChangePauser(s.signer, managerAddress))(
+	s.requireTxWithStrictEvents(s.reserve.ChangePauser(s.signer, managerAddress))(
 		abi.ReservePauserChanged{NewPauser: managerAddress},
 	)
-	s.requireTxWithEvents(s.vault.ChangeManager(s.signer, managerAddress))(
+	s.requireTxWithStrictEvents(s.vault.ChangeManager(s.signer, managerAddress))(
 		abi.VaultManagerTransferred{PreviousManager: s.owner.address(), NewManager: managerAddress},
 	)
 
 	// Set the operator.
-	s.requireTxWithEvents(s.manager.SetOperator(s.signer, s.operator.address()))(
+	s.requireTxWithStrictEvents(s.manager.SetOperator(s.signer, s.operator.address()))(
 		abi.ManagerOperatorChanged{
 			OldAccount: zeroAddress(), NewAccount: s.operator.address(),
 		},
@@ -222,7 +222,7 @@ func (s *ManagerSuite) TestSetIssuancePaused() {
 	s.Equal(false, paused)
 
 	// Pause.
-	s.requireTxWithEvents(s.manager.SetIssuancePaused(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, true))(
 		abi.ManagerIssuancePausedChanged{OldVal: false, NewVal: true},
 	)
 
@@ -232,7 +232,7 @@ func (s *ManagerSuite) TestSetIssuancePaused() {
 	s.Equal(true, paused)
 
 	// Unpause.
-	s.requireTxWithEvents(s.manager.SetIssuancePaused(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, false))(
 		abi.ManagerIssuancePausedChanged{OldVal: true, NewVal: false},
 	)
 
@@ -256,7 +256,7 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Equal(false, emergency)
 
 	// Pause for emergency.
-	s.requireTxWithEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -266,7 +266,7 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Equal(true, emergency)
 
 	// Unpause for emergency.
-	s.requireTxWithEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -285,7 +285,7 @@ func (s *ManagerSuite) TestSetEmergencyIsProtected() {
 // TestSetOperator tests that `setOperator` manipulates state correctly.
 func (s *ManagerSuite) TestSetOperator() {
 	operator := s.account[4].address()
-	s.requireTxWithEvents(s.manager.SetOperator(s.signer, operator))(
+	s.requireTxWithStrictEvents(s.manager.SetOperator(s.signer, operator))(
 		abi.ManagerOperatorChanged{
 			OldAccount: s.operator.address(), NewAccount: operator,
 		},
@@ -306,7 +306,7 @@ func (s *ManagerSuite) TestSetOperatorIsProtected() {
 // TestSetSeigniorage tests that `setSeigniorage` manipulates state correctly.
 func (s *ManagerSuite) TestSetSeigniorage() {
 	seigniorage := bigInt(1)
-	s.requireTxWithEvents(s.manager.SetSeigniorage(s.signer, seigniorage))(
+	s.requireTxWithStrictEvents(s.manager.SetSeigniorage(s.signer, seigniorage))(
 		abi.ManagerSeigniorageChanged{
 			OldVal: bigInt(0), NewVal: seigniorage,
 		},
@@ -328,7 +328,7 @@ func (s *ManagerSuite) TestSetSeigniorageIsProtected() {
 // TestSetDelay tests that `setDelay` manipulates state correctly.
 func (s *ManagerSuite) TestSetDelay() {
 	delay := bigInt(172800) // 48 hours
-	s.requireTxWithEvents(s.manager.SetDelay(s.signer, delay))(
+	s.requireTxWithStrictEvents(s.manager.SetDelay(s.signer, delay))(
 		abi.ManagerDelayChanged{
 			OldVal: bigInt(86400), NewVal: delay,
 		},
@@ -355,7 +355,7 @@ func (s *ManagerSuite) TestClearProposals() {
 	s.Equal(bigInt(1).String(), proposalsLength.String())
 
 	// Clear it.
-	s.requireTxWithEvents(s.manager.ClearProposals(s.signer))(
+	s.requireTxWithStrictEvents(s.manager.ClearProposals(s.signer))(
 		abi.ManagerProposalsCleared{},
 	)
 
@@ -377,7 +377,7 @@ func (s *ManagerSuite) TestIssue() {
 
 	//First set seigniorage, in BPS
 	seigniorage := bigInt(10) // 0.1%
-	s.requireTxWithEvents(s.manager.SetSeigniorage(s.signer, seigniorage))(
+	s.requireTxWithStrictEvents(s.manager.SetSeigniorage(s.signer, seigniorage))(
 		abi.ManagerSeigniorageChanged{
 			OldVal: bigInt(0), NewVal: seigniorage,
 		},
@@ -419,7 +419,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
 
 	// Set `emergency` to true.
-	s.requireTxWithEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -432,7 +432,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
 
 	// Set `emergency` to false.
-	s.requireTxWithEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -440,7 +440,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
 
 	// Pause just issuance.
-	s.requireTxWithEvents(s.manager.SetIssuancePaused(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, true))(
 		abi.ManagerIssuancePausedChanged{OldVal: false, NewVal: true},
 	)
 
@@ -507,7 +507,7 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	s.Equal(rsvAmount.String(), rsvBalance.String())
 
 	// Approve the manager to spend our RSV.
-	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvAmount))(
+	s.requireTx(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvAmount))(
 		abi.ReserveApproval{
 			Owner:   s.proposer.address(),
 			Spender: s.managerAddress,
@@ -519,7 +519,7 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
 
 	// Emergency Pause.
-	s.requireTxWithEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -546,7 +546,7 @@ func (s *ManagerSuite) TestRedeemRequireStatements() {
 	s.Equal(rsvAmount.String(), rsvBalance.String())
 
 	// Approve the manager to spend our RSV.
-	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvAmount))(
+	s.requireTx(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvAmount))(
 		abi.ReserveApproval{
 			Owner:   s.proposer.address(),
 			Spender: s.managerAddress,
@@ -575,7 +575,7 @@ func (s *ManagerSuite) TestProposeWeightsFullUsecase() {
 	s.changeBasketUsingWeightProposal(s.erc20Addresses, newWeights)
 
 	// Approve the manager to spend a billion RSV.
-	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvToIssue))(
+	s.requireTx(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvToIssue))(
 		abi.ReserveApproval{Owner: s.proposer.address(), Spender: s.managerAddress, Value: rsvToIssue},
 	)
 
@@ -602,7 +602,7 @@ func (s *ManagerSuite) TestProposeSwapFullUsecase() {
 	s.changeBasketUsingSwapProposal(s.erc20Addresses, amounts, toVault)
 
 	// Approve the manager to spend a billion RSV.
-	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvToIssue))(
+	s.requireTx(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvToIssue))(
 		abi.ReserveApproval{Owner: s.proposer.address(), Spender: s.managerAddress, Value: rsvToIssue},
 	)
 
@@ -662,7 +662,7 @@ func (s *ManagerSuite) changeBasketUsingWeightProposal(tokens []common.Address, 
 	}
 
 	// Accept the Proposal.
-	s.requireTxWithEvents(s.manager.AcceptProposal(signer(s.operator), proposalID))(
+	s.requireTx(s.manager.AcceptProposal(signer(s.operator), proposalID))(
 		abi.ManagerProposalAccepted{
 			Id: proposalID, Proposer: s.proposer.address(),
 		},
@@ -702,7 +702,7 @@ func (s *ManagerSuite) changeBasketUsingSwapProposal(tokens []common.Address, am
 	s.logParsers[proposalAddress] = proposal
 
 	// Accept the Proposal.
-	s.requireTxWithEvents(s.manager.AcceptProposal(signer(s.operator), proposalID))(
+	s.requireTx(s.manager.AcceptProposal(signer(s.operator), proposalID))(
 		abi.ManagerProposalAccepted{
 			Id: proposalID, Proposer: s.proposer.address(),
 		},
@@ -814,13 +814,13 @@ func (s *ManagerSuite) newWeights(
 func (s *ManagerSuite) fundAccountWithErc20sAndApprove(acc account, amounts []*big.Int) {
 	// Transfer all of the ERC20 tokens to `proposer`.
 	for i, amount := range amounts {
-		s.requireTxWithEvents(s.erc20s[i].Transfer(s.signer, acc.address(), amount))(
+		s.requireTxWithStrictEvents(s.erc20s[i].Transfer(s.signer, acc.address(), amount))(
 			abi.BasicERC20Transfer{
 				From: s.owner.address(), To: acc.address(), Value: amount,
 			},
 		)
 		// Have `proposer` approve the Manager to spend its funds.
-		s.requireTxWithEvents(s.erc20s[i].Approve(signer(acc), s.managerAddress, amount))(
+		s.requireTxWithStrictEvents(s.erc20s[i].Approve(signer(acc), s.managerAddress, amount))(
 			abi.BasicERC20Approval{
 				Owner: acc.address(), Spender: s.managerAddress, Value: amount,
 			},

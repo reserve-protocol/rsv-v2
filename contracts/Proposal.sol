@@ -75,11 +75,15 @@ contract Proposal is IProposal, Ownable {
     enum State { Created, Accepted, Cancelled, Completed }
     State public state;
     
-    event CompletedProposalWithBasket(address indexed basketAddress);
+    event ProposalCreated(address indexed proposer);
+    event ProposalAccepted(address indexed proposer, uint256 indexed time);
+    event ProposalCancelled(address indexed proposer);
+    event ProposalCompleted(address indexed proposer, address indexed basket);
 
     constructor(address _proposer) public {
         proposer = _proposer;
         state = State.Created;
+        emit ProposalCreated(proposer);
     }
 
     /// Moves a proposal from the Created to Accepted state.
@@ -87,12 +91,14 @@ contract Proposal is IProposal, Ownable {
         require(state == State.Created, "proposal not created");
         time = _time;
         state = State.Accepted;
+        emit ProposalAccepted(proposer, _time);
     }
 
     /// Cancels a proposal if it has not been completed.
     function cancel() external onlyOwner {
         require(state != State.Completed);
         state = State.Cancelled;
+        emit ProposalCancelled(proposer);
     }
 
     /// Moves a proposal from the Accepted to Completed state.
@@ -105,7 +111,7 @@ contract Proposal is IProposal, Ownable {
         state = State.Completed;
 
         Basket b = _newBasket(rsv, oldBasket);
-        emit CompletedProposalWithBasket(address(b));
+        emit ProposalCompleted(proposer, address(b));
         return b;
     }
 

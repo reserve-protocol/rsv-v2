@@ -82,7 +82,7 @@ func (s *BasketSuite) BeforeTest(suiteName, testName string) {
 		s.weights,
 	)
 
-	s.requireTxWithEvents(tx, err)()
+	s.requireTxWithStrictEvents(tx, err)()
 	s.basketAddress = basketAddress
 	s.basket = basket
 }
@@ -134,7 +134,7 @@ func (s *BasketSuite) TestSuccessiveBasketWithEmptyParams() {
 		emptyWeights,
 	)
 
-	s.requireTxWithEvents(tx, err)()
+	s.requireTxWithStrictEvents(tx, err)()
 
 	// Our two baskets should be identical in every way.
 	for i, _ := range s.erc20Addresses {
@@ -189,7 +189,7 @@ func (s *BasketSuite) TestSuccessiveBasketWithAdditionalParams() {
 		moreWeights,
 	)
 
-	s.requireTxWithEvents(tx, err)()
+	s.requireTxWithStrictEvents(tx, err)()
 
 	// The second basket should be bigger.
 	firstSize, err := s.basket.Size(nil)
