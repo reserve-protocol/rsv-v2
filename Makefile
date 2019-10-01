@@ -6,7 +6,7 @@ rsv_contracts := Reserve ReserveEternalStorage
 test_contracts := BasicOwnable ReserveV2 BasicERC20
 contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
 
-sol := $(shell find contracts -name '*.sol') ## All Solidity files
+sol := $(shell find contracts -name '*.sol' -not -name '.*' ) ## All Solidity files
 json := $(foreach contract,$(contracts),evm/$(contract).json) ## All JSON files
 abi := $(foreach contract,$(contracts),abi/$(contract).go) ## All ABI files
 
@@ -20,6 +20,9 @@ test: abi
 
 clean:
 	rm -rf abi evm sol-coverage-evm
+
+sizes: json
+	scripts/sizes $(json)
 
 fmt:
 	npx solium -d contracts/ --fix
@@ -74,4 +77,4 @@ evm/BasicERC20.json: contracts/test/BasicERC20.sol $(sol)
 
 
 # Mark "action" targets PHONY, to save occasional headaches.
-.PHONY: all clean json abi test fmt run-geth
+.PHONY: all clean json abi test fmt run-geth sizes
