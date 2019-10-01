@@ -356,6 +356,7 @@ contract Manager is Ownable {
 
         proposals[proposalsLength] =
             proposalFactory.createSwapProposal(_msgSender(), tokens, amounts, toVault);
+        proposals[proposalsLength].acceptOwnership();
 
         emit SwapProposed(proposalsLength, _msgSender(), tokens, amounts, toVault);
         return ++proposalsLength;
@@ -381,6 +382,7 @@ contract Manager is Ownable {
         proposals[proposalsLength] =
             proposalFactory.createWeightProposal(
                 _msgSender(), new Basket(Basket(0), tokens, weights));
+        proposals[proposalsLength].acceptOwnership();
 
         emit WeightsProposed(proposalsLength, _msgSender(), tokens, weights);
 
