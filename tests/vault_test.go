@@ -172,6 +172,9 @@ func (s *VaultSuite) TestWithdrawTo() {
 			abi.BasicERC20Transfer{
 				From: s.vaultAddress, To: receiver.address(), Value: val,
 			},
+			abi.VaultWithdrawal{
+				Token: s.erc20Addresses[i], Amount: val, To: receiver.address(),
+			},
 		)
 
 		// Check that resultant balance is as expected.
@@ -198,6 +201,9 @@ func (s *VaultSuite) TestWithdrawToVoidWithdrawal() {
 	)(
 		abi.BasicERC20Transfer{
 			From: s.vaultAddress, To: receiver.address(), Value: val,
+		},
+		abi.VaultWithdrawal{
+			Token: s.erc20Addresses[0], Amount: val, To: receiver.address(),
 		},
 	)
 
@@ -226,6 +232,9 @@ func (s *VaultSuite) TestWithdrawToProtected() {
 	)(
 		abi.BasicERC20Transfer{
 			From: s.vaultAddress, To: receiver.address(), Value: val,
+		},
+		abi.VaultWithdrawal{
+			Token: s.erc20Addresses[0], Amount: val, To: receiver.address(),
 		},
 	)
 
