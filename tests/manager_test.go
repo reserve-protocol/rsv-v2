@@ -113,9 +113,14 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.vault = vault
 	s.vaultAddress = vaultAddress
 
+	// ProposalFactory.
+	propFactoryAddress, tx, propFactory, err := abi.DeployProposalFactory(s.signer, s.node)
+	s.logParsers[propFactoryAddress] = propFactory
+	s.requireTx(tx, err)
+
 	// Manager.
 	managerAddress, tx, manager, err := abi.DeployManager(
-		s.signer, s.node, vaultAddress, reserveAddress, bigInt(0),
+		s.signer, s.node, vaultAddress, reserveAddress, propFactoryAddress, bigInt(0),
 	)
 
 	s.logParsers[managerAddress] = manager
@@ -444,12 +449,12 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.Require().NoError(err)
 	s.Equal(true, paused)
 
-	// Issue should fail now. 
+	// Issue should fail now.
 	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
 	s.assertManagerCollateralized()
 }
 
-// TestIssueRequireStatements tests that `issue` reverts when Paused. 
+// TestIssueRequireStatements tests that `issue` reverts when Paused.
 func (s *ManagerSuite) TestIssueRequireStatements() {
 	amount := bigInt(1)
 
@@ -457,7 +462,7 @@ func (s *ManagerSuite) TestIssueRequireStatements() {
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
 	s.assertManagerCollateralized()
 
-	// Issue should fail now. 
+	// Issue should fail now.
 	s.requireTxFails(s.manager.Issue(signer(s.proposer), bigInt(0)))
 	s.assertManagerCollateralized()
 }
@@ -504,9 +509,9 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	// Approve the manager to spend our RSV.
 	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvAmount))(
 		abi.ReserveApproval{
-			Owner: s.proposer.address(),
+			Owner:   s.proposer.address(),
 			Spender: s.managerAddress,
-			Value: rsvAmount,
+			Value:   rsvAmount,
 		},
 	)
 
@@ -543,9 +548,9 @@ func (s *ManagerSuite) TestRedeemRequireStatements() {
 	// Approve the manager to spend our RSV.
 	s.requireTxWithEvents(s.reserve.Approve(signer(s.proposer), s.managerAddress, rsvAmount))(
 		abi.ReserveApproval{
-			Owner: s.proposer.address(),
+			Owner:   s.proposer.address(),
 			Spender: s.managerAddress,
-			Value: rsvAmount,
+			Value:   rsvAmount,
 		},
 	)
 

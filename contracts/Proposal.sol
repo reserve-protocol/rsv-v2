@@ -25,7 +25,41 @@ import "./Basket.sol";
  *   determined at the time of proposal execution.
  */
 
-contract Proposal is Ownable {
+interface IProposal {
+    function proposer() external returns(address);
+    function accept(uint256 time) external;
+    function cancel() external;
+    function complete(IRSV rsv, Basket oldBasket) external returns(Basket);
+}
+
+interface IProposalFactory {
+    function createSwapProposal(address,
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        bool[] calldata toVault
+    ) external returns (IProposal);
+
+    function createWeightProposal(address proposer, Basket basket) external returns (IProposal);
+}
+
+contract ProposalFactory {
+    function createSwapProposal(
+        address proposer,
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        bool[] calldata toVault
+    )
+        external returns (IProposal)
+    {
+        return IProposal(new SwapProposal(proposer, tokens, amounts, toVault));
+    }
+
+    function createWeightProposal(address proposer, Basket basket) external returns (IProposal) {
+        return IProposal(new WeightProposal(proposer, basket));
+    }
+}
+
+contract Proposal is Ownable, IProposal {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -160,3 +194,5 @@ contract SwapProposal is Proposal {
         // unit check for weights: aqToken/RSV
     }
 }
+
+
