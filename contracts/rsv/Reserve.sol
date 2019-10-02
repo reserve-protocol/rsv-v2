@@ -30,7 +30,7 @@ contract Reserve is IERC20, Ownable {
     ReserveEternalStorage internal trustedData;
 
     // TX Fee helper contract
-    ITXFee public txFee;
+    ITXFee public trustedTxFee;
 
     // Basic token data
     uint256 public totalSupply;
@@ -67,14 +67,14 @@ contract Reserve is IERC20, Ownable {
     constructor() public {
         trustedData = new ReserveEternalStorage();
         trustedData.nominateNewOwner(msg.sender);
-        txFee = ITXFee(address(0));
+        trustedTxFee = ITXFee(address(0));
 
         pauser = msg.sender;
         feeRecipient = msg.sender;
         // minter defaults to the zero address.
 
         maxSupply = 2 ** 256 - 1;
-        paused = true;
+        // paused = true;
     }
 
     /// Accessor for eternal storage contract address.
@@ -123,8 +123,8 @@ contract Reserve is IERC20, Ownable {
     }
 
     /// Change the contract that helps with transaction fee calculation.
-    function changeTxFeeHelper(address newTxFee) external onlyOwner {
-        txFee = ITXFee(newTxFee);
+    function changeTxFeeHelper(address newTrustedTxFee) external onlyOwner {
+        trustedTxFee = ITXFee(newTrustedTxFee);
     }
 
     /// Change the maximum supply allowed.
@@ -279,8 +279,8 @@ contract Reserve is IERC20, Ownable {
         trustedData.subBalance(from, value);
         uint256 fee = 0;
 
-        if (address(txFee) != address(0)) {
-            fee = txFee.calculateFee(from, to, value);
+        if (address(trustedTxFee) != address(0)) {
+            fee = trustedTxFee.calculateFee(from, to, value);
             require((fee >= 0) && (fee <= value), "transaction fee out of bounds");
 
             trustedData.addBalance(feeRecipient, fee);

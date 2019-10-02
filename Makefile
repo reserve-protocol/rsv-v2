@@ -1,7 +1,7 @@
 export REPO_DIR = $(shell pwd)
 export SOLC_VERSION = 0.5.7
 
-root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory
+root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory ManagerTest
 rsv_contracts := Reserve ReserveEternalStorage
 test_contracts := BasicOwnable ReserveV2 BasicERC20
 contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
@@ -44,6 +44,9 @@ solc --allow-paths $(REPO_DIR)/contracts --optimize --optimize-runs $1 \
      --combined-json=abi,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc \
      $< > $@
 endef
+
+evm/ManagerTest.json : contracts/Echidna.sol $(sol)
+	$(call solc,1)
 
 evm/Basket.json : contracts/Basket.sol $(sol)
 	$(call solc,1)

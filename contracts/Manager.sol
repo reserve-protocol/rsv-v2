@@ -3,9 +3,12 @@ pragma solidity 0.5.7;
 import "./zeppelin/token/ERC20/SafeERC20.sol";
 import "./zeppelin/token/ERC20/IERC20.sol";
 import "./zeppelin/math/SafeMath.sol";
+import "./test/BasicERC20.sol";
 import "./rsv/IRSV.sol";
+import "./rsv/Reserve.sol";
 import "./ownership/Ownable.sol";
 import "./Basket.sol";
+import "./Vault.sol";
 import "./Proposal.sol";
 
 
@@ -66,7 +69,11 @@ contract Manager is Ownable {
     address public operator;
 
     // DATA
+    address public erc20Holder;
 
+    BasicERC20 public erc201;
+    BasicERC20 public erc202;
+    BasicERC20 public erc203;
     Basket public trustedBasket;
     IVault public trustedVault;
     IRSV public trustedRSV;
@@ -121,22 +128,84 @@ contract Manager is Ownable {
 
     // ============================ Constructor ===============================
 
-    /// Begins in `emergency` state.
-    constructor(address vaultAddr,
-        address rsvAddr,
-        address proposalFactoryAddr,
-        address operatorAddr,
-        uint256 seigniorage_) public {
-        trustedVault = IVault(vaultAddr);
-        trustedRSV = IRSV(rsvAddr);
-        trustedProposalFactory = IProposalFactory(proposalFactoryAddr);
-        operator = operatorAddr;
-        seigniorage = seigniorage_;
-        emergency = true; // it's not an emergency, but we want everything to start paused.
+
+    constructor() public {
+        trustedVault = IVault(address(new Vault()));
+        trustedRSV = IRSV(address(new Reserve()));
+
+        trustedProposalFactory = IProposalFactory(address(new ProposalFactory()));
+        operator = 0x00a329C0648769a73afAC7F9381e08fb43DBEA70;
+        seigniorage = uint256(0);
+        emergency = false; // it's not an emergency, but we want everything to start paused.
 
         // Start with the empty basket.
         trustedBasket = new Basket(Basket(0), new address[](0), new uint256[](0));
+
+        delay = 0 hours;
+
+        erc201 = new BasicERC20();
+
+        erc202 = new BasicERC20();
+
+        erc203 = new BasicERC20();
+
+        erc20Holder = 0xD5a41E8FDCdF9aDaa54c51e582f6DA7A8F02c134;
+        erc201.transfer(0xD5a41E8FDCdF9aDaa54c51e582f6DA7A8F02c134, uint256(100000000000000000000000));
+        erc202.transfer(0xD5a41E8FDCdF9aDaa54c51e582f6DA7A8F02c134, uint256(100000000000000000000000));
+        erc203.transfer(0xD5a41E8FDCdF9aDaa54c51e582f6DA7A8F02c134, uint256(100000000000000000000000));
     }
+
+    function echidna_test() public view returns(bool) {
+        return true;
+    }
+
+    function echidna_collateralized() public view returns(bool) {
+        return isFullyCollateralized();
+    }
+
+    function echidna_rsv_supply() public view returns(bool) {
+        return trustedRSV.totalSupply() == uint256(0);
+    }
+
+    function echidna_emergency() public view returns(bool) {
+        return !emergency;
+    }
+
+    function echidna_issuancePaused() public view returns(bool) {
+        return !issuancePaused;
+    }
+
+    function echidna_seigniorage() public view returns(bool) {
+        return seigniorage == uint256(0);
+    }
+
+    function echidna_proposalLength() public view returns(bool) {
+        return proposalsLength == uint256(0);
+    }
+
+    function echidna_operatorChanged() public view returns(bool) {
+        return operator == 0x00a329C0648769a73afAC7F9381e08fb43DBEA70;
+    }
+
+
+
+
+    // /// Begins in `emergency` state.
+    // constructor(address vaultAddr,
+    //     address rsvAddr,
+    //     address proposalFactoryAddr,
+    //     address operatorAddr,
+    //     uint256 seigniorage_) public {
+    //     trustedVault = IVault(vaultAddr);
+    //     trustedRSV = IRSV(rsvAddr);
+    //     trustedProposalFactory = IProposalFactory(proposalFactoryAddr);
+    //     operator = operatorAddr;
+    //     seigniorage = seigniorage_;
+    //     emergency = true; // it's not an emergency, but we want everything to start paused.
+
+    //     // Start with the empty basket.
+    //     trustedBasket = new Basket(Basket(0), new address[](0), new uint256[](0));
+    // }
 
     // ============================= Modifiers ================================
 
