@@ -179,7 +179,7 @@ func (s *TestSuite) assertManagerCollateralized() {
 	s.True(collateralized)
 }
 
-// assertCurrentBasketMirrorsTargets asserts that the current manager basket matches expectations.
+// assertBasket asserts that the current manager basket matches expectations.
 func (s *TestSuite) assertBasket(basket *abi.Basket, tokens []common.Address, weights []*big.Int) {
 	// Get tokens
 	basketTokens, err := basket.GetTokens(nil)
