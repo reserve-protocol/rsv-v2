@@ -240,7 +240,11 @@ contract Reserve is IERC20, Ownable {
         notPaused
         returns (bool)
     {
-        _approve(msg.sender, spender, trustedData.allowed(msg.sender, spender).sub(subtractedValue));
+        _approve(
+            msg.sender, 
+            spender, 
+            trustedData.allowed(msg.sender, spender).sub(subtractedValue)
+        );
         return true;
     }
 

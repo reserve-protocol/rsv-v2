@@ -239,7 +239,11 @@ contract Manager is Ownable {
         // we have to round _up_ each amounts[i].
         for (uint i = 0; i < trustedBasket.size(); i++) {
             address trustedToken = trustedBasket.tokens(i);
-            amounts[i] = _weighted(effectiveAmount, trustedBasket.weights(trustedToken), RoundingMode.UP);
+            amounts[i] = _weighted(
+                effectiveAmount, 
+                trustedBasket.weights(trustedToken), 
+                RoundingMode.UP
+            );
             // unit: qToken = _weighted(qRSV, aqToken/RSV, _)
         }
 
@@ -257,7 +261,11 @@ contract Manager is Ownable {
         // we have to round _down_ each amounts[i].
         for (uint i = 0; i < trustedBasket.size(); i++) {
             address trustedToken = trustedBasket.tokens(i);
-            amounts[i] = _weighted(rsvAmount, trustedBasket.weights(trustedToken), RoundingMode.DOWN);
+            amounts[i] = _weighted(
+                rsvAmount, 
+                trustedBasket.weights(trustedToken), 
+                RoundingMode.DOWN
+            );
             // unit: qToken = _weighted(qRSV, aqToken/RSV, _)
         }
 
@@ -273,7 +281,11 @@ contract Manager is Ownable {
         // Accept collateral tokens.
         uint256[] memory amounts = toIssue(rsvAmount); // unit: qToken[]
         for (uint i = 0; i < trustedBasket.size(); i++) {
-            IERC20(trustedBasket.tokens(i)).safeTransferFrom(_msgSender(), address(trustedVault), amounts[i]);
+            IERC20(trustedBasket.tokens(i)).safeTransferFrom(
+                _msgSender(), 
+                address(trustedVault), 
+                amounts[i]
+            );
             // unit check for amounts[i]: qToken.
         }
 
@@ -350,8 +362,12 @@ contract Manager is Ownable {
         require(tokens.length == amounts.length && amounts.length == toVault.length,
             "proposeSwap: unequal lengths");
 
-        trustedProposals[proposalsLength] =
-        trustedProposalFactory.createSwapProposal(_msgSender(), tokens, amounts, toVault);
+        trustedProposals[proposalsLength] = trustedProposalFactory.createSwapProposal(
+            _msgSender(), 
+            tokens, 
+            amounts, 
+            toVault
+        );
         trustedProposals[proposalsLength].acceptOwnership();
 
         emit SwapProposed(proposalsLength, _msgSender(), tokens, amounts, toVault);
@@ -375,13 +391,13 @@ contract Manager is Ownable {
         require(tokens.length == weights.length, "proposeWeights: unequal lengths");
         require(tokens.length > 0, "proposeWeights: zero length");
 
-        trustedProposals[proposalsLength] =
-        trustedProposalFactory.createWeightProposal(
-            _msgSender(), new Basket(Basket(0), tokens, weights));
+        trustedProposals[proposalsLength] = trustedProposalFactory.createWeightProposal(
+            _msgSender(), 
+            new Basket(Basket(0), tokens, weights)
+        );
         trustedProposals[proposalsLength].acceptOwnership();
 
         emit WeightsProposed(proposalsLength, _msgSender(), tokens, weights);
-
         return ++proposalsLength;
     }
 
@@ -460,19 +476,29 @@ contract Manager is Ownable {
         if (newWeight > oldWeight) {
             // This token must increase in the vault, so transfer from proposer to vault.
             // (Transfer into vault: round up)
-            uint256 transferAmount =
-            _weighted(trustedRSV.totalSupply(), newWeight.sub(oldWeight), RoundingMode.UP);
+            uint256 transferAmount =_weighted(
+                trustedRSV.totalSupply(), 
+                newWeight.sub(oldWeight), 
+                RoundingMode.UP
+            );
             // transferAmount unit: qTokens
 
             if (transferAmount > 0) {
-                IERC20(trustedToken).safeTransferFrom(proposer, address(trustedVault), transferAmount);
+                IERC20(trustedToken).safeTransferFrom(
+                    proposer, 
+                    address(trustedVault), 
+                    transferAmount
+                );
             }
 
         } else if (newWeight < oldWeight) {
             // This token will decrease in the vault, so transfer from vault to proposer.
             // (Transfer out of vault: round down)
-            uint256 transferAmount =
-            _weighted(trustedRSV.totalSupply(), oldWeight.sub(newWeight), RoundingMode.DOWN);
+            uint256 transferAmount =_weighted(
+                trustedRSV.totalSupply(), 
+                oldWeight.sub(newWeight), 
+                RoundingMode.DOWN
+            );
             // transferAmount unit: qTokens
             if (transferAmount > 0) {
                 trustedVault.withdrawTo(trustedToken, transferAmount, proposer);
