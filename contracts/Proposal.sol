@@ -169,7 +169,9 @@ contract SwapProposal is Proposal {
         require(_tokens.length > 0, "proposal cannot be empty");
         require(_tokens.length == _amounts.length && _amounts.length == _toVault.length,
                 "unequal array lengths");
-        (tokens, amounts, toVault) = (_tokens, _amounts, _toVault);
+        tokens = _tokens;
+        amounts = _amounts;
+        toVault = _toVault;
     }
 
     /// Return the newly-proposed basket, based on the current vault and the old basket.
