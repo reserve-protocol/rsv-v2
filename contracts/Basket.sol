@@ -45,7 +45,6 @@ contract Basket {
 
         // If there's a previous basket, copy those of its contents not already set.
         if (prev != Basket(0)) {
-            require(_tokens.length + prev.size() <= 100, "Basket: bad length");
             for (uint i = 0; i < prev.size(); i++) {
                 address tok = prev.tokens(i);
                 if (!has[tok]) {
@@ -55,6 +54,7 @@ contract Basket {
                 }
             }
         }
+        require(tokens.length <= 100, "Basket: bad length");
     }
 
     function getTokens() external view returns(address[] memory) {
