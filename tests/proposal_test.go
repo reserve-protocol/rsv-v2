@@ -42,7 +42,7 @@ type SwapProposalSuite struct {
 }
 
 var (
-	// Compile-futureTimecheck that WeightProposalSuite implements the interfaces we think it does.
+	// Compile-time check that WeightProposalSuite implements the interfaces we think it does.
 	// If it does not implement these interfaces, then the corresponding setup and teardown
 	// functions will not actually run.
 	_ suite.BeforeTest       = &WeightProposalSuite{}
@@ -157,7 +157,7 @@ func (s *WeightProposalSuite) BeforeTest(suiteName, testName string) {
 	s.Require().NoError(err)
 	s.Equal(s.proposer.address(), proposer)
 
-	// Check that futureTimewas not set.
+	// Check that futureTime was not set.
 	time, err := proposal.Time(nil)
 	s.Require().NoError(err)
 	s.Equal(bigInt(0).String(), time.String())
@@ -416,7 +416,7 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 	s.Require().NoError(err)
 	s.Equal(s.proposer.address(), proposer)
 
-	// Check that futureTimewas not set.
+	// Check that futureTime was not set.
 	futureTime, err := proposal.Time(nil)
 	s.Require().NoError(err)
 	s.Equal(bigInt(0).String(), futureTime.String())
@@ -532,7 +532,7 @@ func (s *SwapProposalSuite) TestAccept() {
 		abi.SwapProposalProposalAccepted{Proposer: s.proposer.address(), Time: futureTime},
 	)
 
-	// Check that the futureTimewas set.
+	// Check that the futureTime was set.
 	foundTime, err := s.proposal.Time(nil)
 	s.Require().NoError(err)
 	s.Equal(futureTime.String(), foundTime.String())
