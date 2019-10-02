@@ -20,6 +20,12 @@ contract Vault is Ownable {
         address indexed newManager
     );
 
+    event Withdrawal(
+        address indexed token,
+        uint256 indexed amount,
+        address indexed to
+    );
+
     constructor() public {
         // Initialize manager as _msgSender()
         manager = _msgSender();
@@ -28,7 +34,7 @@ contract Vault is Ownable {
 
     /// Changes the manager account. 
     function changeManager(address newManager) external onlyOwner {
-        require(newManager != address(0));
+        require(newManager != address(0), "cannot be 0 address");
         emit ManagerTransferred(manager, newManager);
         manager = newManager;
     }
@@ -37,5 +43,6 @@ contract Vault is Ownable {
     function withdrawTo(address token, uint256 amount, address to) external {
         require(_msgSender() == manager, "must be manager");
         IERC20(token).safeTransfer(to, amount);
+        emit Withdrawal(token, amount, to);
     }
 }

@@ -70,7 +70,7 @@ func (s *OwnableSuite) BeforeTest(suiteName, testName string) {
 	s.ownable = ownable
 	s.ownableAddress = ownableAddress
 
-	s.requireTxStrongly(tx, err)(
+	s.requireTxWithStrictEvents(tx, err)(
 		abi.BasicOwnableOwnershipTransferred{
 			PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 		},
@@ -95,7 +95,7 @@ func (s *OwnableSuite) TestConstructor() {
 // TestNominateNewOwner unit tests the nominateNewOwner function.
 func (s *OwnableSuite) TestNominateNewOwner() {
 	newOwner := s.account[1]
-	s.requireTxStrongly(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
 			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
 		},
@@ -114,7 +114,7 @@ func (s *OwnableSuite) TestNominateNewOwnerNegativeCases() {
 	s.requireTxFails(s.ownable.NominateNewOwner(signer(newOwner), newOwner.address()))
 
 	// Check that the nominated owner cannot call nominateNewOwner.
-	s.requireTxStrongly(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
 			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
 		},
@@ -126,36 +126,14 @@ func (s *OwnableSuite) TestNominateNewOwnerNegativeCases() {
 // TestAcceptOwnershipByNominatedOwner tests that ownership can be accepted by nominated owner.
 func (s *OwnableSuite) TestAcceptOwnershipByNominatedOwner() {
 	newOwner := s.account[1]
-	s.requireTxStrongly(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
 			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
 		},
 	)
 
 	// Check that the nominated owner can accept ownership.
-	s.requireTxStrongly(s.ownable.AcceptOwnership(signer(newOwner)))(
-		abi.BasicOwnableOwnershipTransferred{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
-		},
-	)
-
-	// Check that state changed appropriately.
-	ownerAddress, err := s.ownable.Owner(nil)
-	s.Require().NoError(err)
-	s.Equal(ownerAddress, newOwner.address())
-}
-
-// TestAcceptOwnershipByOwner tests that ownership can be accepted by the owner.
-func (s *OwnableSuite) TestAcceptOwnershipByOwner() {
-	newOwner := s.account[1]
-	s.requireTxStrongly(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
-		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
-		},
-	)
-
-	// Check that the old owner can force the nominated owner to accept ownership.
-	s.requireTxStrongly(s.ownable.AcceptOwnership(s.signer))(
+	s.requireTxWithStrictEvents(s.ownable.AcceptOwnership(signer(newOwner)))(
 		abi.BasicOwnableOwnershipTransferred{
 			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
 		},
@@ -175,7 +153,7 @@ func (s *OwnableSuite) TestAcceptOwnershipNegativeCases() {
 	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
 
 	// Set nominatedOwner.
-	s.requireTxStrongly(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
 			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
 		},
@@ -188,7 +166,7 @@ func (s *OwnableSuite) TestAcceptOwnershipNegativeCases() {
 // TestRenounceOwnership unit tests the renounceOwnership function.
 func (s *OwnableSuite) TestRenounceOwnership() {
 	// Check that the owner can renounce ownership.
-	s.requireTxStrongly(s.ownable.RenounceOwnership(s.signer))(
+	s.requireTxWithStrictEvents(s.ownable.RenounceOwnership(s.signer))(
 		abi.BasicOwnableOwnershipTransferred{
 			PreviousOwner: s.owner.address(), NewOwner: zeroAddress(),
 		},
@@ -206,7 +184,7 @@ func (s *OwnableSuite) TestRenounceOwnershipNegativeCases() {
 
 	// Check that the nominated owner cannot call nominateNewOwner.
 	newOwner := s.account[1]
-	s.requireTxStrongly(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
 			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
 		},

@@ -32,9 +32,8 @@ contract Basket {
 
     /// Construct a new basket from an old Basket `prev`, and a list of tokens and weights with
     /// which to update `prev`. If `prev == address(0)`, act like it's an empty basket.
-    constructor(Basket prev, address[] memory _tokens, uint256[] memory _weights) public {
+    constructor(Basket trustedPrev, address[] memory _tokens, uint256[] memory _weights) public {
         require(_tokens.length == _weights.length, "Basket: unequal array lengths");
-        require(_tokens.length <= 100, "Basket: bad length");
 
         // Initialize data from input arrays
         tokens = new address[](_tokens.length);
@@ -45,16 +44,17 @@ contract Basket {
         }
 
         // If there's a previous basket, copy those of its contents not already set.
-        if (prev != Basket(0)) {
-            for (uint i = 0; i < prev.size(); i++) {
-                address tok = prev.tokens(i);
+        if (trustedPrev != Basket(0)) {
+            for (uint i = 0; i < trustedPrev.size(); i++) {
+                address tok = trustedPrev.tokens(i);
                 if (!has[tok]) {
-                    weights[tok] = prev.weights(tok);
+                    weights[tok] = trustedPrev.weights(tok);
                     has[tok] = true;
                     tokens.push(tok);
                 }
             }
         }
+        require(tokens.length <= 100, "Basket: bad length");
     }
 
     function getTokens() external view returns(address[] memory) {

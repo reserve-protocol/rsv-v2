@@ -25,7 +25,47 @@ import "./Basket.sol";
  *   determined at the time of proposal execution.
  */
 
-contract Proposal is Ownable {
+interface IProposal {
+    function proposer() external returns(address);
+    function accept(uint256 time) external;
+    function cancel() external;
+    function complete(IRSV rsv, Basket oldBasket) external returns(Basket);
+    function nominateNewOwner(address newOwner) external;
+    function acceptOwnership() external;
+}
+
+interface IProposalFactory {
+    function createSwapProposal(address,
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        bool[] calldata toVault
+    ) external returns (IProposal);
+
+    function createWeightProposal(address proposer, Basket basket) external returns (IProposal);
+}
+
+contract ProposalFactory is IProposalFactory {
+    function createSwapProposal(
+        address proposer,
+        address[] calldata tokens,
+        uint256[] calldata amounts,
+        bool[] calldata toVault
+    )
+        external returns (IProposal)
+    {
+        IProposal proposal = IProposal(new SwapProposal(proposer, tokens, amounts, toVault));
+        proposal.nominateNewOwner(msg.sender);
+        return proposal;
+    }
+
+    function createWeightProposal(address proposer, Basket basket) external returns (IProposal) {
+        IProposal proposal = IProposal(new WeightProposal(proposer, basket));
+        proposal.nominateNewOwner(msg.sender);
+        return proposal;
+    }
+}
+
+contract Proposal is IProposal, Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -35,11 +75,15 @@ contract Proposal is Ownable {
     enum State { Created, Accepted, Cancelled, Completed }
     State public state;
     
-    event CompletedProposalWithBasket(address indexed basketAddress);
+    event ProposalCreated(address indexed proposer);
+    event ProposalAccepted(address indexed proposer, uint256 indexed time);
+    event ProposalCancelled(address indexed proposer);
+    event ProposalCompleted(address indexed proposer, address indexed basket);
 
     constructor(address _proposer) public {
         proposer = _proposer;
         state = State.Created;
+        emit ProposalCreated(proposer);
     }
 
     /// Moves a proposal from the Created to Accepted state.
@@ -47,12 +91,14 @@ contract Proposal is Ownable {
         require(state == State.Created, "proposal not created");
         time = _time;
         state = State.Accepted;
+        emit ProposalAccepted(proposer, _time);
     }
 
     /// Cancels a proposal if it has not been completed.
     function cancel() external onlyOwner {
         require(state != State.Completed);
         state = State.Cancelled;
+        emit ProposalCancelled(proposer);
     }
 
     /// Moves a proposal from the Accepted to Completed state.
@@ -65,13 +111,13 @@ contract Proposal is Ownable {
         state = State.Completed;
 
         Basket b = _newBasket(rsv, oldBasket);
-        emit CompletedProposalWithBasket(address(b));
+        emit ProposalCompleted(proposer, address(b));
         return b;
     }
 
     /// Returns the newly-proposed basket. This varies for different types of proposals,
     /// so it's abstract here.
-    function _newBasket(IRSV rsv, Basket oldBasket) internal returns(Basket);
+    function _newBasket(IRSV trustedRSV, Basket oldBasket) internal returns(Basket);
 }
 
 /**
@@ -83,15 +129,16 @@ contract Proposal is Ownable {
  * When this proposal is completed, it simply returns the target basket.
  */
 contract WeightProposal is Proposal {
-    Basket public basket;
+    Basket public trustedBasket;
 
-    constructor(address _proposer, Basket _basket) Proposal(_proposer) public {
-        basket = _basket;
+    constructor(address _proposer, Basket _trustedBasket) Proposal(_proposer) public {
+        require(_trustedBasket.size() > 0, "proposal cannot be empty");
+        trustedBasket = _trustedBasket;
     }
 
     /// Returns the newly-proposed basket
     function _newBasket(IRSV, Basket) internal returns(Basket) {
-        return basket;
+        return trustedBasket;
     }
 }
 
@@ -102,7 +149,7 @@ contract WeightProposal is Proposal {
  * solves for the new resultant basket later.
  *
  * When this proposal is completed, it calculates what the weights for the new basket will be
- * and returns it.
+ * and returns it. If RSV supply is 0, this kind of Proposal cannot be used. 
  */
 
 // On "unit" comments, see comment at top of Manager.sol.
@@ -111,7 +158,7 @@ contract SwapProposal is Proposal {
     uint256[] public amounts; // unit: qToken
     bool[] public toVault;
 
-    uint256 constant WEIGHT_FACTOR = uint256(10)**18; // unit: aqToken / qToken
+    uint256 constant WEIGHT_SCALE = uint256(10)**18; // unit: aqToken / qToken
 
     constructor(address _proposer,
                 address[] memory _tokens,
@@ -119,6 +166,7 @@ contract SwapProposal is Proposal {
                 bool[] memory _toVault )
         Proposal(_proposer) public
     {
+        require(_tokens.length > 0, "proposal cannot be empty");
         require(_tokens.length == _amounts.length && _amounts.length == _toVault.length,
                 "unequal array lengths");
         tokens = _tokens;
@@ -127,20 +175,19 @@ contract SwapProposal is Proposal {
     }
 
     /// Return the newly-proposed basket, based on the current vault and the old basket.
-    function _newBasket(IRSV rsv, Basket oldBasket) internal returns(Basket) {
+    function _newBasket(IRSV trustedRSV, Basket trustedOldBasket) internal returns(Basket) {
 
         uint256[] memory weights = new uint256[](tokens.length);
         // unit: aqToken/RSV
 
-        uint256 divisor = WEIGHT_FACTOR.mul(uint256(10)**(rsv.decimals()));
+        uint256 scaleFactor = WEIGHT_SCALE.mul(uint256(10)**(trustedRSV.decimals()));
         // unit: aqToken/qToken * qRSV/RSV
 
-        uint256 rsvSupply = rsv.totalSupply();
+        uint256 rsvSupply = trustedRSV.totalSupply();
         // unit: qRSV
 
         for (uint i = 0; i < tokens.length; i++) {
-            address token = tokens[i];
-            uint256 oldWeight = oldBasket.weights(token);
+            uint256 oldWeight = trustedOldBasket.weights(tokens[i]);
             // unit: aqToken/RSV
 
             if (toVault[i]) {
@@ -151,15 +198,17 @@ contract SwapProposal is Proposal {
                 // this mechanism to overspend the proposer's tokens by 1 qToken. We avoid that,
                 // here, by making the effective proposal one less. Yeah, it's pretty fiddly.
                 
-                weights[i] = oldWeight.add( (amounts[i].sub(1)).mul(divisor).div(rsvSupply) );
+                weights[i] = oldWeight.add( (amounts[i].sub(1)).mul(scaleFactor).div(rsvSupply) );
                 //unit: aqToken/RSV == aqToken/RSV == [qToken] * [aqToken/qToken*qRSV/RSV] / [qRSV]
             } else {
-                weights[i] = oldWeight.sub( amounts[i].mul(divisor).div(rsvSupply) );
+                weights[i] = oldWeight.sub( amounts[i].mul(scaleFactor).div(rsvSupply) );
                 //unit: aqToken/RSV
             }
         }
 
-        return new Basket(oldBasket, tokens, weights);
+        return new Basket(trustedOldBasket, tokens, weights);
         // unit check for weights: aqToken/RSV
     }
 }
+
+

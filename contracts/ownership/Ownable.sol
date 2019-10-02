@@ -2,19 +2,18 @@ pragma solidity 0.5.7;
 
 import "../zeppelin/GSN/Context.sol";
 /**
- * @dev Contract module which provides a basic access control mechanism, where
- * there is an account (owner) that can be granted exclusive access to
- * specific functions.
+ * @dev Contract module which provides a basic access control mechanism, where there is an account
+ * (owner) that can be granted exclusive access to specific functions.
  *
  * This module is used through inheritance by using the modifier `onlyOwner`.
  * 
  * To change ownership, use a 2-part nominate-accept pattern.
  * 
- * This contract is loosely based off of (https://github.com/OpenZeppelin/openzeppelin-contracts/blob/6f8e672f3fcb93289fb559ecbef72b8fd1cd56e1/contracts/ownership/Ownable.sol) but additionally
- * requires new owners to accept ownership before the transition occurs. 
+ * This contract is loosely based off of https://git.io/JenNF but additionally requires new owners
+ * to accept ownership before the transition occurs.
  */
 contract Ownable is Context {
-    address public _owner;
+    address private _owner;
     address public _nominatedOwner;
 
     event NewOwnerNominated(address indexed previousOwner, address indexed newOwner);
@@ -27,6 +26,13 @@ contract Ownable is Context {
         address msgSender = _msgSender();
         _owner = msgSender;
         emit OwnershipTransferred(address(0), msgSender);
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view returns (address) {
+        return _owner;
     }
 
     /**

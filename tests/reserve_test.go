@@ -64,9 +64,15 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 		reserveAddress: reserve,
 	}
 
-	s.requireTxStrongly(tx, err)(abi.ReserveOwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.account[0].address(),
-	})
+	s.requireTx(tx, err)(
+		abi.ReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.account[0].address()},
+	)
+
+	// Unpause.
+	s.requireTxWithStrictEvents(reserve.Unpause(s.signer))(
+		abi.ReserveUnpaused{Account: s.account[0].address()},
+	)
+
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 
@@ -78,13 +84,20 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 
 	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
 
+	// Accept ownership.
+	s.requireTxWithStrictEvents(s.eternalStorage.AcceptOwnership(s.signer))(
+		abi.ReserveEternalStorageOwnershipTransferred{
+			PreviousOwner: s.reserveAddress, NewOwner: s.account[0].address(),
+		},
+	)
+
 	deployerAddress := s.account[0].address()
 
 	// Make the deployment account a minter, pauser, and freezer.
-	s.requireTxStrongly(s.reserve.ChangeMinter(s.signer, deployerAddress))(
+	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, deployerAddress))(
 		abi.ReserveMinterChanged{NewMinter: deployerAddress},
 	)
-	s.requireTxStrongly(s.reserve.ChangePauser(s.signer, deployerAddress))(
+	s.requireTxWithStrictEvents(s.reserve.ChangePauser(s.signer, deployerAddress))(
 		abi.ReservePauserChanged{NewPauser: deployerAddress},
 	)
 }
@@ -118,7 +131,7 @@ func (s *ReserveSuite) TestAllowsMinting() {
 	amount := bigInt(100)
 
 	// Mint to recipient.
-	s.requireTxStrongly(s.reserve.Mint(s.signer, recipient, amount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, recipient, amount))(
 		mintingTransfer(recipient, amount),
 	)
 
@@ -134,12 +147,12 @@ func (s *ReserveSuite) TestTransfer() {
 	amount := bigInt(100)
 
 	// Mint to sender.
-	s.requireTxStrongly(s.reserve.Mint(s.signer, sender.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, sender.address(), amount))(
 		mintingTransfer(sender.address(), amount),
 	)
 
 	// Transfer from sender to recipient.
-	s.requireTxStrongly(s.reserve.Transfer(signer(sender), recipient, amount))(
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(sender), recipient, amount))(
 		abi.ReserveTransfer{
 			From:  sender.address(),
 			To:    recipient,
@@ -161,7 +174,7 @@ func (s *ReserveSuite) TestTransferExceedsFunds() {
 	smallAmount := bigInt(10) // must be smaller than amount
 
 	// Mint smallAmount to sender.
-	s.requireTxStrongly(s.reserve.Mint(s.signer, sender.address(), smallAmount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, sender.address(), smallAmount))(
 		mintingTransfer(sender.address(), smallAmount),
 	)
 
@@ -191,7 +204,7 @@ func (s *ReserveSuite) TestMintWouldOverflow() {
 		overflowCausingAmount = overflowCausingAmount.Sub(overflowCausingAmount, bigInt(8))
 
 		// Mint smallAmount to recipient.
-		s.requireTxStrongly(s.reserve.Mint(s.signer, recipient, smallAmount))(
+		s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, recipient, smallAmount))(
 			mintingTransfer(recipient, smallAmount),
 		)
 
@@ -207,7 +220,7 @@ func (s *ReserveSuite) TestApprove() {
 	amount := bigInt(53)
 
 	// Owner approves spender.
-	s.requireTxStrongly(s.reserve.Approve(signer(owner), spender.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(owner), spender.address(), amount))(
 		abi.ReserveApproval{Owner: owner.address(), Spender: spender.address(), Value: amount},
 	)
 
@@ -229,7 +242,7 @@ func (s *ReserveSuite) TestIncreaseAllowance() {
 	amount := bigInt(2000)
 
 	// Owner approves spender through increaseAllowance.
-	s.requireTxStrongly(s.reserve.IncreaseAllowance(signer(owner), spender.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.IncreaseAllowance(signer(owner), spender.address(), amount))(
 		abi.ReserveApproval{Owner: owner.address(), Spender: spender.address(), Value: amount},
 	)
 
@@ -251,7 +264,7 @@ func (s *ReserveSuite) TestIncreaseAllowanceWouldOverflow() {
 	initialAmount := bigInt(10)
 
 	// Owner approves spender for initial amount.
-	s.requireTxStrongly(s.reserve.IncreaseAllowance(signer(owner), spender.address(), initialAmount))(
+	s.requireTxWithStrictEvents(s.reserve.IncreaseAllowance(signer(owner), spender.address(), initialAmount))(
 		abi.ReserveApproval{Owner: owner.address(), Spender: spender.address(), Value: initialAmount},
 	)
 
@@ -267,12 +280,12 @@ func (s *ReserveSuite) TestDecreaseAllowance() {
 	final := bigInt(4)
 
 	// Owner approves spender for initial amount.
-	s.requireTxStrongly(s.reserve.IncreaseAllowance(signer(owner), spender.address(), initialAmount))(
+	s.requireTxWithStrictEvents(s.reserve.IncreaseAllowance(signer(owner), spender.address(), initialAmount))(
 		abi.ReserveApproval{Owner: owner.address(), Spender: spender.address(), Value: initialAmount},
 	)
 
 	// Owner decreases allowance.
-	s.requireTxStrongly(s.reserve.DecreaseAllowance(signer(owner), spender.address(), decrease))(
+	s.requireTxWithStrictEvents(s.reserve.DecreaseAllowance(signer(owner), spender.address(), decrease))(
 		abi.ReserveApproval{Owner: owner.address(), Spender: spender.address(), Value: final},
 	)
 
@@ -292,7 +305,7 @@ func (s *ReserveSuite) TestDecreaseAllowanceUnderflow() {
 	decrease := bigInt(11)
 
 	// Owner approves spender for initial amount.
-	s.requireTxStrongly(s.reserve.IncreaseAllowance(signer(owner), spender.address(), initialAmount))(
+	s.requireTxWithStrictEvents(s.reserve.IncreaseAllowance(signer(owner), spender.address(), initialAmount))(
 		abi.ReserveApproval{Owner: owner.address(), Spender: spender.address(), Value: initialAmount},
 	)
 
@@ -319,19 +332,19 @@ func (s *ReserveSuite) TestPausing() {
 	spender := s.account[3]
 
 	// Give banker funds. Minting is allowed while unpaused.
-	s.requireTxStrongly(s.reserve.Mint(s.signer, banker.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, banker.address(), amount))(
 		mintingTransfer(banker.address(), amount),
 	)
 	s.assertRSVBalance(banker.address(), amount)
 
 	// Approve spender to spend bankers funds.
-	s.requireTxStrongly(s.reserve.Approve(signer(banker), spender.address(), approveAmount))(
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(banker), spender.address(), approveAmount))(
 		abi.ReserveApproval{Owner: banker.address(), Spender: spender.address(), Value: approveAmount},
 	)
 	s.assertRSVAllowance(banker.address(), spender.address(), approveAmount)
 
 	// Pause.
-	s.requireTxStrongly(s.reserve.Pause(s.signer))(
+	s.requireTxWithStrictEvents(s.reserve.Pause(s.signer))(
 		abi.ReservePaused{Account: s.account[0].address()},
 	)
 
@@ -361,30 +374,30 @@ func (s *ReserveSuite) TestPausing() {
 	s.assertRSVAllowance(banker.address(), spender.address(), approveAmount)
 
 	// Unpause.
-	s.requireTxStrongly(s.reserve.Unpause(s.signer))(
+	s.requireTxWithStrictEvents(s.reserve.Unpause(s.signer))(
 		abi.ReserveUnpaused{Account: s.account[0].address()},
 	)
 
 	// Transfers are allowed while unpaused.
-	s.requireTxStrongly(s.reserve.Transfer(signer(banker), recipient.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(banker), recipient.address(), amount))(
 		abi.ReserveTransfer{From: banker.address(), To: recipient.address(), Value: amount},
 	)
 	s.assertRSVBalance(recipient.address(), amount)
 
 	// Approving is allowed while unpaused.
-	s.requireTxStrongly(s.reserve.Approve(signer(banker), spender.address(), bigInt(2)))(
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(banker), spender.address(), bigInt(2)))(
 		abi.ReserveApproval{Owner: banker.address(), Spender: spender.address(), Value: bigInt(2)},
 	)
 	s.assertRSVAllowance(banker.address(), spender.address(), bigInt(2))
 
 	// DecreaseAllowance is allowed while unpaused.
-	s.requireTxStrongly(s.reserve.DecreaseAllowance(signer(banker), spender.address(), approveAmount))(
+	s.requireTxWithStrictEvents(s.reserve.DecreaseAllowance(signer(banker), spender.address(), approveAmount))(
 		abi.ReserveApproval{Owner: banker.address(), Spender: spender.address(), Value: bigInt(1)},
 	)
 	s.assertRSVAllowance(banker.address(), spender.address(), approveAmount)
 
 	// IncreaseAllowance is allowed while unpaused.
-	s.requireTxStrongly(s.reserve.IncreaseAllowance(signer(banker), spender.address(), approveAmount))(
+	s.requireTxWithStrictEvents(s.reserve.IncreaseAllowance(signer(banker), spender.address(), approveAmount))(
 		abi.ReserveApproval{Owner: banker.address(), Spender: spender.address(), Value: bigInt(2)},
 	)
 	s.assertRSVAllowance(banker.address(), spender.address(), bigInt(2))
@@ -396,7 +409,7 @@ func (s *ReserveSuite) TestMintingBurningChain() {
 	recipient := s.account[1]
 	amount := bigInt(100)
 
-	s.requireTxStrongly(s.reserve.Mint(s.signer, recipient.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, recipient.address(), amount))(
 		mintingTransfer(recipient.address(), amount),
 	)
 
@@ -404,12 +417,12 @@ func (s *ReserveSuite) TestMintingBurningChain() {
 	s.assertRSVTotalSupply(amount)
 
 	// Approve signer for burning.
-	s.requireTxStrongly(s.reserve.Approve(signer(recipient), deployerAddress, amount))(
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(recipient), deployerAddress, amount))(
 		abi.ReserveApproval{Owner: recipient.address(), Spender: deployerAddress, Value: amount},
 	)
 
 	// Burn from recipient.
-	s.requireTxStrongly(s.reserve.BurnFrom(s.signer, recipient.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.BurnFrom(s.signer, recipient.address(), amount))(
 		abi.ReserveTransfer{From: recipient.address(), To: zeroAddress(), Value: amount},
 		abi.ReserveApproval{Owner: recipient.address(), Spender: deployerAddress, Value: bigInt(0)},
 	)
@@ -424,7 +437,7 @@ func (s *ReserveSuite) TestMintingTransferBurningChain() {
 	amount := bigInt(100)
 
 	// Mint to recipient.
-	s.requireTxStrongly(s.reserve.Mint(s.signer, recipient.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, recipient.address(), amount))(
 		mintingTransfer(recipient.address(), amount),
 	)
 
@@ -433,7 +446,7 @@ func (s *ReserveSuite) TestMintingTransferBurningChain() {
 
 	// Transfer to target.
 	target := s.account[2]
-	s.requireTxStrongly(s.reserve.Transfer(signer(recipient), target.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(recipient), target.address(), amount))(
 		abi.ReserveTransfer{From: recipient.address(), To: target.address(), Value: amount},
 	)
 
@@ -441,12 +454,12 @@ func (s *ReserveSuite) TestMintingTransferBurningChain() {
 	s.assertRSVBalance(recipient.address(), bigInt(0))
 
 	// Approve signer for burning.
-	s.requireTxStrongly(s.reserve.Approve(signer(target), s.account[0].address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(target), s.account[0].address(), amount))(
 		abi.ReserveApproval{Owner: target.address(), Spender: s.account[0].address(), Value: amount},
 	)
 
 	// Burn from target.
-	s.requireTxStrongly(s.reserve.BurnFrom(s.signer, target.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.BurnFrom(s.signer, target.address(), amount))(
 		abi.ReserveTransfer{From: target.address(), To: zeroAddress(), Value: amount},
 		abi.ReserveApproval{Owner: target.address(), Spender: deployerAddress, Value: bigInt(0)},
 	)
@@ -464,7 +477,7 @@ func (s *ReserveSuite) TestBurnFromWouldUnderflow() {
 	causesUnderflowAmount := bigInt(101)
 
 	s.assertRSVTotalSupply(bigInt(0))
-	s.requireTxStrongly(s.reserve.Mint(s.signer, recipient.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, recipient.address(), amount))(
 		mintingTransfer(recipient.address(), amount),
 	)
 
@@ -472,7 +485,7 @@ func (s *ReserveSuite) TestBurnFromWouldUnderflow() {
 	s.assertRSVTotalSupply(amount)
 
 	// Approve signer for burning.
-	s.requireTxStrongly(s.reserve.Approve(signer(recipient), deployerAddress, amount))(
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(recipient), deployerAddress, amount))(
 		abi.ReserveApproval{Owner: recipient.address(), Spender: deployerAddress, Value: amount},
 	)
 
@@ -489,7 +502,7 @@ func (s *ReserveSuite) TestTransferFrom() {
 	recipient := s.account[3]
 
 	amount := bigInt(1)
-	s.requireTxStrongly(s.reserve.Mint(s.signer, sender.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, sender.address(), amount))(
 		mintingTransfer(sender.address(), amount),
 	)
 	s.assertRSVBalance(sender.address(), amount)
@@ -498,13 +511,13 @@ func (s *ReserveSuite) TestTransferFrom() {
 	s.assertRSVTotalSupply(amount)
 
 	// Approve middleman to transfer funds from the sender.
-	s.requireTxStrongly(s.reserve.Approve(signer(sender), middleman.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(sender), middleman.address(), amount))(
 		abi.ReserveApproval{Owner: sender.address(), Spender: middleman.address(), Value: amount},
 	)
 	s.assertRSVAllowance(sender.address(), middleman.address(), amount)
 
 	// transferFrom allows the msg.sender to send an existing approval to an arbitrary destination.
-	s.requireTxStrongly(s.reserve.TransferFrom(signer(middleman), sender.address(), recipient.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.TransferFrom(signer(middleman), sender.address(), recipient.address(), amount))(
 		abi.ReserveTransfer{From: sender.address(), To: recipient.address(), Value: amount},
 		abi.ReserveApproval{Owner: sender.address(), Spender: middleman.address(), Value: bigInt(0)},
 	)
@@ -524,7 +537,7 @@ func (s *ReserveSuite) TestTransferFromWouldUnderflow() {
 	recipient := s.account[3]
 
 	approveAmount := bigInt(2)
-	s.requireTxStrongly(s.reserve.Mint(s.signer, sender.address(), approveAmount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, sender.address(), approveAmount))(
 		mintingTransfer(sender.address(), approveAmount),
 	)
 	s.assertRSVBalance(sender.address(), approveAmount)
@@ -533,13 +546,13 @@ func (s *ReserveSuite) TestTransferFromWouldUnderflow() {
 	s.assertRSVTotalSupply(approveAmount)
 
 	// Approve middleman to transfer funds from the sender.
-	s.requireTxStrongly(s.reserve.Approve(signer(sender), middleman.address(), approveAmount))(
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(sender), middleman.address(), approveAmount))(
 		abi.ReserveApproval{Owner: sender.address(), Spender: middleman.address(), Value: approveAmount},
 	)
 	s.assertRSVAllowance(sender.address(), middleman.address(), approveAmount)
 
 	// now reduce the approveAmount in the sender's account to less than the approval for the middleman
-	s.requireTxStrongly(s.reserve.Transfer(signer(sender), recipient.address(), bigInt(1)))(
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(sender), recipient.address(), bigInt(1)))(
 		abi.ReserveTransfer{From: sender.address(), To: recipient.address(), Value: bigInt(1)},
 	)
 
@@ -566,7 +579,7 @@ func (s *ReserveSuite) TestPauseFailsForNonPauser() {
 
 func (s *ReserveSuite) TestUnpauseFailsForNonPauser() {
 	deployerAddress := s.account[0].address()
-	s.requireTxStrongly(s.reserve.Pause(s.signer))(
+	s.requireTxWithStrictEvents(s.reserve.Pause(s.signer))(
 		abi.ReservePaused{Account: deployerAddress},
 	)
 	s.requireTxFails(s.reserve.Unpause(signer(s.account[1])))
@@ -594,7 +607,7 @@ func (s *ReserveSuite) TestUpgrade() {
 	amount := big.NewInt(100)
 
 	// Mint to recipient.
-	s.requireTxStrongly(s.reserve.Mint(s.signer, recipient.address(), amount))(
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, recipient.address(), amount))(
 		mintingTransfer(recipient.address(), amount),
 	)
 
@@ -602,17 +615,15 @@ func (s *ReserveSuite) TestUpgrade() {
 	newKey := s.account[2]
 	newTokenAddress, tx, newToken, err := abi.DeployReserveV2(signer(newKey), s.node)
 	s.logParsers[newTokenAddress] = newToken
-	s.requireTxStrongly(tx, err)(abi.ReserveV2OwnershipTransferred{
-		PreviousOwner: zeroAddress(), NewOwner: s.account[2].address(),
-	})
+	s.requireTx(tx, err)(
+		abi.ReserveV2OwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: newKey.address()},
+	)
 
 	// Make the switch.
-	s.requireTxStrongly(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
+	s.requireTxWithStrictEvents(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
 		PreviousOwner: s.account[0].address(), NewOwner: newTokenAddress,
 	})
-	s.requireTxStrongly(newToken.CompleteHandoff(signer(newKey), s.reserveAddress)) /*
-		not asserting events because there are a lot and we don't care much about them
-	*/
+	s.requireTxWithStrictEvents(newToken.CompleteHandoff(signer(newKey), s.reserveAddress))
 
 	// Old token should not be functional.
 	s.requireTxFails(s.reserve.Mint(s.signer, recipient.address(), big.NewInt(1500)))
@@ -629,82 +640,90 @@ func (s *ReserveSuite) TestUpgrade() {
 
 	// New token should be functional.
 	assertRSVBalance(recipient.address(), amount)
-	s.requireTxStrongly(newToken.ChangeMinter(signer(newKey), newKey.address()))(
+	s.requireTxWithStrictEvents(newToken.ChangeMinter(signer(newKey), newKey.address()))(
 		abi.ReserveV2MinterChanged{NewMinter: newKey.address()},
 	)
-	s.requireTxStrongly(newToken.ChangePauser(signer(newKey), newKey.address()))(
+	s.requireTxWithStrictEvents(newToken.ChangePauser(signer(newKey), newKey.address()))(
 		abi.ReserveV2PauserChanged{NewPauser: newKey.address()},
 	)
-	s.requireTxStrongly(newToken.Mint(signer(newKey), recipient.address(), big.NewInt(1500)))(
+	s.requireTxWithStrictEvents(newToken.Mint(signer(newKey), recipient.address(), big.NewInt(1500)))(
 		abi.ReserveV2Transfer{From: zeroAddress(), To: recipient.address(), Value: bigInt(1500)},
 	)
-	s.requireTxStrongly(newToken.Transfer(signer(recipient), s.account[3].address(), big.NewInt(10)))(
+	s.requireTxWithStrictEvents(newToken.Transfer(signer(recipient), s.account[3].address(), big.NewInt(10)))(
 		abi.ReserveV2Transfer{From: recipient.address(), To: s.account[3].address(), Value: bigInt(10)},
 	)
-	s.requireTxStrongly(newToken.Pause(signer(newKey)))(
+	s.requireTxWithStrictEvents(newToken.Pause(signer(newKey)))(
 		abi.ReserveV2Paused{Account: newKey.address()},
 	)
-	s.requireTxStrongly(newToken.Unpause(signer(newKey)))(
+	s.requireTxWithStrictEvents(newToken.Unpause(signer(newKey)))(
 		abi.ReserveV2Unpaused{Account: newKey.address()},
 	)
 	assertRSVBalance(recipient.address(), big.NewInt(100+1500-10))
 	assertRSVBalance(s.account[3].address(), big.NewInt(10))
 }
 
-// Test that we can use the escape hatch in ReserveEternalStorage.
-func (s *ReserveSuite) TestEternalStorageEscapeHatch() {
+// Test that we can use the owner in ReserveEternalStorage.
+func (s *ReserveSuite) TestEternalStorageOwner() {
+	assertReserveAddress := func(expected common.Address) {
+		reserveAddress, err := s.eternalStorage.ReserveAddress(nil)
+		s.NoError(err)
+		s.Equal(expected, reserveAddress)
+	}
+
 	assertOwner := func(expected common.Address) {
 		owner, err := s.eternalStorage.Owner(nil)
 		s.NoError(err)
 		s.Equal(expected, owner)
 	}
 
-	assertEscapeHatch := func(expected common.Address) {
-		escapeHatch, err := s.eternalStorage.EscapeHatch(nil)
-		s.NoError(err)
-		s.Equal(expected, escapeHatch)
-	}
+	// Check that owner and reserveAddress are initialized in the way we expect.
+	assertReserveAddress(s.reserveAddress)
+	assertOwner(s.account[0].address())
 
-	// Check that owner and escapeHatch are initialized in the way we expect.
-	assertOwner(s.reserveAddress)
-	assertEscapeHatch(s.account[0].address())
+	newOwner := s.account[3]
 
-	newEscapeHatch := s.account[3]
-
-	// Change escapeHatch address and check it is what we expect.
-	s.requireTxStrongly(s.eternalStorage.TransferEscapeHatch(s.signer, newEscapeHatch.address()))(
-		abi.ReserveEternalStorageEscapeHatchTransferred{
-			OldEscapeHatch: s.account[0].address(),
-			NewEscapeHatch: newEscapeHatch.address(),
+	// Nominate a new owner.
+	s.requireTxWithStrictEvents(s.eternalStorage.NominateNewOwner(s.signer, newOwner.address()))(
+		abi.ReserveEternalStorageNewOwnerNominated{
+			PreviousOwner: s.account[0].address(),
+			NewOwner:      newOwner.address(),
 		},
 	)
 
-	// Check that escapeHatch changed and owner didn't.
-	assertOwner(s.reserveAddress)
-	assertEscapeHatch(newEscapeHatch.address())
-
-	newOwner := s.account[4]
-
-	// Change owner as escapeHatch account.
-	s.requireTxStrongly(s.eternalStorage.TransferOwnership(signer(newEscapeHatch), newOwner.address()))(
+	// Accept ownership.
+	s.requireTxWithStrictEvents(s.eternalStorage.AcceptOwnership(signer(newOwner)))(
 		abi.ReserveEternalStorageOwnershipTransferred{
-			OldOwner: s.reserveAddress,
-			NewOwner: newOwner.address(),
+			PreviousOwner: s.account[0].address(),
+			NewOwner:      newOwner.address(),
 		},
 	)
 
-	// Check that owner changed and escapeHatch didn't.
+	// Check that owner changed and reserveAddress didn't.
+	assertReserveAddress(s.reserveAddress)
 	assertOwner(newOwner.address())
-	assertEscapeHatch(newEscapeHatch.address())
 
-	// Check that owner cannot change escapeHatch.
-	s.requireTxFails(s.eternalStorage.TransferEscapeHatch(signer(newOwner), s.account[5].address()))
+	newReserveAccount := s.account[4]
 
-	// Check that escapeHatch can make the change the owner could not.
-	s.requireTxStrongly(s.eternalStorage.TransferEscapeHatch(signer(newEscapeHatch), s.account[5].address()))(
-		abi.ReserveEternalStorageEscapeHatchTransferred{
-			OldEscapeHatch: newEscapeHatch.address(),
-			NewEscapeHatch: s.account[5].address(),
+	// Change reserveAddress as owner account.
+	s.requireTxWithStrictEvents(s.eternalStorage.UpdateReserveAddress(signer(newOwner), newReserveAccount.address()))(
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: s.reserveAddress,
+			NewReserveAddress: newReserveAccount.address(),
+		},
+	)
+
+	// Check that reserveAddress changed and owner didn't.
+	assertReserveAddress(newReserveAccount.address())
+	assertOwner(newOwner.address())
+
+	// Check that reserveAddress cannot change owner.
+	s.requireTxFails(s.eternalStorage.NominateNewOwner(signer(newReserveAccount), s.account[5].address()))
+
+	// Check that owner can make the change the reserveAddress could not.
+	s.requireTxWithStrictEvents(s.eternalStorage.NominateNewOwner(signer(newOwner), s.account[5].address()))(
+		abi.ReserveEternalStorageNewOwnerNominated{
+			PreviousOwner: newOwner.address(),
+			NewOwner:      s.account[5].address(),
 		},
 	)
 }
@@ -719,16 +738,16 @@ func (s *ReserveSuite) TestEternalStorageSetBalance() {
 	// Check that we can't call setBalance before becoming the owner.
 	s.requireTxFails(s.eternalStorage.SetBalance(signer(newOwner), newOwner.address(), amount))
 
-	// Transfer ownership of Eternal Storage to external account.
-	s.requireTxStrongly(s.eternalStorage.TransferOwnership(s.signer, newOwner.address()))(
-		abi.ReserveEternalStorageOwnershipTransferred{
-			OldOwner: s.reserveAddress,
-			NewOwner: newOwner.address(),
+	// Set reserveAddress to newOwner.
+	s.requireTxWithStrictEvents(s.eternalStorage.UpdateReserveAddress(s.signer, newOwner.address()))(
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: s.reserveAddress,
+			NewReserveAddress: newOwner.address(),
 		},
 	)
 
 	// Check that we can now call setBalance.
-	s.requireTxStrongly(s.eternalStorage.SetBalance(signer(newOwner), newOwner.address(), amount))( /* assert zero events */ )
+	s.requireTxWithStrictEvents(s.eternalStorage.SetBalance(signer(newOwner), newOwner.address(), amount))
 
 	// Balance should have changed.
 	balance, err := s.eternalStorage.Balance(nil, newOwner.address())

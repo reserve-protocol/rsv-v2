@@ -27,10 +27,10 @@ contract Reserve is IERC20, Ownable {
 
 
     // Non-constant-sized data
-    ReserveEternalStorage internal data;
+    ReserveEternalStorage internal trustedData;
 
     // TX Fee helper contract
-    ITXFee public txFee;
+    ITXFee public trustedTxFee;
 
     // Basic token data
     uint256 public totalSupply;
@@ -65,8 +65,9 @@ contract Reserve is IERC20, Ownable {
 
     /// Initialize critical fields.
     constructor() public {
-        data = new ReserveEternalStorage(msg.sender);
-        txFee = ITXFee(address(0));
+        trustedData = new ReserveEternalStorage();
+        trustedData.nominateNewOwner(msg.sender);
+        trustedTxFee = ITXFee(address(0));
 
         pauser = msg.sender;
         feeRecipient = msg.sender;
@@ -78,7 +79,7 @@ contract Reserve is IERC20, Ownable {
 
     /// Accessor for eternal storage contract address.
     function getEternalStorageAddress() external view returns(address) {
-        return address(data);
+        return address(trustedData);
     }
 
 
@@ -93,7 +94,7 @@ contract Reserve is IERC20, Ownable {
 
     /// Modifies a function to only run if sent by `role` or the contract's `owner`.
     modifier onlyOwnerOr(address role) {
-        require(msg.sender == _owner || msg.sender == role, "unauthorized: not role holder and not owner");
+        require(msg.sender == owner() || msg.sender == role, "unauthorized: not owner or role");
         _;
     }
 
@@ -114,17 +115,16 @@ contract Reserve is IERC20, Ownable {
         emit FeeRecipientChanged(newFeeRecipient);
     }
 
-    /// Make a different address own the EternalStorage contract.
+    /// Make a different address the EternalStorage contract's reserveAddress.
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
-    function transferEternalStorage(address newOwner) external onlyOwner {
-        require(paused);
-        data.transferOwnership(newOwner);
+    function transferEternalStorage(address newReserveAddress) external onlyOwner isPaused {
+        trustedData.updateReserveAddress(newReserveAddress);
     }
 
     /// Change the contract that helps with transaction fee calculation.
-    function changeTxFeeHelper(address newTxFee) external onlyOwner {
-        txFee = ITXFee(newTxFee);
+    function changeTxFeeHelper(address newTrustedTxFee) external onlyOwner {
+        trustedTxFee = ITXFee(newTrustedTxFee);
     }
 
     /// Change the maximum supply allowed.
@@ -145,6 +145,12 @@ contract Reserve is IERC20, Ownable {
         emit Unpaused(pauser);
     }
 
+    /// Modifies a function to run only when the contract is paused.
+    modifier isPaused() {
+        require(paused, "contract is not paused");
+        _;
+    }
+
     /// Modifies a function to run only when the contract is not paused.
     modifier notPaused() {
         require(!paused, "contract is paused");
@@ -157,12 +163,12 @@ contract Reserve is IERC20, Ownable {
 
     /// @return how many attoRSV are held by `holder`.
     function balanceOf(address holder) external view returns (uint256) {
-        return data.balance(holder);
+        return trustedData.balance(holder);
     }
 
     /// @return how many attoRSV `holder` has allowed `spender` to control.
     function allowance(address holder, address spender) external view returns (uint256) {
-        return data.allowed(holder, spender);
+        return trustedData.allowed(holder, spender);
     }
 
     /// Transfer `value` attoRSV from `msg.sender` to `to`.
@@ -208,7 +214,7 @@ contract Reserve is IERC20, Ownable {
         returns (bool)
     {
         _transfer(from, to, value);
-        _approve(from, msg.sender, data.allowed(from, msg.sender).sub(value));
+        _approve(from, msg.sender, trustedData.allowed(from, msg.sender).sub(value));
         return true;
     }
 
@@ -221,7 +227,7 @@ contract Reserve is IERC20, Ownable {
         notPaused
         returns (bool)
     {
-        _approve(msg.sender, spender, data.allowed(msg.sender, spender).add(addedValue));
+        _approve(msg.sender, spender, trustedData.allowed(msg.sender, spender).add(addedValue));
         return true;
     }
 
@@ -234,7 +240,11 @@ contract Reserve is IERC20, Ownable {
         notPaused
         returns (bool)
     {
-        _approve(msg.sender, spender, data.allowed(msg.sender, spender).sub(subtractedValue));
+        _approve(
+            msg.sender, 
+            spender, 
+            trustedData.allowed(msg.sender, spender).sub(subtractedValue)
+        );
         return true;
     }
 
@@ -248,7 +258,7 @@ contract Reserve is IERC20, Ownable {
 
         totalSupply = totalSupply.add(value);
         require(totalSupply < maxSupply, "max supply exceeded");
-        data.addBalance(account, value);
+        trustedData.addBalance(account, value);
         emit Transfer(address(0), account, value);
     }
 
@@ -259,25 +269,25 @@ contract Reserve is IERC20, Ownable {
         only(minter)
     {
         _burn(account, value);
-        _approve(account, msg.sender, data.allowed(account, msg.sender).sub(value));
+        _approve(account, msg.sender, trustedData.allowed(account, msg.sender).sub(value));
     }
 
     /// @dev Transfer of `value` attotokens from `from` to `to`.
     /// Internal; doesn't check permissions.
     function _transfer(address from, address to, uint256 value) internal {
         require(to != address(0), "can't transfer to address zero");
-        data.subBalance(from, value);
+        trustedData.subBalance(from, value);
         uint256 fee = 0;
 
-        if (address(txFee) != address(0)) {
-            fee = txFee.calculateFee(from, to, value);
+        if (address(trustedTxFee) != address(0)) {
+            fee = trustedTxFee.calculateFee(from, to, value);
             require((fee >= 0) && (fee <= value), "transaction fee out of bounds");
 
-            data.addBalance(feeRecipient, fee);
+            trustedData.addBalance(feeRecipient, fee);
             emit Transfer(from, feeRecipient, fee);
         }
 
-        data.addBalance(to, value.sub(fee));
+        trustedData.addBalance(to, value.sub(fee));
         emit Transfer(from, to, value.sub(fee));
     }
 
@@ -287,7 +297,7 @@ contract Reserve is IERC20, Ownable {
         require(account != address(0), "can't burn from address zero");
 
         totalSupply = totalSupply.sub(value);
-        data.subBalance(account, value);
+        trustedData.subBalance(account, value);
         emit Transfer(account, address(0), value);
     }
 
@@ -297,7 +307,7 @@ contract Reserve is IERC20, Ownable {
         require(spender != address(0), "spender cannot be address zero");
         require(holder != address(0), "holder cannot be address zero");
 
-        data.setAllowed(holder, spender, value);
+        trustedData.setAllowed(holder, spender, value);
         emit Approval(holder, spender, value);
     }
 }

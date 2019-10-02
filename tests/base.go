@@ -62,17 +62,20 @@ type TestSuite struct {
 
 var coverageEnabled = os.Getenv("COVERAGE_ENABLED") != ""
 
-// requireTxStrongly requires that a transaction is successfully mined and does
-// not revert. It also takes an extra error argument, and checks that the
-// error is nil. This signature allows the function to directly wrap our
-// abigen'd mutator calls.
+// requireTxWithStrictEvents(tx, err)(events...) requires that a transaction is successfully mined,
+// does not revert, and that err is nil. The result of requireTxWithStrictEvents takes a
+// variable-length list error arguments, and requires that exactly that set of events was thrown
+// while processing tx. This signature allows the function to directly wrap our abigen'd mutator
+// calls.
 //
-// requireTxStrongly returns a closure that can be used to assert the list of events
-// that were emitted during the transaction. This API is a bit weird -- it would
-// be more natural to pass the events in to the `requireTxStrongly` call itself -- but
-// this is the cleanest way that is compatible with directly wrapping the abigen'd
-// calls, without using intermediate placeholder variables in calling code.
-func (s *TestSuite) requireTxStrongly(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
+// requireTxWithStrictEvents(tx, err) returns a closure that can be used to assert the list of
+// events that were emitted during the transaction. This API is a bit weird -- it would be more
+// natural to pass the events in to the requireTxWithStrictEvents call itself -- but this is the
+// cleanest way that is compatible with directly wrapping the abigen'd calls, without using
+// intermediate placeholder variables in calling code.
+//
+// Note: This closure asserts exactly the set of expected events and no more. It is strict.
+func (s *TestSuite) requireTxWithStrictEvents(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
 	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
 
 	// return a closure that can take a varargs list of events,
@@ -92,21 +95,42 @@ func (s *TestSuite) requireTxStrongly(tx *types.Transaction, err error) func(ass
 	}
 }
 
-// requireTxWeakly is like requireTxStrongly but does not parse events for correctness.
-// LogParsers are keyed by contract address. Contracts that deploy other contracts
-// instrumentally will end up emitting events that cannot be parsed without making assumption
-// In these cases, instead use requireTxWeakly to simply do a comparison of event counts.
-func (s *TestSuite) requireTxWeakly(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
+// requireTx(tx, err)(events...) requires that a transaction is successfully mined, does not
+// revert, and that err is nil. The result of requireTx takes a variable-length
+// list error arguments, and requires that exactly that set of events was thrown while processing
+// tx. This signature allows the function to directly wrap our abigen'd mutator calls.
+//
+// requireTx(tx, err) returns a closure that can be used to assert the list of events that were
+// emitted during the transaction. This API is a bit weird -- it would be more natural to pass the
+// events in to the requireTx call itself -- but this is the cleanest way that is compatible with
+// directly wrapping the abigen'd calls, without using intermediate placeholder variables in
+// calling code.
+//
+// Note: This closure asserts that each expected event was emitted, but not that all emitted events
+// match the given list. It is less strict than requir
+func (s *TestSuite) requireTx(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
 	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
 
 	// return a closure that can take a varargs list of events,
-	// and assert that the transaction generates those events.
+	// and assert that the transaction generates at least that set of events.
 	return func(assertEvent ...fmt.Stringer) {
-		s.Equal(len(assertEvent), len(receipt.Logs), "did not get the expected number of events")
+		for _, wantEvent := range assertEvent {
+			found := false
+			for _, log := range receipt.Logs {
+				parser := s.logParsers[log.Address]
+				if parser != nil {
+					gotEvent, err := parser.ParseLog(log)
+					if err == nil && wantEvent.String() == gotEvent.String() {
+						found = true
+					}
+				}
+			}
+			s.Truef(found, "event not found: %v", wantEvent)
+		}
 	}
 }
 
-// requireTxFails is like requireTxStrongly, but it requires that the transaction either
+// requireTxFails is like requireTxWithEvents, but it requires that the transaction either
 // reverts or is not successfully made in the first place due to gas estimation
 // failing.
 func (s *TestSuite) requireTxFails(tx *types.Transaction, err error) {
@@ -156,16 +180,8 @@ func (s *TestSuite) assertManagerCollateralized() {
 	s.True(collateralized)
 }
 
-// assertCurrentBasketMirrorsTargets asserts that the current manager basket matches expectations.
-func (s *TestSuite) assertCurrentBasketMirrorsTargets(tokens []common.Address, backing []*big.Int) {
-	// Get the new basket.
-	basketAddress, err := s.manager.Basket(nil)
-	s.Require().NoError(err)
-	s.NotEqual(zeroAddress(), basketAddress)
-
-	basket, err := abi.NewBasket(basketAddress, s.node)
-	s.Require().NoError(err)
-
+// assertBasket asserts that the current manager basket matches expectations.
+func (s *TestSuite) assertBasket(basket *abi.Basket, tokens []common.Address, weights []*big.Int) {
 	// Get tokens
 	basketTokens, err := basket.GetTokens(nil)
 	s.Require().NoError(err)
@@ -176,7 +192,7 @@ func (s *TestSuite) assertCurrentBasketMirrorsTargets(tokens []common.Address, b
 		s.Equal(tokens[i], basketTokens[i])
 		weight, err := basket.Weights(nil, tokens[i])
 		s.Require().NoError(err)
-		s.Equal(backing[i].String(), weight.String())
+		s.Equal(weights[i].String(), weight.String())
 	}
 }
 
@@ -280,7 +296,7 @@ func (s *TestSuite) setup() {
 	s.Require().NoError(err)
 
 	_, tx, utilContract, err := bind.DeployContract(s.signer, utilABI, code, s.node)
-	s.requireTxStrongly(tx, err)( /* assert zero events */ )
+	s.requireTx(tx, err)( /* assert zero events */ )
 	s.utilContract = utilContract
 }
 
@@ -368,15 +384,18 @@ func burningTransfer(from common.Address, value *big.Int) abi.ReserveTransfer {
 	}
 }
 
-func toAtto(n uint32, decimals uint32) *big.Int {
+// shiftLeft returns `n`, shifted left by `decimals` zeroes.
+func shiftLeft(n uint32, decimals uint32) *big.Int {
 	attoBase := big.NewInt(0).Exp(bigInt(10), bigInt(decimals), nil)
 	return big.NewInt(0).Mul(bigInt(n), attoBase)
 }
 
-func makeLinearWeights(val *big.Int, n int) []*big.Int {
-	var arr []*big.Int
-	for i := 0; i < n; i++ {
-		arr = append(arr, bigInt(0).Mul(val, bigInt(uint32(i+1))))
+// containsAddress tells whether `a` contains `x`.
+func containsAddress(a []common.Address, x common.Address) bool {
+	for _, n := range a {
+		if x == n {
+			return true
+		}
 	}
-	return arr
+	return false
 }

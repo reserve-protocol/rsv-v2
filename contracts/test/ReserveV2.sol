@@ -7,21 +7,18 @@ import "../rsv/ReserveEternalStorage.sol";
  * @dev A version of the Reserve Token for testing upgrades.
  */
 contract ReserveV2 is Reserve {
-    constructor() public {
-        paused = true;
-    }
 
     function completeHandoff(address previousImplementation) external onlyOwner {
         Reserve previous = Reserve(previousImplementation);
-        data = ReserveEternalStorage(previous.getEternalStorageAddress());
+        trustedData = ReserveEternalStorage(previous.getEternalStorageAddress());
         previous.acceptOwnership();
 
-        // Take control of Eternal Storage.
-        previous.transferEternalStorage(address(this));
+        //Take control of Eternal Storage.
         previous.changePauser(address(this));
-
-        // Old contract off, new contract on.
         previous.pause();
+        previous.transferEternalStorage(address(this));
+
+        // Unpause.
         paused = false;
         emit Unpaused(pauser);
 

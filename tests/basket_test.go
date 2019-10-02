@@ -71,7 +71,7 @@ func (s *BasketSuite) BeforeTest(suiteName, testName string) {
 		s.erc20Addresses[i] = erc20Address
 	}
 
-	s.weights = makeLinearWeights(bigInt(1), len(s.erc20s))
+	s.weights = []*big.Int{shiftLeft(1, 36), shiftLeft(2, 36), shiftLeft(3, 36)}
 
 	// Make a simple basket
 	basketAddress, tx, basket, err := abi.DeployBasket(
@@ -82,7 +82,7 @@ func (s *BasketSuite) BeforeTest(suiteName, testName string) {
 		s.weights,
 	)
 
-	s.requireTxStrongly(tx, err)()
+	s.requireTxWithStrictEvents(tx, err)()
 	s.basketAddress = basketAddress
 	s.basket = basket
 }
@@ -134,7 +134,7 @@ func (s *BasketSuite) TestSuccessiveBasketWithEmptyParams() {
 		emptyWeights,
 	)
 
-	s.requireTxStrongly(tx, err)()
+	s.requireTxWithStrictEvents(tx, err)()
 
 	// Our two baskets should be identical in every way.
 	for i, _ := range s.erc20Addresses {
@@ -189,7 +189,7 @@ func (s *BasketSuite) TestSuccessiveBasketWithAdditionalParams() {
 		moreWeights,
 	)
 
-	s.requireTxStrongly(tx, err)()
+	s.requireTxWithStrictEvents(tx, err)()
 
 	// The second basket should be bigger.
 	firstSize, err := s.basket.Size(nil)
@@ -267,7 +267,7 @@ func (s *BasketSuite) TestNegativeCases() {
 	// Case 3: Basket is too big.
 	var longTokens []common.Address
 	var longWeights []*big.Int
-	for i := 0; i < 101; i++ {
+	for i := 0; i < 99; i++ {
 		longTokens = append(longTokens, s.account[2].address())
 		longWeights = append(longWeights, bigInt(1))
 	}
