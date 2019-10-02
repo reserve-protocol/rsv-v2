@@ -44,7 +44,7 @@ interface IProposalFactory {
     function createWeightProposal(address proposer, Basket basket) external returns (IProposal);
 }
 
-contract ProposalFactory {
+contract ProposalFactory is IProposalFactory {
     function createSwapProposal(
         address proposer,
         address[] calldata tokens,
