@@ -142,44 +142,26 @@ contract Manager is Ownable {
 
     /// Modifies a function to run only when issuance is not paused.
     modifier issuanceNotPaused() {
-        _issuanceNotPaused();
+        require(!issuancePaused, "issuance is paused");
         _;
     }
 
     /// Modifies a function to run only when there is not some emergency that requires upgrades.
     modifier notEmergency() {
-        _notEmergency();
+        require(!emergency, "contract is paused");
         _;
     }
 
     /// Modifies a function to run only when the caller is the operator account.
     modifier onlyOperator() {
-        _onlyOperator();
+        require(_msgSender() == operator, "operator only");
         _;
     }
 
     /// Modifies a function to run and complete only if the vault is collateralized.
     modifier vaultCollateralized() {
-        _vaultCollateralized();
-        _;
-    }
-
-    // This internal view pattern is required to stay under the bytecode limit.
-
-    function _issuanceNotPaused() internal view {
-        require(!issuancePaused, "issuance is paused");
-    }
-
-    function _notEmergency() internal view {
-        require(!emergency, "contract is paused");
-    }
-
-    function _onlyOperator() internal view {
-        require(_msgSender() == operator, "operator only");
-    }
-
-    function _vaultCollateralized() internal view {
         require(isFullyCollateralized(), "undercollateralized");
+        _;
     }
 
     // ========================= Public + External ============================
