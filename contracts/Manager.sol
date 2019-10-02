@@ -212,7 +212,7 @@ contract Manager is Ownable {
 
             address trustedToken = trustedBasket.tokens(i);
             uint256 weight = trustedBasket.weights(trustedToken); // unit: aqToken/RSV
-            uint256 balance = IERC20(trustedToken).balanceOf(address(trustedVault)); // unit: qToken
+            uint256 balance = IERC20(trustedToken).balanceOf(address(trustedVault)); //unit: qToken
 
             // Return false if this token is undercollateralized:
             if (trustedRSV.totalSupply().mul(weight) > balance.mul(scaleFactor)) {

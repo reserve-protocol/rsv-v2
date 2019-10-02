@@ -8,11 +8,11 @@ import "../zeppelin/math/SafeMath.sol";
  *
  * @dev Eternal Storage facilitates future upgrades.
  *
- * If Reserve chooses to release an upgraded contract for the Reserve in the future, Reserve
- * will have the option of reusing the deployed version of this data contract to simplify migration.
+ * If Reserve chooses to release an upgraded contract for the Reserve in the future, Reserve will
+ * have the option of reusing the deployed version of this data contract to simplify migration.
  *
- * The use of this contract does not imply that Reserve will choose to do a future upgrade, nor that
- * any future upgrades will necessarily re-use this storage. It merely provides option value.
+ * The use of this contract does not imply that Reserve will choose to do a future upgrade, nor
+ * that any future upgrades will necessarily re-use this storage. It merely provides option value.
  */
 contract ReserveEternalStorage is Ownable {
 
@@ -23,7 +23,10 @@ contract ReserveEternalStorage is Ownable {
 
     address public reserveAddress;
 
-    event ReserveAddressTransferred(address indexed oldReserveAddress, address indexed newReserveAddress);
+    event ReserveAddressTransferred(
+        address indexed oldReserveAddress,
+        address indexed newReserveAddress
+    );
 
     /// On construction, set auth fields.
     constructor() public {
@@ -52,9 +55,9 @@ contract ReserveEternalStorage is Ownable {
 
     /// Add `value` to `balance[key]`, unless this causes integer overflow.
     ///
-    /// @dev This is a slight divergence from the strict Eternal Storage pattern, but it reduces the gas
-    /// for the by-far most common token usage, it's a *very simple* divergence, and `setBalance` is
-    /// available anyway.
+    /// @dev This is a slight divergence from the strict Eternal Storage pattern, but it reduces
+    /// the gas for the by-far most common token usage, it's a *very simple* divergence, and
+    /// `setBalance` is available anyway.
     function addBalance(address key, uint256 value) external onlyReserveAddress {
         balance[key] = balance[key].add(value);
     }
