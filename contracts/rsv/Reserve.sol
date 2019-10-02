@@ -94,7 +94,7 @@ contract Reserve is IERC20, Ownable {
 
     /// Modifies a function to only run if sent by `role` or the contract's `owner`.
     modifier onlyOwnerOr(address role) {
-        require(msg.sender == owner() || msg.sender == role, "unauthorized: not role holder and not owner");
+        require(msg.sender == owner() || msg.sender == role, "unauthorized: not owner or role");
         _;
     }
 
