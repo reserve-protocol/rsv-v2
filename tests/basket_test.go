@@ -71,7 +71,7 @@ func (s *BasketSuite) BeforeTest(suiteName, testName string) {
 		s.erc20Addresses[i] = erc20Address
 	}
 
-	s.weights = []*big.Int{shiftRight(1, 36), shiftRight(2, 36), shiftRight(3, 36)}
+	s.weights = []*big.Int{shiftLeft(1, 36), shiftLeft(2, 36), shiftLeft(3, 36)}
 
 	// Make a simple basket
 	basketAddress, tx, basket, err := abi.DeployBasket(

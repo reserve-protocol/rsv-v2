@@ -384,8 +384,8 @@ func burningTransfer(from common.Address, value *big.Int) abi.ReserveTransfer {
 	}
 }
 
-// shiftRight returns `n`, shifted left by `decimals` zeroes.
-func shiftRight(n uint32, decimals uint32) *big.Int {
+// shiftLeft returns `n`, shifted left by `decimals` zeroes.
+func shiftLeft(n uint32, decimals uint32) *big.Int {
 	attoBase := big.NewInt(0).Exp(bigInt(10), bigInt(decimals), nil)
 	return big.NewInt(0).Mul(bigInt(n), attoBase)
 }

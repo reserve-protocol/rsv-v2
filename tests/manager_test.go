@@ -180,11 +180,11 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	}
 
 	// Fund and set allowances.
-	amounts := []*big.Int{shiftRight(1, 46), shiftRight(1, 46), shiftRight(1, 46)}
+	amounts := []*big.Int{shiftLeft(1, 46), shiftLeft(1, 46), shiftLeft(1, 46)}
 	s.fundAccountWithErc20sAndApprove(s.proposer, amounts)
 
 	// Pass a WeightProposal so we are able to Issue/Redeem.
-	s.weights = []*big.Int{shiftRight(1, 35), shiftRight(3, 35), shiftRight(6, 35)}
+	s.weights = []*big.Int{shiftLeft(1, 35), shiftLeft(3, 35), shiftLeft(6, 35)}
 	s.changeBasketUsingWeightProposal(s.erc20Addresses, s.weights)
 }
 
@@ -376,7 +376,7 @@ func (s *ManagerSuite) TestIssue() {
 		},
 	)
 
-	rsvAmount := shiftRight(1, 27) // 1 billion
+	rsvAmount := shiftLeft(1, 27) // 1 billion
 	expectedAmounts := s.computeExpectedIssueAmounts(seigniorage, rsvAmount)
 	fmt.Println(expectedAmounts)
 	s.fundAccountWithErc20sAndApprove(buyer, expectedAmounts)
@@ -463,7 +463,7 @@ func (s *ManagerSuite) TestIssueRequireStatements() {
 // TestRedeem tests that `redeem` compensates the person with the correct amounts.
 func (s *ManagerSuite) TestRedeem() {
 	// Issue.
-	rsvAmount := shiftRight(1, 27) // 1 billion
+	rsvAmount := shiftLeft(1, 27) // 1 billion
 	s.requireTx(s.manager.Issue(signer(s.proposer), rsvAmount))
 
 	// Send the RSV to someone else who doesn't have any Erc20s.
@@ -491,7 +491,7 @@ func (s *ManagerSuite) TestRedeem() {
 // TestRedeemIsProtected tests that `redeem` compensates the person with the correct amounts.
 func (s *ManagerSuite) TestRedeemIsProtected() {
 	// Issue.
-	rsvAmount := shiftRight(1, 27) // 1 billion
+	rsvAmount := shiftLeft(1, 27) // 1 billion
 	s.requireTx(s.manager.Issue(signer(s.proposer), rsvAmount))
 
 	// Make sure we have the balance we expect to have.
@@ -530,7 +530,7 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 // TestRedeemRequireStatements tests that `redeem` reverts for 0 RSV.
 func (s *ManagerSuite) TestRedeemRequireStatements() {
 	// Issue.
-	rsvAmount := shiftRight(1, 27) // 1 billion
+	rsvAmount := shiftLeft(1, 27) // 1 billion
 	s.requireTx(s.manager.Issue(signer(s.proposer), rsvAmount))
 
 	// Make sure we have the balance we expect to have.
@@ -559,12 +559,12 @@ func (s *ManagerSuite) TestRedeemRequireStatements() {
 // TestProposeWeightsUseCase sets a basket, issues RSV, changes the basket, and redeems RSV.
 func (s *ManagerSuite) TestProposeWeightsFullUsecase() {
 	// Issue a billion RSV.
-	rsvToIssue := shiftRight(1, 27) // 1 billion
+	rsvToIssue := shiftLeft(1, 27) // 1 billion
 	s.requireTx(s.manager.Issue(signer(s.proposer), rsvToIssue))
 	s.assertManagerCollateralized()
 
 	// Change to a new basket.
-	newWeights := []*big.Int{shiftRight(2, 48), shiftRight(3, 48), shiftRight(1, 48)}
+	newWeights := []*big.Int{shiftLeft(2, 48), shiftLeft(3, 48), shiftLeft(1, 48)}
 	s.changeBasketUsingWeightProposal(s.erc20Addresses, newWeights)
 
 	// Approve the manager to spend a billion RSV.
@@ -585,12 +585,12 @@ func (s *ManagerSuite) TestProposeWeightsFullUsecase() {
 // changes the basket using a SwapProposal, and redeems the RSV.
 func (s *ManagerSuite) TestProposeSwapFullUsecase() {
 	// Issue a billion RSV.
-	rsvToIssue := shiftRight(1, 27) // 1 billion
+	rsvToIssue := shiftLeft(1, 27) // 1 billion
 	s.requireTx(s.manager.Issue(signer(s.proposer), rsvToIssue))
 	s.assertManagerCollateralized()
 
 	// Change to a new basket using a SwapProposal
-	amounts := []*big.Int{shiftRight(2, 18), shiftRight(3, 18), shiftRight(1, 18)}
+	amounts := []*big.Int{shiftLeft(2, 18), shiftLeft(3, 18), shiftLeft(1, 18)}
 	toVault := []bool{true, false, true}
 	s.changeBasketUsingSwapProposal(s.erc20Addresses, amounts, toVault)
 
@@ -741,7 +741,7 @@ func (s *ManagerSuite) computeExpectedIssueAmounts(
 		// Compute expectedAmount.
 		sum := bigInt(0).Add(BPS_FACTOR, seigniorage)
 		effectiveAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, sum), BPS_FACTOR)
-		expectedAmount := bigInt(0).Div(bigInt(0).Mul(effectiveAmount, weight), shiftRight(1, 36))
+		expectedAmount := bigInt(0).Div(bigInt(0).Mul(effectiveAmount, weight), shiftLeft(1, 36))
 		expectedAmounts = append(expectedAmounts, expectedAmount)
 	}
 
@@ -766,7 +766,7 @@ func (s *ManagerSuite) computeExpectedRedeemAmounts(rsvSupply *big.Int) []*big.I
 		s.Require().NoError(err)
 
 		// Compute expectedAmount.
-		expectedAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, weight), shiftRight(1, 36))
+		expectedAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, weight), shiftLeft(1, 36))
 		expectedAmounts = append(expectedAmounts, expectedAmount)
 	}
 
