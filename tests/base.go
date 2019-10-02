@@ -62,18 +62,18 @@ type TestSuite struct {
 
 var coverageEnabled = os.Getenv("COVERAGE_ENABLED") != ""
 
-// requireTxWithEvents requires that a transaction is successfully mined and does
+// requireTxWithStrictEvents requires that a transaction is successfully mined and does
 // not revert. It also takes an extra error argument, and checks that the
 // error is nil. This signature allows the function to directly wrap our
 // abigen'd mutator calls.
 //
-// requireTxWithEvents returns a closure that can be used to assert the list of events
+// requireTxWithStrictEvents returns a closure that can be used to assert the list of events
 // that were emitted during the transaction. This API is a bit weird -- it would
 // be more natural to pass the events in to the `requireTxWithEvents` call itself -- but
 // this is the cleanest way that is compatible with directly wrapping the abigen'd
 // calls, without using intermediate placeholder variables in calling code.
 //
-// Note: This closure asserts exactly the set of expected events and no more.
+// Note: This closure asserts exactly the set of expected events and no more, it is strict.
 func (s *TestSuite) requireTxWithStrictEvents(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
 	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
 
@@ -94,18 +94,19 @@ func (s *TestSuite) requireTxWithStrictEvents(tx *types.Transaction, err error) 
 	}
 }
 
-// requireTxWithEvents requires that a transaction is successfully mined and does
+// requireTx requires that a transaction is successfully mined and does
 // not revert. It also takes an extra error argument, and checks that the
 // error is nil. This signature allows the function to directly wrap our
 // abigen'd mutator calls.
 //
-// requireTxWithEvents returns a closure that can be used to assert the list of events
+// requireTx returns a closure that can be used to assert the list of events
 // that were emitted during the transaction. This API is a bit weird -- it would
 // be more natural to pass the events in to the `requireTxWithEvents` call itself -- but
 // this is the cleanest way that is compatible with directly wrapping the abigen'd
 // calls, without using intermediate placeholder variables in calling code.
 //
-// Note: This closure asserts that the found events contain all of the expected events.
+// Note: This closure asserts that the emitted events contain all of the expected events, but not
+// that they exactly match.
 func (s *TestSuite) requireTx(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
 	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
 
