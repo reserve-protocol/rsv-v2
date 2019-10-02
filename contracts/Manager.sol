@@ -361,17 +361,18 @@ contract Manager is Ownable {
     {
         require(tokens.length == amounts.length && amounts.length == toVault.length,
             "proposeSwap: unequal lengths");
+        uint256 proposalID = proposalsLength++;
 
-        trustedProposals[proposalsLength] = trustedProposalFactory.createSwapProposal(
+        trustedProposals[proposalID] = trustedProposalFactory.createSwapProposal(
             _msgSender(), 
             tokens, 
             amounts, 
             toVault
         );
-        trustedProposals[proposalsLength].acceptOwnership();
+        trustedProposals[proposalID].acceptOwnership();
 
-        emit SwapProposed(proposalsLength, _msgSender(), tokens, amounts, toVault);
-        return ++proposalsLength;
+        emit SwapProposed(proposalID, _msgSender(), tokens, amounts, toVault);
+        return proposalID;
     }
 
 
@@ -391,14 +392,16 @@ contract Manager is Ownable {
         require(tokens.length == weights.length, "proposeWeights: unequal lengths");
         require(tokens.length > 0, "proposeWeights: zero length");
 
-        trustedProposals[proposalsLength] = trustedProposalFactory.createWeightProposal(
+        uint256 proposalID = proposalsLength++;
+
+        trustedProposals[proposalID] = trustedProposalFactory.createWeightProposal(
             _msgSender(), 
             new Basket(Basket(0), tokens, weights)
         );
-        trustedProposals[proposalsLength].acceptOwnership();
+        trustedProposals[proposalID].acceptOwnership();
 
-        emit WeightsProposed(proposalsLength, _msgSender(), tokens, weights);
-        return ++proposalsLength;
+        emit WeightsProposed(proposalID, _msgSender(), tokens, weights);
+        return proposalID;
     }
 
     /// Accepts a proposal for a new basket, beginning the required delay.

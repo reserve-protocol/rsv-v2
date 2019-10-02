@@ -24,6 +24,9 @@ clean:
 sizes: json
 	scripts/sizes $(json)
 
+check: $(sol)
+	for solFile in $(sol); do slither --triage-mode $$solFile; done
+
 fmt:
 	npx solium -d contracts/ --fix
 	npx solium -d tests/echidna/ --fix

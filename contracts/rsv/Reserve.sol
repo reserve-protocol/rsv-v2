@@ -65,16 +65,16 @@ contract Reserve is IERC20, Ownable {
 
     /// Initialize critical fields.
     constructor() public {
-        trustedData = new ReserveEternalStorage();
-        trustedData.nominateNewOwner(msg.sender);
-        trustedTxFee = ITXFee(address(0));
-
         pauser = msg.sender;
         feeRecipient = msg.sender;
         // minter defaults to the zero address.
 
         maxSupply = 2 ** 256 - 1;
         paused = true;
+
+        trustedTxFee = ITXFee(address(0));
+        trustedData = new ReserveEternalStorage();
+        trustedData.nominateNewOwner(msg.sender);
     }
 
     /// Accessor for eternal storage contract address.
