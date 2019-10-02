@@ -394,7 +394,7 @@ contract Manager is Ownable {
 
     /// Cancels a proposal. This can be done anytime before it is enacted by any of:
     /// 1. Proposer 2. Operator 3. Owner
-    function cancelProposal(uint256 id) external notEmergency {
+    function cancelProposal(uint256 id) external notEmergency vaultCollateralized {
         require(
             _msgSender() == trustedProposals[id].proposer() ||
             _msgSender() == owner() ||
