@@ -25,7 +25,10 @@ sizes: json
 	scripts/sizes $(json)
 
 check: $(sol)
-	for solFile in $(sol); do slither --triage-mode $$solFile; done
+	slither contracts
+
+triage-check: $(sol)
+	slither --triage-mode contracts
 
 fmt:
 	npx solium -d contracts/ --fix
@@ -83,4 +86,4 @@ evm/BasicERC20.json: contracts/test/BasicERC20.sol $(sol)
 
 
 # Mark "action" targets PHONY, to save occasional headaches.
-.PHONY: all clean json abi test fmt run-geth sizes
+.PHONY: all clean json abi test check triage-check fmt run-geth sizes
