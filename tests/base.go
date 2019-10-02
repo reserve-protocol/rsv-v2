@@ -62,18 +62,19 @@ type TestSuite struct {
 
 var coverageEnabled = os.Getenv("COVERAGE_ENABLED") != ""
 
-// requireTxWithStrictEvents requires that a transaction is successfully mined and does
-// not revert. It also takes an extra error argument, and checks that the
-// error is nil. This signature allows the function to directly wrap our
-// abigen'd mutator calls.
+// requireTxWithStrictEvents(tx, err)(events...) requires that a transaction is successfully mined,
+// does not revert, and that err is nil. The result of requireTxWithStrictEvents takes a
+// variable-length list error arguments, and requires that exactly that set of events was thrown
+// while processing tx. This signature allows the function to directly wrap our abigen'd mutator
+// calls.
 //
-// requireTxWithStrictEvents returns a closure that can be used to assert the list of events
-// that were emitted during the transaction. This API is a bit weird -- it would
-// be more natural to pass the events in to the `requireTxWithEvents` call itself -- but
-// this is the cleanest way that is compatible with directly wrapping the abigen'd
-// calls, without using intermediate placeholder variables in calling code.
+// requireTxWithStrictEvents(tx, err) returns a closure that can be used to assert the list of
+// events that were emitted during the transaction. This API is a bit weird -- it would be more
+// natural to pass the events in to the requireTxWithStrictEvents call itself -- but this is the
+// cleanest way that is compatible with directly wrapping the abigen'd calls, without using
+// intermediate placeholder variables in calling code.
 //
-// Note: This closure asserts exactly the set of expected events and no more, it is strict.
+// Note: This closure asserts exactly the set of expected events and no more. It is strict.
 func (s *TestSuite) requireTxWithStrictEvents(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
 	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
 
@@ -94,19 +95,19 @@ func (s *TestSuite) requireTxWithStrictEvents(tx *types.Transaction, err error) 
 	}
 }
 
-// requireTx requires that a transaction is successfully mined and does
-// not revert. It also takes an extra error argument, and checks that the
-// error is nil. This signature allows the function to directly wrap our
-// abigen'd mutator calls.
+// requireTx(tx, err)(events...) requires that a transaction is successfully mined, does not
+// revert, and that err is nil. The result of requireTx takes a variable-length
+// list error arguments, and requires that exactly that set of events was thrown while processing
+// tx. This signature allows the function to directly wrap our abigen'd mutator calls.
 //
-// requireTx returns a closure that can be used to assert the list of events
-// that were emitted during the transaction. This API is a bit weird -- it would
-// be more natural to pass the events in to the `requireTxWithEvents` call itself -- but
-// this is the cleanest way that is compatible with directly wrapping the abigen'd
-// calls, without using intermediate placeholder variables in calling code.
+// requireTx(tx, err) returns a closure that can be used to assert the list of events that were
+// emitted during the transaction. This API is a bit weird -- it would be more natural to pass the
+// events in to the requireTx call itself -- but this is the cleanest way that is compatible with
+// directly wrapping the abigen'd calls, without using intermediate placeholder variables in
+// calling code.
 //
-// Note: This closure asserts that the emitted events contain all of the expected events, but not
-// that they exactly match.
+// Note: This closure asserts that each expected event was emitted, but not that all emitted events
+// match the given list. It is less strict than requir
 func (s *TestSuite) requireTx(tx *types.Transaction, err error) func(assertEvent ...fmt.Stringer) {
 	receipt := s._requireTxStatus(tx, err, types.ReceiptStatusSuccessful)
 
