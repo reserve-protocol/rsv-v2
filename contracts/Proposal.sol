@@ -117,7 +117,7 @@ contract Proposal is IProposal, Ownable {
 
     /// Returns the newly-proposed basket. This varies for different types of proposals,
     /// so it's abstract here.
-    function _newBasket(IRSV rsv, Basket oldBasket) internal returns(Basket);
+    function _newBasket(IRSV trustedRSV, Basket oldBasket) internal returns(Basket);
 }
 
 /**
@@ -175,15 +175,15 @@ contract SwapProposal is Proposal {
     }
 
     /// Return the newly-proposed basket, based on the current vault and the old basket.
-    function _newBasket(IRSV rsv, Basket trustedOldBasket) internal returns(Basket) {
+    function _newBasket(IRSV trustedRSV, Basket trustedOldBasket) internal returns(Basket) {
 
         uint256[] memory weights = new uint256[](tokens.length);
         // unit: aqToken/RSV
 
-        uint256 scaleFactor = WEIGHT_SCALE.mul(uint256(10)**(rsv.decimals()));
+        uint256 scaleFactor = WEIGHT_SCALE.mul(uint256(10)**(trustedRSV.decimals()));
         // unit: aqToken/qToken * qRSV/RSV
 
-        uint256 rsvSupply = rsv.totalSupply();
+        uint256 rsvSupply = trustedRSV.totalSupply();
         // unit: qRSV
 
         for (uint i = 0; i < tokens.length; i++) {
