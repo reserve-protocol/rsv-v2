@@ -147,7 +147,7 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 	// Confirm we start in emergency state.
 	emergency, err := s.manager.Emergency(nil)
 	s.Require().NoError(err)
-	s.Equal(true, emergency)
+	s.Require().Equal(true, emergency)
 
 	// Unpause from emergency.
 	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
@@ -157,7 +157,7 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 	// Confirm we are unpaused from emergency.
 	emergency, err = s.manager.Emergency(nil)
 	s.Require().NoError(err)
-	s.Equal(false, emergency)
+	s.Require().Equal(false, emergency)
 
 	// Set all auths to Manager.
 	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, managerAddress))(
@@ -208,7 +208,6 @@ func (s *ManagerFuzzSuite) TestByFuzzing() {
 	fmt.Print("\n")
 	for i := 0; i < duration; i++ {
 		fmt.Printf("Run %v", i)
-
 		// Choose between Issuing, Redeeming, WeightProposal, or SwapProposal
 		choice := rand.Int31n(4)
 		switch choice {
@@ -319,7 +318,7 @@ func (s *ManagerFuzzSuite) generateWeights(tokens []common.Address, sum *big.Int
 
 	// Check that the weights sum to 1e36.
 	if len(weights) > 0 {
-		s.Equal(shiftLeft(1, 36).String(), sumWeights(weights).String())
+		s.Require().Equal(shiftLeft(1, 36).String(), sumWeights(weights).String())
 	}
 	return weights
 }
@@ -368,7 +367,7 @@ func (s *ManagerFuzzSuite) generateSwaps(erc20s []*abi.BasicERC20, tokens []comm
 	}
 
 	// In net this should not be an exchange of value.
-	s.Equal(bigInt(0).String(), sumSwaps(amounts, toVault).String())
+	s.Require().Equal(bigInt(0).String(), sumSwaps(amounts, toVault).String())
 	return amounts, toVault
 }
 
@@ -408,18 +407,18 @@ func (s *ManagerFuzzSuite) tryWeightProposal(tokens []common.Address, weights []
 	// Tokens
 	basketTokens, err := basket.GetTokens(nil)
 	s.Require().NoError(err)
-	s.True(reflect.DeepEqual(basketTokens, tokens))
+	s.Require().True(reflect.DeepEqual(basketTokens, tokens))
 
 	// Size
 	basketSize, err := basket.Size(nil)
 	s.Require().NoError(err)
-	s.Equal(bigInt(uint32(len(tokens))).String(), basketSize.String())
+	s.Require().Equal(bigInt(uint32(len(tokens))).String(), basketSize.String())
 
 	// Weights
 	for i := 0; i < len(weights); i++ {
 		foundBacking, err := basket.Weights(nil, tokens[i])
 		s.Require().NoError(err)
-		s.Equal(weights[i], foundBacking)
+		s.Require().Equal(weights[i], foundBacking)
 	}
 
 	// Accept the Proposal.
@@ -534,7 +533,7 @@ func (s *ManagerFuzzSuite) assertManagerCollateralizedOffChain() {
 
 	rsvTotalSupply, err := s.reserve.TotalSupply(nil)
 	s.Require().NoError(err)
-	s.True(len(tokens) > 0)
+	s.Require().True(len(tokens) > 0)
 
 	for _, token := range tokens {
 		tokenErc20, err := abi.NewBasicERC20(token, s.node)
@@ -548,7 +547,7 @@ func (s *ManagerFuzzSuite) assertManagerCollateralizedOffChain() {
 
 		leftSide := bigInt(0).Mul(rsvTotalSupply, tokenWeight)
 		rightSide := bigInt(0).Mul(tokBal, shiftLeft(1, 36))
-		s.True(leftSide.Cmp(rightSide) <= 0)
+		s.Require().True(leftSide.Cmp(rightSide) <= 0)
 	}
 
 }
@@ -574,7 +573,7 @@ func (s *ManagerFuzzSuite) assertProposerDidNotGainValue(oldVal *big.Int) {
 	// 	fmt.Printf("The proposer started with: %v\n", oldVal)
 	// 	fmt.Printf("But they ended with: %v\n", newVal)
 	// 	fmt.Println()
-	// 	s.True(false)
+	// 	s.Require().True(false)
 	// }
 
 }
