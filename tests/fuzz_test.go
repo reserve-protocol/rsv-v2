@@ -29,7 +29,7 @@ type ManagerFuzzSuite struct {
 	TestSuite
 }
 
-var duration = 100
+var duration = 10
 
 var (
 	// Compile-time check that ManagerFuzzSuite implements the interfaces we think it does.
