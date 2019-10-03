@@ -37,7 +37,6 @@ Other than auth state, contracts have the following semantic state:
 - RSV.allowance: mapping(address => mapping(address => uint256))
 - Manager.makers: set(address)
 - Manager.weights: mapping(address => rational)
-    [TODO: This is implemented as a mapping to uint256; but we've been doing our thinking in rational numbers. I'm not going to specify how to handle all the rounding error yet; a good design for that will be informed by the rest of this work.]
 
 The semantic state of the Vault is its balances of ERC-20 tokens, which are not directly represented by storage of the Vault itself.
 
@@ -53,7 +52,7 @@ The semantic state of the Vault is its balances of ERC-20 tokens, which are not 
     - `addr` is a contract, and satisfies the ERC-20 interface for `balanceOf`, `transfer`, `allowance`, and `transferFrom`.
 
 - The sum of weights in `Manager.weights` is 1.
-    - [TODO: Do we want to require this? Enforce it in code, or just by owner-controlled policy? Or perhaps require that the owner correctly provides the current sum of weights when rebalancing, to ensure that the owner is not expecting it to be 1 and being wrong.?]
+    - Note that this cannot easily be required in the contracts themselves, as we want the contracts to generalize to cases where prices are unknown. However, we can build a `check-proposal` off-chain script to check the sum-of-weights, and ensure that our proposal-acceptance playbook entry requires it to pass.
 
 ## Auth
 
@@ -66,10 +65,10 @@ The semantic state of the Vault is its balances of ERC-20 tokens, which are not 
     - That is, at all times, for every pair (`addr -> weight`) in the mapping `Manager.weights`, `addr.balanceOf(Vault) >= RSV.totalSupply * weight`
 
 
-- If the owner has large enough balances in the named assets, the owner can always (through some series of transactions) unilaterally modify `Manager.weights` to any other mapping, 1-10 entries, 
+- If the owner has large enough balances in the named assets, the owner can always (through some series of transactions) unilaterally modify `Manager.weights` to any other mapping, 1-10 entries,
 
 - Issuance works. That is, when `maker` calls `Manager.issue(amount)`:
-    - Preconditions: 
+    - Preconditions:
         - `Manager` is unpaused.
         - `maker` is in `Manager.makers`.
         - For every pair (`addr -> weight`) in `Manager.weights`, `addr.allowed[maker] >= amount * weight`
@@ -93,8 +92,35 @@ The semantic state of the Vault is its balances of ERC-20 tokens, which are not 
         - `RSV.balanceOf[maker]` decreases by `amount`
         - `RSV.totalBalance` decreases by `amount`
 
-[TODO: for issuance and redemption, see:  https://consensys.github.io/smart-contract-best-practices/recommendations/#favor-pull-over-push-for-external-calls]
-
 ## RSV
-RSV functions strictly per ERC-20. [TODO: unfold, and further specify transfer return-value behavior]
+RSV functions strictly per ERC-20:
 
+### ERC-20 Interface
+
+    # view functions.
+    function name() public view returns (string)
+    function symbol() public view returns (string)
+    function decimals() public view returns (uint8)
+    function totalSupply() public view returns (uint256)
+    function balanceOf(address owner) public view returns (uint256 balance)
+
+    # transfer transfers `value` tokens from msg.sender to the address `to`.
+    # Must emit a Transfer event, return true on success, and revert on failure.
+    # Must allow zero-value transfers.
+    function transfer(address to, uint256 value) public returns (bool success)
+
+    # Returns the amount which `_spender` is still allowed to withdraw from `_owner`.
+    function allowance(address owner, address spender) public view returns (uint256 remaining)
+
+    # approve: allowance[msg.sender][spender] = value
+    function approve(address spender, uint256 value) public returns (bool success)
+
+    # transferFrom: If allowance[msg.sender][from] >= value, transfer `value` from address `from` to
+    # `to`, reduce allowance[msg.sender][from] by `value`, and emit a Transfer event. If not, revert.
+    function transferFrom(address from, address to, uint256 value) public returns (bool success)
+
+    # Must trigger whenever tokens are transferred, including zero-value transfers.
+    event Transfer(address indexed from, address indexed to, uint256 value)
+
+    # Must trigger on any successful call to approve()
+    event Approval(address indexed owner, address indexed spender, uint256 value)
