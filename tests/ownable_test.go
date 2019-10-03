@@ -166,7 +166,8 @@ func (s *OwnableSuite) TestAcceptOwnershipNegativeCases() {
 // TestRenounceOwnership unit tests the renounceOwnership function.
 func (s *OwnableSuite) TestRenounceOwnership() {
 	// Check that the owner can renounce ownership.
-	s.requireTxWithStrictEvents(s.ownable.RenounceOwnership(s.signer))(
+	pledge := "I hereby renounce ownership of this contract forever."
+	s.requireTxWithStrictEvents(s.ownable.RenounceOwnership(s.signer, pledge))(
 		abi.BasicOwnableOwnershipTransferred{
 			PreviousOwner: s.owner.address(), NewOwner: zeroAddress(),
 		},
@@ -180,7 +181,9 @@ func (s *OwnableSuite) TestRenounceOwnership() {
 
 // TestRenounceOwnershipNegativeCases makes sure renounceOwnership can only be called by owner.
 func (s *OwnableSuite) TestRenounceOwnershipNegativeCases() {
-	s.requireTxFails(s.ownable.RenounceOwnership(signer(s.account[1])))
+	pledge := "I hereby renounce ownership of this contract forever."
+	s.requireTxFails(s.ownable.RenounceOwnership(signer(s.account[1]), pledge))
+	s.requireTxFails(s.ownable.RenounceOwnership(s.signer, "mumble frotz"))
 
 	// Check that the nominated owner cannot call nominateNewOwner.
 	newOwner := s.account[1]
@@ -189,5 +192,5 @@ func (s *OwnableSuite) TestRenounceOwnershipNegativeCases() {
 			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
 		},
 	)
-	s.requireTxFails(s.ownable.RenounceOwnership(signer(newOwner)))
+	s.requireTxFails(s.ownable.RenounceOwnership(signer(newOwner), pledge))
 }

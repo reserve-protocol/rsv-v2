@@ -25,6 +25,6 @@ contract ReserveV2 is Reserve {
         // Burn the bridge behind us.
         previous.changeMinter(address(0));
         previous.changePauser(address(0));
-        previous.renounceOwnership();
+        previous.renounceOwnership("I hereby renounce ownership of this contract forever.");
     }
 }
