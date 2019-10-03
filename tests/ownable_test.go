@@ -2,14 +2,15 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/suite"
-
 	"github.com/reserve-protocol/rsv-beta/abi"
 	"github.com/reserve-protocol/rsv-beta/soltools"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestOwnable(t *testing.T) {
@@ -164,30 +165,48 @@ func (s *OwnableSuite) TestAcceptOwnershipNegativeCases() {
 }
 
 // TestRenounceOwnership unit tests the renounceOwnership function.
-func (s *OwnableSuite) TestRenounceOwnership() {
-	// Check that the owner can renounce ownership.
-	s.requireTxWithStrictEvents(s.ownable.RenounceOwnership(s.signer))(
+func (s *OwnableSuite) TestAbdication() {
+	const ONE_WEEK = (60*60*24*7 + 100)
+
+	startTime := s.currentTimestamp()
+	abdicationTime := new(big.Int).Add(startTime, bigInt(ONE_WEEK))
+
+	// Announce abdication!
+	s.requireTxWithStrictEvents(s.ownable.SetAbdicationTime(s.signer, abdicationTime))(
+		abi.BasicOwnableAbdicationTimeSet{Time: abdicationTime},
+	)
+	// Assert no error, and that the time we set is the current state.
+	abdicationTimeState, err := s.ownable.AbdicationTime(nil)
+	s.Require().NoError(err)
+	s.Equal(abdicationTime.String(), abdicationTimeState.String())
+
+	// Advance time one week.
+	s.node.(backend).AdjustTime(ONE_WEEK * time.Second)
+
+	// Abdicate!
+	s.requireTxWithStrictEvents(s.ownable.AbdicateOwnership(s.signer))(
 		abi.BasicOwnableOwnershipTransferred{
-			PreviousOwner: s.owner.address(), NewOwner: zeroAddress(),
+			PreviousOwner: s.owner.address(),
+			NewOwner:      zeroAddress(),
 		},
 	)
 
-	// Check that state changed appropriately.
+	// Check that the owner is now zero.
 	ownerAddress, err := s.ownable.Owner(nil)
 	s.Require().NoError(err)
 	s.Equal(ownerAddress, zeroAddress())
 }
 
 // TestRenounceOwnershipNegativeCases makes sure renounceOwnership can only be called by owner.
-func (s *OwnableSuite) TestRenounceOwnershipNegativeCases() {
-	s.requireTxFails(s.ownable.RenounceOwnership(signer(s.account[1])))
+func (s *OwnableSuite) TestAbdicationNegativeCases() {
+	// s.requireTxFails(s.ownable.RenounceOwnership(signer(s.account[1])))
 
-	// Check that the nominated owner cannot call nominateNewOwner.
-	newOwner := s.account[1]
-	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
-		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
-		},
-	)
-	s.requireTxFails(s.ownable.RenounceOwnership(signer(newOwner)))
+	// // Check that the nominated owner cannot call nominateNewOwner.
+	// newOwner := s.account[1]
+	// s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
+	// 	abi.BasicOwnableNewOwnerNominated{
+	// 		PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+	// 	},
+	// )
+	// s.requireTxFails(s.ownable.RenounceOwnership(signer(newOwner)))
 }

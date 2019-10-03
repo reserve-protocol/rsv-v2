@@ -47,8 +47,6 @@ contract ReserveEternalStorage is Ownable {
         reserveAddress = newReserveAddress;
     }
 
-
-
     // ===== balance =====
 
     mapping(address => uint256) public balance;
