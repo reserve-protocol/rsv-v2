@@ -10,7 +10,6 @@ import "./Proposal.sol";
 
 
 interface IVault {
-    function changeManger(address) external;
     function withdrawTo(address, uint256, address) external;
 }
 
