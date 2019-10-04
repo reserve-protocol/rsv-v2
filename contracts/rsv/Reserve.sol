@@ -53,6 +53,7 @@ contract Reserve is IERC20, Ownable {
     event PauserChanged(address indexed newPauser);
     event FeeRecipientChanged(address indexed newFeeRecipient);
     event MaxSupplyChanged(uint256 indexed newMaxSupply);
+    event TxFeeHelperChanged(address indexed newTxFeeHelper)
 
     // Pause events
     event Paused(address indexed account);
@@ -125,6 +126,7 @@ contract Reserve is IERC20, Ownable {
     /// Change the contract that helps with transaction fee calculation.
     function changeTxFeeHelper(address newTrustedTxFee) external onlyOwner {
         trustedTxFee = ITXFee(newTrustedTxFee);
+        emit TxFeeHelperChanged(newTrustedTxFee);
     }
 
     /// Change the maximum supply allowed.
