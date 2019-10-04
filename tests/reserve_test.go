@@ -748,6 +748,11 @@ func (s *ReserveSuite) TestTransferEternalStorageFailsWhenUnpaused() {
 	s.requireTxFails(s.reserve.TransferEternalStorage(signer(s.account[2]), s.account[1].address()))
 }
 
+func (s *ReserveSuite) TestTransferEternalStorageFailsForZeroAddress() {
+	s.requireTx(s.reserve.Unpause(s.signer))
+	s.requireTxFails(s.reserve.TransferEternalStorage(s.signer, zeroAddress()))
+}
+
 ///////////////////////
 
 func (s *ReserveSuite) TestUpgrade() {
@@ -771,7 +776,9 @@ func (s *ReserveSuite) TestUpgrade() {
 	s.requireTxWithStrictEvents(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
 		PreviousOwner: s.owner.address(), NewOwner: newTokenAddress,
 	})
-	s.requireTxWithStrictEvents(newToken.CompleteHandoff(signer(newKey), s.reserveAddress))
+	s.requireTx(newToken.CompleteHandoff(signer(newKey), s.reserveAddress))(
+		abi.ReserveEternalStorageTransferred{NewReserveAddress: newTokenAddress},
+	)
 
 	// Old token's owner should be the zero address.
 	owner, err := s.reserve.Owner(nil)

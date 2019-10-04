@@ -53,6 +53,7 @@ contract Reserve is IERC20, Ownable {
     event PauserChanged(address indexed newPauser);
     event FeeRecipientChanged(address indexed newFeeRecipient);
     event MaxSupplyChanged(uint256 indexed newMaxSupply);
+    event EternalStorageTransferred(address indexed newReserveAddress);
     event TxFeeHelperChanged(address indexed newTxFeeHelper);
 
     // Pause events
@@ -120,6 +121,8 @@ contract Reserve is IERC20, Ownable {
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
     function transferEternalStorage(address newReserveAddress) external onlyOwner isPaused {
+        require(newReserveAddress != address(0), "zero address");
+        emit EternalStorageTransferred(newReserveAddress);
         trustedData.updateReserveAddress(newReserveAddress);
     }
 
@@ -283,7 +286,7 @@ contract Reserve is IERC20, Ownable {
 
         if (address(trustedTxFee) != address(0)) {
             fee = trustedTxFee.calculateFee(from, to, value);
-            require((fee >= 0) && (fee <= value), "transaction fee out of bounds");
+            require(fee <= value, "transaction fee out of bounds");
 
             trustedData.addBalance(feeRecipient, fee);
             emit Transfer(from, feeRecipient, fee);

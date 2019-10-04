@@ -126,12 +126,13 @@ contract Manager is Ownable {
         address rsvAddr,
         address proposalFactoryAddr,
         address operatorAddr,
-        uint256 seigniorage_) public {
+        uint256 _seigniorage) public {
+        require(_seigniorage <= 1000, "max seigniorage 10%");
         trustedVault = IVault(vaultAddr);
         trustedRSV = IRSV(rsvAddr);
         trustedProposalFactory = IProposalFactory(proposalFactoryAddr);
         operator = operatorAddr;
-        seigniorage = seigniorage_;
+        seigniorage = _seigniorage;
         emergency = true; // it's not an emergency, but we want everything to start paused.
 
         // Start with the empty basket.
@@ -162,6 +163,7 @@ contract Manager is Ownable {
     modifier vaultCollateralized() {
         require(isFullyCollateralized(), "undercollateralized");
         _;
+        assert(isFullyCollateralized());
     }
 
     // ========================= Public + External ============================
@@ -186,6 +188,7 @@ contract Manager is Ownable {
 
     /// Set the seigniorage, in BPS.
     function setSeigniorage(uint256 _seigniorage) external onlyOwner {
+        require(_seigniorage <= 1000, "max seigniorage 10%");
         emit SeigniorageChanged(seigniorage, _seigniorage);
         seigniorage = _seigniorage;
     }
@@ -208,7 +211,7 @@ contract Manager is Ownable {
         uint256 scaleFactor = WEIGHT_SCALE.mul(uint256(10) ** trustedRSV.decimals());
         // scaleFactor unit: aqToken/qToken * qRSV/RSV
 
-        for (uint i = 0; i < trustedBasket.size(); i++) {
+        for (uint256 i = 0; i < trustedBasket.size(); i++) {
 
             address trustedToken = trustedBasket.tokens(i);
             uint256 weight = trustedBasket.weights(trustedToken); // unit: aqToken/RSV
@@ -237,7 +240,7 @@ contract Manager is Ownable {
 
         // On issuance, amounts[i] of token i will enter the vault. To maintain full backing,
         // we have to round _up_ each amounts[i].
-        for (uint i = 0; i < trustedBasket.size(); i++) {
+        for (uint256 i = 0; i < trustedBasket.size(); i++) {
             address trustedToken = trustedBasket.tokens(i);
             amounts[i] = _weighted(
                 effectiveAmount, 
@@ -259,7 +262,7 @@ contract Manager is Ownable {
 
         // On redemption, amounts[i] of token i will leave the vault. To maintain full backing,
         // we have to round _down_ each amounts[i].
-        for (uint i = 0; i < trustedBasket.size(); i++) {
+        for (uint256 i = 0; i < trustedBasket.size(); i++) {
             address trustedToken = trustedBasket.tokens(i);
             amounts[i] = _weighted(
                 rsvAmount, 
@@ -284,7 +287,7 @@ contract Manager is Ownable {
 
         // Accept collateral tokens.
         uint256[] memory amounts = toIssue(rsvAmount); // unit: qToken[]
-        for (uint i = 0; i < trustedBasket.size(); i++) {
+        for (uint256 i = 0; i < trustedBasket.size(); i++) {
             IERC20(trustedBasket.tokens(i)).safeTransferFrom(
                 _msgSender(), 
                 address(trustedVault), 
@@ -312,7 +315,7 @@ contract Manager is Ownable {
 
         // Compensate with collateral tokens.
         uint256[] memory amounts = toRedeem(rsvAmount); // unit: qToken[]
-        for (uint i = 0; i < trustedBasket.size(); i++) {
+        for (uint256 i = 0; i < trustedBasket.size(); i++) {
             trustedVault.withdrawTo(trustedBasket.tokens(i), amounts[i], _msgSender());
             // unit check for amounts[i]: qToken.
         }
@@ -410,7 +413,7 @@ contract Manager is Ownable {
 
     /// Accepts a proposal for a new basket, beginning the required delay.
     function acceptProposal(uint256 id) external onlyOperator notEmergency vaultCollateralized {
-        require(proposalsLength > id, "proposals length < id");
+        require(proposalsLength > id, "proposals length <= id");
         trustedProposals[id].accept(now.add(delay));
         emit ProposalAccepted(id, trustedProposals[id].proposer());
     }
@@ -424,13 +427,14 @@ contract Manager is Ownable {
             _msgSender() == operator,
             "cannot cancel"
         );
+        require(proposalsLength > id, "proposals length <= id");
         trustedProposals[id].cancel();
         emit ProposalCanceled(id, trustedProposals[id].proposer(), _msgSender());
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
     function executeProposal(uint256 id) external onlyOperator notEmergency vaultCollateralized {
-        require(proposalsLength > id, "proposals length < id");
+        require(proposalsLength > id, "proposals length <= id");
         address proposer = trustedProposals[id].proposer();
         Basket trustedOldBasket = trustedBasket;
 
@@ -438,7 +442,7 @@ contract Manager is Ownable {
         trustedBasket = trustedProposals[id].complete(trustedRSV, trustedOldBasket);
 
         // For each token in either basket, perform transfers between proposer and Vault
-        for (uint i = 0; i < trustedOldBasket.size(); i++) {
+        for (uint256 i = 0; i < trustedOldBasket.size(); i++) {
             address trustedToken = trustedOldBasket.tokens(i);
             _executeBasketShift(
                 trustedOldBasket.weights(trustedToken),
@@ -447,7 +451,7 @@ contract Manager is Ownable {
                 proposer
             );
         }
-        for (uint i = 0; i < trustedBasket.size(); i++) {
+        for (uint256 i = 0; i < trustedBasket.size(); i++) {
             address trustedToken = trustedBasket.tokens(i);
             if (!trustedOldBasket.has(trustedToken)) {
                 _executeBasketShift(
@@ -526,11 +530,8 @@ contract Manager is Ownable {
         RoundingMode rnd
     ) internal view returns(uint256) // return unit: qTokens
     {
-        // This wouldn't work properly with negative numbers, but we don't need them here.
-        require(amount >= 0 && weight >= 0, "weight or amount negative");
-
         uint256 scaleFactor = WEIGHT_SCALE.mul(uint256(10)**(trustedRSV.decimals()));
-        // decimalsDivisor unit: aqTokens/qTokens * qRSV/RSV
+        // scaleFactor unit: aqTokens/qTokens * qRSV/RSV
         uint256 shiftedWeight = amount.mul(weight);
         // shiftedWeight unit: qRSV/RSV * aqTokens
 

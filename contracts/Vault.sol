@@ -32,7 +32,13 @@ contract Vault is Ownable {
         emit ManagerTransferred(address(0), manager);
     }
 
-    /// Changes the manager account. 
+    /// Modifies a function to run only when called by `manager`.
+    modifier onlyManager() {
+        require(_msgSender() == manager, "must be manager");
+        _;
+    }
+
+    /// Changes `manager` account. 
     function changeManager(address newManager) external onlyOwner {
         require(newManager != address(0), "cannot be 0 address");
         emit ManagerTransferred(manager, newManager);
@@ -40,8 +46,7 @@ contract Vault is Ownable {
     }
 
     /// Withdraw `amount` of `token` to address `to`. Only callable by `manager`.
-    function withdrawTo(address token, uint256 amount, address to) external {
-        require(_msgSender() == manager, "must be manager");
+    function withdrawTo(address token, uint256 amount, address to) external onlyManager {
         IERC20(token).safeTransfer(to, amount);
         emit Withdrawal(token, amount, to);
     }
