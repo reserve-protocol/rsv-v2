@@ -42,6 +42,7 @@ contract ReserveEternalStorage is Ownable {
 
     /// Set `reserveAddress`.
     function updateReserveAddress(address newReserveAddress) external {
+        require(newReserveAddress != address(0), "zero address");
         require(_msgSender() == reserveAddress || _msgSender() == owner(), "not authorized");
         emit ReserveAddressTransferred(reserveAddress, newReserveAddress);
         reserveAddress = newReserveAddress;

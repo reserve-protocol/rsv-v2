@@ -302,6 +302,12 @@ func (s *ManagerSuite) TestSetSeigniorageIsProtected() {
 	s.requireTxFails(s.manager.SetSeigniorage(signer(s.operator), seigniorage))
 }
 
+// TestSetSeigniorageRequires tests that `setSeigniorage` require statements works as expected
+func (s *ManagerSuite) TestSetSeigniorageRequires() {
+	seigniorage := bigInt(1001)
+	s.requireTxFails(s.manager.SetSeigniorage(s.signer, seigniorage))
+}
+
 // TestSetDelay tests that `setDelay` manipulates state correctly.
 func (s *ManagerSuite) TestSetDelay() {
 	delay := bigInt(172800) // 48 hours

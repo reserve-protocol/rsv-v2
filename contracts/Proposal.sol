@@ -186,7 +186,7 @@ contract SwapProposal is Proposal {
         uint256 rsvSupply = trustedRSV.totalSupply();
         // unit: qRSV
 
-        for (uint i = 0; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length; i++) {
             uint256 oldWeight = trustedOldBasket.weights(tokens[i]);
             // unit: aqToken/RSV
 

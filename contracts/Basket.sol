@@ -37,7 +37,7 @@ contract Basket {
 
         // Initialize data from input arrays
         tokens = new address[](_tokens.length);
-        for (uint i = 0; i < _tokens.length; i++) {
+        for (uint256 i = 0; i < _tokens.length; i++) {
             weights[_tokens[i]] = _weights[i];
             has[_tokens[i]] = true;
             tokens[i] = _tokens[i];
@@ -45,7 +45,7 @@ contract Basket {
 
         // If there's a previous basket, copy those of its contents not already set.
         if (trustedPrev != Basket(0)) {
-            for (uint i = 0; i < trustedPrev.size(); i++) {
+            for (uint256 i = 0; i < trustedPrev.size(); i++) {
                 address tok = trustedPrev.tokens(i);
                 if (!has[tok]) {
                     weights[tok] = trustedPrev.weights(tok);
@@ -61,7 +61,7 @@ contract Basket {
         return tokens;
     }
 
-    function size() external view returns(uint) {
+    function size() external view returns(uint256) {
         return tokens.length;
     }
 }
