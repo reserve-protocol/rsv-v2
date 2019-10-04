@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -300,6 +301,26 @@ func (s *TestSuite) setup() {
 	_, tx, utilContract, err := bind.DeployContract(s.signer, utilABI, code, s.node)
 	s.requireTx(tx, err)( /* assert zero events */ )
 	s.utilContract = utilContract
+}
+
+// TearDownSuite runs once, after all of the tests in the suite.
+func (s *TestSuite) TearDownSuite() {
+	if coverageEnabled {
+		// Write coverage profile to disk.
+		s.Assert().NoError(s.node.(*soltools.Backend).WriteCoverage())
+
+		// Close the node.js process.
+		s.Assert().NoError(s.node.(*soltools.Backend).Close())
+
+		// Process coverage profile into an HTML report.
+		if out, err := exec.Command("npx", "istanbul", "report", "html").CombinedOutput(); err != nil {
+			fmt.Println()
+			fmt.Println("I generated coverage information in coverage/coverage.json.")
+			fmt.Println("I tried to process it with `istanbul` to turn it into a readable report, but failed.")
+			fmt.Println("The error I got when running istanbul was:", err)
+			fmt.Println("Istanbul's output was:\n" + string(out))
+		}
+	}
 }
 
 // backend is a wrapper around *backends.SimulatedBackend.
