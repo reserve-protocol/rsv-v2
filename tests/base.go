@@ -41,19 +41,21 @@ type TestSuite struct {
 		bind.ContractBackend
 		TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	}
-	owner                 account
-	reserve               *abi.Reserve
-	reserveAddress        common.Address
-	eternalStorage        *abi.ReserveEternalStorage
-	eternalStorageAddress common.Address
-	manager               *abi.Manager
-	managerAddress        common.Address
-	vault                 *abi.Vault
-	vaultAddress          common.Address
-	basket                *abi.Basket
-	basketAddress         common.Address
-	erc20s                []*abi.BasicERC20
-	erc20Addresses        []common.Address
+	owner                  account
+	reserve                *abi.Reserve
+	reserveAddress         common.Address
+	eternalStorage         *abi.ReserveEternalStorage
+	eternalStorageAddress  common.Address
+	manager                *abi.Manager
+	managerAddress         common.Address
+	vault                  *abi.Vault
+	vaultAddress           common.Address
+	basket                 *abi.Basket
+	basketAddress          common.Address
+	erc20s                 []*abi.BasicERC20
+	erc20Addresses         []common.Address
+	proposalFactory        *abi.ProposalFactory
+	proposalFactoryAddress common.Address
 
 	utilContract *bind.BoundContract
 

@@ -76,9 +76,12 @@ contract Manager is Ownable {
     uint256 public proposalsLength;
     uint256 public delay = 24 hours;
 
-    // Pausing
+    // Controls
+    mapping(address => bool) public issuers;  
+    bool public filterIssuers;
     bool public issuancePaused;
     bool public emergency;
+
 
     // The spread between issuance and redemption in basis points (BPS).
     uint256 public seigniorage;              // 0.1% spread -> 10 BPS. unit: BPS
@@ -92,6 +95,8 @@ contract Manager is Ownable {
     event Redemption(address indexed user, uint256 indexed amount);
 
     // Pause events
+    event FilterIssuersChanged(bool indexed oldVal, bool indexed newVal);
+    event IssuersChanged(address indexed issuer, bool indexed oldVal, bool indexed newVal);
     event IssuancePausedChanged(bool indexed oldVal, bool indexed newVal);
     event EmergencyChanged(bool indexed oldVal, bool indexed newVal);
     event OperatorChanged(address indexed oldAccount, address indexed newAccount);
@@ -132,12 +137,22 @@ contract Manager is Ownable {
         operator = operatorAddr;
         seigniorage = seigniorage_;
         emergency = true; // it's not an emergency, but we want everything to start paused.
+        filterIssuers = true;
+        issuers[_msgSender()] = true;
 
         // Start with the empty basket.
         trustedBasket = new Basket(Basket(0), new address[](0), new uint256[](0));
     }
 
     // ============================= Modifiers ================================
+
+    /// Modifies a function to run only when called by an issuer.
+    modifier onlyIssuers() {
+        if (filterIssuers) {
+            require(issuers[_msgSender()], "issuers only");
+        }
+        _;
+    }
 
     /// Modifies a function to run only when issuance is not paused.
     modifier issuanceNotPaused() {
@@ -164,6 +179,18 @@ contract Manager is Ownable {
     }
 
     // ========================= Public + External ============================
+
+    /// Set if the issuance filter should be applied. 
+    function setFilterIssuers(bool val) external onlyOwner {
+        emit FilterIssuersChanged(filterIssuers, val);
+        filterIssuers = val;
+    }
+
+    /// Set whether a address is an issuer or not. 
+    function setIssuerStatus(address issuer, bool val) external onlyOwner {
+        emit IssuersChanged(issuer, issuers[issuer], val);
+        issuers[issuer] = val;
+    }    
 
     /// Set if issuance should be paused. 
     function setIssuancePaused(bool val) external onlyOwner {
@@ -273,7 +300,7 @@ contract Manager is Ownable {
 
     /// Handles issuance.
     /// rsvAmount unit: qRSV
-    function issue(uint256 rsvAmount) external issuanceNotPaused notEmergency vaultCollateralized {
+    function issue(uint256 rsvAmount) external onlyIssuers issuanceNotPaused notEmergency vaultCollateralized {
         require(rsvAmount > 0, "cannot issue zero RSV");
         require(trustedBasket.size() > 0, "basket cannot be empty");
 
@@ -297,7 +324,7 @@ contract Manager is Ownable {
 
     /// Handles redemption.
     /// rsvAmount unit: qRSV
-    function redeem(uint256 rsvAmount) external notEmergency vaultCollateralized {
+    function redeem(uint256 rsvAmount) external onlyIssuers notEmergency vaultCollateralized {
         require(rsvAmount > 0, "cannot redeem 0 RSV");
         require(trustedBasket.size() > 0, "basket cannot be empty");
 
