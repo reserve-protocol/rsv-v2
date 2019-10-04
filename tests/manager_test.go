@@ -1,10 +1,10 @@
+// +build regular
+
 package tests
 
 import (
 	"math/big"
-	"reflect"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/suite"
@@ -18,10 +18,6 @@ func TestManager(t *testing.T) {
 
 type ManagerSuite struct {
 	TestSuite
-
-	operator account
-	proposer account
-	weights  []*big.Int
 }
 
 var (
@@ -727,7 +723,7 @@ func (s *ManagerSuite) TestProposeWeightsFullUsecase() {
 	s.assertManagerCollateralized()
 
 	// Change to a new basket.
-	newWeights := []*big.Int{shiftLeft(2, 48), shiftLeft(3, 48), shiftLeft(1, 48)}
+	newWeights := []*big.Int{shiftLeft(6, 35), shiftLeft(1, 35), shiftLeft(3, 35)}
 	s.changeBasketUsingWeightProposal(s.erc20Addresses, newWeights)
 
 	// Approve the manager to spend a billion RSV.
@@ -753,7 +749,7 @@ func (s *ManagerSuite) TestProposeSwapFullUsecase() {
 	s.assertManagerCollateralized()
 
 	// Change to a new basket using a SwapProposal
-	amounts := []*big.Int{shiftLeft(2, 18), shiftLeft(3, 18), shiftLeft(1, 18)}
+	amounts := []*big.Int{shiftLeft(2, 17), shiftLeft(3, 17), shiftLeft(1, 17)}
 	toVault := []bool{true, false, true}
 	s.changeBasketUsingSwapProposal(s.erc20Addresses, amounts, toVault)
 
@@ -768,218 +764,4 @@ func (s *ManagerSuite) TestProposeSwapFullUsecase() {
 
 	// We should be back to zero RSV supply.
 	s.assertRSVTotalSupply(bigInt(0))
-}
-
-// ===================================== Helpers ===========================================
-
-func (s *ManagerSuite) changeBasketUsingWeightProposal(tokens []common.Address, weights []*big.Int) {
-	// Propose the new basket.
-	s.requireTx(s.manager.ProposeWeights(signer(s.proposer), tokens, weights))
-
-	// Confirm proposals length increments.
-	proposalsLength, err := s.manager.ProposalsLength(nil)
-	s.Require().NoError(err)
-	proposalID := bigInt(0).Sub(proposalsLength, bigInt(1))
-
-	// Construct Proposal binding.
-	proposalAddress, err := s.manager.TrustedProposals(nil, proposalID)
-	s.Require().NoError(err)
-	proposal, err := abi.NewWeightProposal(proposalAddress, s.node)
-	s.Require().NoError(err)
-
-	s.logParsers[proposalAddress] = proposal
-
-	// Get Proposal Basket.
-	proposalBasketAddress, err := proposal.TrustedBasket(nil)
-	s.Require().NoError(err)
-	s.NotEqual(zeroAddress(), proposalBasketAddress)
-
-	basket, err := abi.NewBasket(proposalBasketAddress, s.node)
-	s.Require().NoError(err)
-
-	s.logParsers[proposalBasketAddress] = basket
-
-	// Check Basket has correct fields
-	// Tokens
-	basketTokens, err := basket.GetTokens(nil)
-	s.Require().NoError(err)
-	s.True(reflect.DeepEqual(basketTokens, tokens))
-
-	// Size
-	basketSize, err := basket.Size(nil)
-	s.Require().NoError(err)
-	s.Equal(bigInt(uint32(len(tokens))).String(), basketSize.String())
-
-	// Weights
-	for i := 0; i < len(weights); i++ {
-		foundBacking, err := basket.Weights(nil, tokens[i])
-		s.Require().NoError(err)
-		s.Equal(weights[i], foundBacking)
-	}
-
-	// Accept the Proposal.
-	s.requireTx(s.manager.AcceptProposal(signer(s.operator), proposalID))(
-		abi.ManagerProposalAccepted{
-			Id: proposalID, Proposer: s.proposer.address(),
-		},
-	)
-
-	// Confirm we cannot execute the proposal yet.
-	s.requireTxFails(s.manager.ExecuteProposal(signer(s.operator), proposalID))
-
-	// Advance 24h.
-	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
-
-	// Execute Proposal.
-	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
-
-	// Gets the current basket and makes sure it is correct.
-	s.assertBasket(basket, tokens, weights)
-
-	// Assert that the vault is still collateralized.
-	s.assertManagerCollateralized()
-}
-
-func (s *ManagerSuite) changeBasketUsingSwapProposal(tokens []common.Address, amounts []*big.Int, toVault []bool) {
-	// Propose the new basket.
-	s.requireTx(s.manager.ProposeSwap(signer(s.proposer), tokens, amounts, toVault))
-
-	// Confirm proposals length increments.
-	proposalsLength, err := s.manager.ProposalsLength(nil)
-	s.Require().NoError(err)
-	proposalID := bigInt(0).Sub(proposalsLength, bigInt(1))
-
-	// Construct Proposal binding.
-	proposalAddress, err := s.manager.TrustedProposals(nil, proposalID)
-	s.Require().NoError(err)
-	proposal, err := abi.NewSwapProposal(proposalAddress, s.node)
-	s.Require().NoError(err)
-
-	s.logParsers[proposalAddress] = proposal
-
-	// Accept the Proposal.
-	s.requireTx(s.manager.AcceptProposal(signer(s.operator), proposalID))(
-		abi.ManagerProposalAccepted{
-			Id: proposalID, Proposer: s.proposer.address(),
-		},
-	)
-
-	// Confirm we cannot execute the proposal yet.
-	s.requireTxFails(s.manager.ExecuteProposal(signer(s.operator), proposalID))
-
-	// Advance 24h.
-	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
-
-	// Execute Proposal.
-	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
-
-	// Gets the current basket and makes sure it is correct.
-	// s.assertBasket(basket, tokens, weights)
-
-	// Assert that the vault is still collateralized.
-	s.assertManagerCollateralized()
-}
-
-func (s *ManagerSuite) computeExpectedIssueAmounts(
-	seigniorage *big.Int, rsvSupply *big.Int,
-) []*big.Int {
-	BPS_FACTOR := bigInt(10000)
-
-	// Get current basket.
-	basketAddress, err := s.manager.TrustedBasket(nil)
-	s.Require().NoError(err)
-	basket, err := abi.NewBasket(basketAddress, s.node)
-	s.Require().NoError(err)
-	size, err := basket.Size(nil)
-	s.Require().NoError(err)
-
-	// Compute expected amounts.
-	var expectedAmounts []*big.Int
-	for i := bigInt(0); i.Cmp(size) == -1; i.Add(i, bigInt(1)) {
-		token, err := basket.Tokens(nil, i)
-		s.Require().NoError(err)
-		weight, err := basket.Weights(nil, token)
-		s.Require().NoError(err)
-
-		// Compute expectedAmount.
-		sum := bigInt(0).Add(BPS_FACTOR, seigniorage)
-		effectiveAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, sum), BPS_FACTOR)
-		expectedAmount := bigInt(0).Div(bigInt(0).Mul(effectiveAmount, weight), shiftLeft(1, 36))
-		expectedAmounts = append(expectedAmounts, expectedAmount)
-	}
-
-	return expectedAmounts
-}
-
-func (s *ManagerSuite) computeExpectedRedeemAmounts(rsvSupply *big.Int) []*big.Int {
-	// Get current basket.
-	basketAddress, err := s.manager.TrustedBasket(nil)
-	s.Require().NoError(err)
-	basket, err := abi.NewBasket(basketAddress, s.node)
-	s.Require().NoError(err)
-	size, err := basket.Size(nil)
-	s.Require().NoError(err)
-
-	// Compute expected amounts.
-	var expectedAmounts []*big.Int
-	for i := bigInt(0); i.Cmp(size) == -1; i.Add(i, bigInt(1)) {
-		token, err := basket.Tokens(nil, i)
-		s.Require().NoError(err)
-		weight, err := basket.Weights(nil, token)
-		s.Require().NoError(err)
-
-		// Compute expectedAmount.
-		expectedAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, weight), shiftLeft(1, 36))
-		expectedAmounts = append(expectedAmounts, expectedAmount)
-	}
-
-	return expectedAmounts
-}
-
-func (s *ManagerSuite) newWeights(
-	oldWeights []*big.Int, amounts []*big.Int, toVault []bool,
-) []*big.Int {
-	// Find rsv supply
-	rsvSupply, err := s.reserve.TotalSupply(nil)
-	s.Require().NoError(err)
-
-	// Compute newWeights.
-	var newWeights []*big.Int
-	for i, _ := range s.erc20s {
-		weight := oldWeights[i]
-		oldAmount := bigInt(0).Mul(weight, rsvSupply)
-
-		var newAmount *big.Int
-		if toVault[i] {
-			newAmount = bigInt(0).Add(oldAmount, amounts[i])
-		} else {
-			newAmount = bigInt(0).Sub(oldAmount, amounts[i])
-		}
-
-		// TODO: Rounding?
-		if rsvSupply.Cmp(newAmount) == 1 {
-			newWeights[i] = bigInt(0).Div(newAmount, rsvSupply)
-		} else {
-			newWeights[i] = bigInt(0)
-		}
-	}
-
-	return newWeights
-}
-
-func (s *ManagerSuite) fundAccountWithErc20sAndApprove(acc account, amounts []*big.Int) {
-	// Transfer all of the ERC20 tokens to `proposer`.
-	for i, amount := range amounts {
-		s.requireTxWithStrictEvents(s.erc20s[i].Transfer(s.signer, acc.address(), amount))(
-			abi.BasicERC20Transfer{
-				From: s.owner.address(), To: acc.address(), Value: amount,
-			},
-		)
-		// Have `proposer` approve the Manager to spend its funds.
-		s.requireTxWithStrictEvents(s.erc20s[i].Approve(signer(acc), s.managerAddress, amount))(
-			abi.BasicERC20Approval{
-				Owner: acc.address(), Spender: s.managerAddress, Value: amount,
-			},
-		)
-	}
 }

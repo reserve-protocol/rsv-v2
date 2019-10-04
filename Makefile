@@ -11,13 +11,19 @@ json := $(foreach contract,$(contracts),evm/$(contract).json) ## All JSON files
 abi := $(foreach contract,$(contracts),abi/$(contract).go) ## All ABI files
 myth_analyses := $(foreach solFile,$(sol),analysis/$(subst contracts/,,$(basename $(solFile))).myth.md)
 
+runs := 100
+decimals := "6,18,6" # up to 10 tokens max, probably stay between 1 and 36 decimals
+
 all: test json abi
 
 abi: $(abi)
 json: $(json)
 
 test: abi
-	go test ./tests
+	go test ./tests -tags regular
+
+fuzz: abi
+	go test ./tests -v -tags fuzz -args -decimals=${decimals} -runs=${runs}
 
 clean:
 	rm -rf abi evm sol-coverage-evm analysis
