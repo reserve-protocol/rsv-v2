@@ -146,14 +146,6 @@ contract Manager is Ownable {
 
     // ============================= Modifiers ================================
 
-    /// Modifies a function to run only when called by an issuer.
-    modifier onlyIssuers() {
-        if (filterIssuers) {
-            require(issuers[_msgSender()], "issuers only");
-        }
-        _;
-    }
-
     /// Modifies a function to run only when issuance is not paused.
     modifier issuanceNotPaused() {
         require(!issuancePaused, "issuance is paused");
@@ -179,18 +171,6 @@ contract Manager is Ownable {
     }
 
     // ========================= Public + External ============================
-
-    /// Set if the issuance filter should be applied. 
-    function setFilterIssuers(bool val) external onlyOwner {
-        emit FilterIssuersChanged(filterIssuers, val);
-        filterIssuers = val;
-    }
-
-    /// Set whether a address is an issuer or not. 
-    function setIssuerStatus(address issuer, bool val) external onlyOwner {
-        emit IssuersChanged(issuer, issuers[issuer], val);
-        issuers[issuer] = val;
-    }    
 
     /// Set if issuance should be paused. 
     function setIssuancePaused(bool val) external onlyOwner {
@@ -300,8 +280,7 @@ contract Manager is Ownable {
 
     /// Handles issuance.
     /// rsvAmount unit: qRSV
-    function issue(uint256 rsvAmount) external 
-        onlyIssuers 
+    function issue(uint256 rsvAmount) external  
         issuanceNotPaused 
         notEmergency 
         vaultCollateralized 
@@ -329,7 +308,7 @@ contract Manager is Ownable {
 
     /// Handles redemption.
     /// rsvAmount unit: qRSV
-    function redeem(uint256 rsvAmount) external onlyIssuers notEmergency vaultCollateralized {
+    function redeem(uint256 rsvAmount) external notEmergency vaultCollateralized {
         require(rsvAmount > 0, "cannot redeem 0 RSV");
         require(trustedBasket.size() > 0, "basket cannot be empty");
 

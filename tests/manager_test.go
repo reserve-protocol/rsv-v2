@@ -121,11 +121,6 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.Require().NoError(err)
 	s.Equal(false, emergency)
 
-	// Add the proposer to the list of approved issuers.
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, s.proposer.address(), true))(
-		abi.ManagerIssuersChanged{Issuer: s.proposer.address(), OldVal: false, NewVal: true},
-	)
-
 	// Set all auths to Manager.
 	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, managerAddress))(
 		abi.ReserveMinterChanged{NewMinter: managerAddress},
@@ -202,85 +197,6 @@ func (s *ManagerSuite) TestConstructor() {
 	isIssuer, err := s.manager.Issuers(nil, s.owner.address())
 	s.Require().NoError(err)
 	s.Equal(true, isIssuer)
-}
-
-// TestSetFilterIssuers tests that `setFilterIssuers` changes `filterIssuers`
-func (s *ManagerSuite) TestSetFilterIssuers() {
-	// Confirm it begins true
-	filter, err := s.manager.FilterIssuers(nil)
-	s.Require().NoError(err)
-	s.Equal(true, filter)
-
-	// Take the proposer off the list.
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, s.proposer.address(), false))(
-		abi.ManagerIssuersChanged{Issuer: s.proposer.address(), OldVal: true, NewVal: false},
-	)
-
-	// Turn filter off.
-	s.requireTxWithStrictEvents(s.manager.SetFilterIssuers(s.signer, false))(
-		abi.ManagerFilterIssuersChanged{OldVal: true, NewVal: false},
-	)
-
-	// Confirm filter is off.
-	filter, err = s.manager.FilterIssuers(nil)
-	s.Require().NoError(err)
-	s.Equal(false, filter)
-
-	// Confirm the proposer can issue.
-	s.requireTx(s.manager.Issue(signer(s.proposer), bigInt(1)))
-
-	// Turn it back on.
-	s.requireTxWithStrictEvents(s.manager.SetFilterIssuers(s.signer, true))(
-		abi.ManagerFilterIssuersChanged{OldVal: false, NewVal: true},
-	)
-
-	// Confirm filter is on.
-	filter, err = s.manager.FilterIssuers(nil)
-	s.Require().NoError(err)
-	s.Equal(true, filter)
-
-	// Confirm the proposer cannot issue.
-	s.requireTxFails(s.manager.Issue(signer(s.proposer), bigInt(1)))
-}
-
-// TestSetFilterIssuanceIsProtected tests that `setFilterIssuers` can only be called by owner.
-func (s *ManagerSuite) TestSetFilterIssuanceIsProtected() {
-	s.requireTxFails(s.manager.SetFilterIssuers(signer(s.account[2]), true))
-	s.requireTxFails(s.manager.SetFilterIssuers(signer(s.operator), true))
-}
-
-// TestSetIssuerStatus tests that `setIssuerStatus` changes the list of issuers.
-func (s *ManagerSuite) TestSetIssuerStatus() {
-	// Confirm it begins true for the proposer.
-	isIssuer, err := s.manager.Issuers(nil, s.proposer.address())
-	s.Require().NoError(err)
-	s.Equal(true, isIssuer)
-
-	// Take proposer off the list
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, s.proposer.address(), false))(
-		abi.ManagerIssuersChanged{Issuer: s.proposer.address(), OldVal: true, NewVal: false},
-	)
-
-	// Confirm they are off the list.
-	isIssuer, err = s.manager.Issuers(nil, s.proposer.address())
-	s.Require().NoError(err)
-	s.Equal(false, isIssuer)
-
-	// Put them back on the list.
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, s.proposer.address(), true))(
-		abi.ManagerIssuersChanged{Issuer: s.proposer.address(), OldVal: false, NewVal: true},
-	)
-
-	// Confirm they are on the list.
-	isIssuer, err = s.manager.Issuers(nil, s.proposer.address())
-	s.Require().NoError(err)
-	s.Equal(true, isIssuer)
-}
-
-// TestSetIssuerStatusIsProtected tests that `setFilterIssuers` can only be called by owner.
-func (s *ManagerSuite) TestSetIssuerStatusIsProtected() {
-	s.requireTxFails(s.manager.SetIssuerStatus(signer(s.account[2]), s.proposer.address(), true))
-	s.requireTxFails(s.manager.SetIssuerStatus(signer(s.operator), s.proposer.address(), true))
 }
 
 // TestSetIssuancePaused tests that `setIssuancePaused` changes the state as expected.
@@ -456,11 +372,6 @@ func (s *ManagerSuite) TestIssue() {
 	expectedAmounts := s.computeExpectedIssueAmounts(seigniorage, rsvAmount)
 	s.fundAccountWithErc20sAndApprove(buyer, expectedAmounts)
 
-	// Add buyer to `issuers`
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, buyer.address(), true))(
-		abi.ManagerIssuersChanged{Issuer: buyer.address(), OldVal: false, NewVal: true},
-	)
-
 	// Issue.
 	s.requireTx(s.manager.Issue(signer(buyer), rsvAmount))
 
@@ -533,38 +444,6 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	// Now we should be able to issue.
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
 
-	// Take proposer off the list
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, s.proposer.address(), false))(
-		abi.ManagerIssuersChanged{Issuer: s.proposer.address(), OldVal: true, NewVal: false},
-	)
-
-	// Issue should fail.
-	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
-
-	// Turn off the filter.
-	s.requireTxWithStrictEvents(s.manager.SetFilterIssuers(s.signer, false))(
-		abi.ManagerFilterIssuersChanged{OldVal: true, NewVal: false},
-	)
-
-	// Should be able to issue.
-	s.requireTx(s.manager.Issue(signer(s.proposer), bigInt(1)))
-
-	// Turn the filter back on.
-	s.requireTxWithStrictEvents(s.manager.SetFilterIssuers(s.signer, true))(
-		abi.ManagerFilterIssuersChanged{OldVal: false, NewVal: true},
-	)
-
-	// Issue should fail.
-	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
-
-	// Put them back on the list.
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, s.proposer.address(), true))(
-		abi.ManagerIssuersChanged{Issuer: s.proposer.address(), OldVal: false, NewVal: true},
-	)
-
-	// Issue should succeed
-	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
-
 }
 
 // TestIssueRequireStatements tests that `issue` reverts when Paused.
@@ -587,11 +466,6 @@ func (s *ManagerSuite) TestRedeem() {
 	s.requireTx(s.manager.Issue(signer(s.proposer), rsvAmount))
 
 	redeemer := s.account[4]
-
-	// Add redeemer to the list of approved issuers.
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, redeemer.address(), true))(
-		abi.ManagerIssuersChanged{Issuer: redeemer.address(), OldVal: false, NewVal: true},
-	)
 
 	// Send the RSV to someone else who doesn't have any Erc20s.
 	s.requireTx(s.reserve.Transfer(signer(s.proposer), redeemer.address(), rsvAmount))
@@ -651,38 +525,6 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	)
 
 	// Should be able to Redeem.
-	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
-
-	// Take proposer off the list
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, s.proposer.address(), false))(
-		abi.ManagerIssuersChanged{Issuer: s.proposer.address(), OldVal: true, NewVal: false},
-	)
-
-	// Redeem should fail.
-	s.requireTxFails(s.manager.Redeem(signer(s.proposer), bigInt(1)))
-
-	// Turn off the filter.
-	s.requireTxWithStrictEvents(s.manager.SetFilterIssuers(s.signer, false))(
-		abi.ManagerFilterIssuersChanged{OldVal: true, NewVal: false},
-	)
-
-	// Should be able to Redeem.
-	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
-
-	// Turn the filter back on.
-	s.requireTxWithStrictEvents(s.manager.SetFilterIssuers(s.signer, true))(
-		abi.ManagerFilterIssuersChanged{OldVal: false, NewVal: true},
-	)
-
-	// Redeem should fail.
-	s.requireTxFails(s.manager.Redeem(signer(s.proposer), bigInt(1)))
-
-	// Put them back on the list.
-	s.requireTxWithStrictEvents(s.manager.SetIssuerStatus(s.signer, s.proposer.address(), true))(
-		abi.ManagerIssuersChanged{Issuer: s.proposer.address(), OldVal: false, NewVal: true},
-	)
-
-	// Redeem should succeed
 	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
 }
 

@@ -144,11 +144,6 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 	s.Require().NoError(err)
 	s.Require().Equal(false, emergency)
 
-	// Disable the issuance filter.
-	s.requireTxWithStrictEvents(s.manager.SetFilterIssuers(s.signer, false))(
-		abi.ManagerFilterIssuersChanged{OldVal: true, NewVal: false},
-	)
-
 	// Set all auths to Manager.
 	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, managerAddress))(
 		abi.ReserveMinterChanged{NewMinter: managerAddress},
