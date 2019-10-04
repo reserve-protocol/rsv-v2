@@ -1,14 +1,17 @@
+// +build fuzz
+
 package tests
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"math/big"
 	"math/rand"
-	"os"
 	"os/exec"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,9 +30,15 @@ func TestManagerFuzz(t *testing.T) {
 
 type ManagerFuzzSuite struct {
 	TestSuite
+	numTokens         int
+	decimals          []uint32
+	addressToDecimals map[common.Address]uint32
 }
 
-var duration = 10
+var duration = flag.Int("runs", 100, "transactions to randomly generate")
+var decimals = flag.String("decimals", "6,18,6", "number of decimals for each token")
+
+// Limitations: Only up to 10 tokens max
 
 var (
 	// Compile-time check that ManagerFuzzSuite implements the interfaces we think it does.
@@ -43,16 +52,14 @@ var (
 // SetupSuite runs once, before all of the tests in the suite.
 func (s *ManagerFuzzSuite) SetupSuite() {
 	s.setup()
-	if os.Getenv("FUZZ_DURATION") != "" {
-		durationStr := os.Getenv("FUZZ_DURATION")
-		asInt, err := strconv.Atoi(durationStr)
-		if err == nil {
-			duration = asInt
-		}
-	}
-	fmt.Printf("running with fuzz duration: %v\n", duration)
-
 	rand.Seed(time.Now().UnixNano())
+	for _, d := range strings.Split(*decimals, ",") {
+		dInt, err := strconv.Atoi(d)
+		s.Require().NoError(err)
+		s.decimals = append(s.decimals, uint32(dInt))
+	}
+	s.numTokens = len(s.decimals)
+	s.addressToDecimals = make(map[common.Address]uint32)
 }
 
 // TearDownSuite runs once, after all of the tests in the suite.
@@ -182,32 +189,41 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 	s.basket = basket
 
 	// Deploy collateral ERC20s.
-	s.erc20s = make([]*abi.BasicERC20, 3)
-	s.erc20Addresses = make([]common.Address, 3)
-	for i := 0; i < 3; i++ {
+	s.erc20s = make([]*abi.BasicERC20, s.numTokens)
+	s.erc20Addresses = make([]common.Address, s.numTokens)
+	for i := 0; i < s.numTokens; i++ {
 		erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
 		s.Require().NoError(err)
 
+		s.addressToDecimals[erc20Address] = s.decimals[i]
 		s.erc20s[i] = erc20
 		s.erc20Addresses[i] = erc20Address
 		s.logParsers[erc20Address] = erc20
 	}
 
 	// Fund and set allowances.
-	amounts := []*big.Int{shiftLeft(1, 48), shiftLeft(1, 48), shiftLeft(1, 48)}
+	var amounts []*big.Int
+	for i := 0; i < s.numTokens; i++ {
+		amounts = append(amounts, shiftLeft(1, 48))
+	}
 	s.fundAccountWithErc20sAndApprove(s.proposer, amounts)
 
 	// Pass a WeightProposal so we are able to Issue/Redeem.
-	s.weights = []*big.Int{shiftLeft(1, 35), shiftLeft(3, 35), shiftLeft(6, 35)}
-	s.changeBasketUsingWeightProposal(s.erc20Addresses, s.weights)
+	weights := s.generateWeights(s.erc20Addresses)
+	s.changeBasketUsingWeightProposal(s.erc20Addresses, weights)
 }
 
 // TestByFuzzing chooses between Issuing, Redeeming, WeightProposal, and SwapProposal for
 // `duration` times and asserts invariants are uphold at every step.
 func (s *ManagerFuzzSuite) TestByFuzzing() {
 	fmt.Print("\n")
-	for i := 0; i < duration; i++ {
+	fmt.Printf("Running fuzzing with %v tokens with decimals: %v\n", s.numTokens, s.decimals)
+	for i := 0; i < *duration; i++ {
 		fmt.Printf("Run %v", i)
+
+		// Record how much value the proposer starts with.
+		erc20Balances := s.getERC20Balances()
+
 		// Choose between Issuing, Redeeming, WeightProposal, or SwapProposal
 		choice := rand.Int31n(4)
 		switch choice {
@@ -239,42 +255,35 @@ func (s *ManagerFuzzSuite) TestByFuzzing() {
 		case 2: // WeightProposal
 			fmt.Print(" | WeightProposal")
 
-			// Record how much value the proposer starts with.
-			startProposerValue := s.getTotalERC20Quantity(s.proposer.address())
-
-			// Choose 0, 1, 2, or 3 of the 3 ERC20 tokens using a binomial distribution.
+			// Choose a number of tokens from the full set using a binomial distribution.
 			_, tokens := s.chooseTokenSet()
 
-			// Randomly choose weights that sum to 1e36.
-			weights := s.generateWeights(tokens, shiftLeft(1, 36))
+			weights := s.generateWeights(tokens)
 
 			// Try to execute this WeightProposal. It's okay if it fails.
 			s.tryWeightProposal(tokens, weights)
 
-			// The proposer shouldn't end up with more value than they started with.
-			s.assertProposerDidNotGainValue(startProposerValue)
-
 		case 3: // SwapProposal
 			fmt.Print(" |  SwapProposal ")
 
-			// Record how much value the proposer starts with.
-			startProposerValue := s.getTotalERC20Quantity(s.proposer.address())
-
-			// Choose 0, 1, 2, or 3 of the 3 ERC20 tokens using a binomial distribution.
+			// Choose a number of tokens from the full set using a binomial distribution.
 			erc20s, tokens := s.chooseTokenSet()
 
 			// Generate a SwapProposal.
 			amounts, toVault := s.generateSwaps(erc20s, tokens)
 
 			// Try to execute this SwapProposal. It's okay if it fails.
-			s.trySwapProposal(s.erc20Addresses, amounts, toVault)
-
-			// The proposer shouldn't end up with more value than they started with.
-			s.assertProposerDidNotGainValue(startProposerValue)
+			s.trySwapProposal(tokens, amounts, toVault)
 		}
 
 		// Display RSV supply and basket content.
 		s.printMetrics()
+
+		//
+		if choice >= 2 {
+			// The proposer shouldn't end up with more value than they started with.
+			s.printRoundingError(erc20Balances)
+		}
 
 		// Check our on-chain invariant.
 		s.assertManagerCollateralized()
@@ -303,8 +312,9 @@ func (s *ManagerFuzzSuite) chooseTokenSet() ([]*abi.BasicERC20, []common.Address
 // generateWeights randomly chooses weights that add to `sum`.
 // I'm not really sure what distribution this is. It certainly biases toward
 // putting the largest weights on the early tokens, and fewest on the last.
-func (s *ManagerFuzzSuite) generateWeights(tokens []common.Address, sum *big.Int) []*big.Int {
+func (s *ManagerFuzzSuite) generateWeights(tokens []common.Address) []*big.Int {
 	var weights []*big.Int
+	sum := shiftLeft(1, 18)
 	for _, _ = range tokens {
 		n := generateRandUpTo(sum)
 		weights = append(weights, n)
@@ -316,9 +326,14 @@ func (s *ManagerFuzzSuite) generateWeights(tokens []common.Address, sum *big.Int
 		weights[len(weights)-1] = sum.Add(sum, weights[len(weights)-1])
 	}
 
-	// Check that the weights sum to 1e36.
+	// Check that the weights sum to 1e18.
 	if len(weights) > 0 {
-		s.Require().Equal(shiftLeft(1, 36).String(), sumWeights(weights).String())
+		s.Require().Equal(shiftLeft(1, 18).String(), sumWeights(weights).String())
+	}
+
+	// Multiply each weight by 1eDecimals
+	for i, _ := range weights {
+		weights[i] = bigInt(0).Mul(weights[i], shiftLeft(1, s.addressToDecimals[tokens[i]]))
 	}
 	return weights
 }
@@ -342,10 +357,11 @@ func (s *ManagerFuzzSuite) generateSwaps(erc20s []*abi.BasicERC20, tokens []comm
 	indexToVault := int(rand.Int31n(int32(len(erc20s))))
 	indexBalance, err := erc20s[indexToVault].BalanceOf(nil, s.vaultAddress)
 	s.Require().NoError(err)
-
-	// Randomly choose what amount to transfer out of the vault, up to the full amount available.
-	amounts[indexToVault] = generateRandUpTo(indexBalance)
 	toVault[indexToVault] = false
+
+	// Multiply 1e100 by everything and then remove zeroes later.
+	amounts[indexToVault] = generateRandUpTo(indexBalance)
+	amounts[indexToVault] = bigInt(0).Mul(amounts[indexToVault], shiftLeft(1, 100))
 
 	// Now we have to meet the constraint that the sum of the rest of the tokens must equal this chosen amount.
 	remainingTotal := bigInt(0).Add(bigInt(0), amounts[indexToVault])
@@ -368,6 +384,15 @@ func (s *ManagerFuzzSuite) generateSwaps(erc20s []*abi.BasicERC20, tokens []comm
 
 	// In net this should not be an exchange of value.
 	s.Require().Equal(bigInt(0).String(), sumSwaps(amounts, toVault).String())
+
+	// Now we have to put everything in terms of their own decimals.
+	baseDecimals := s.addressToDecimals[tokens[indexToVault]]
+	for i, _ := range amounts {
+		decimal := s.addressToDecimals[tokens[i]]
+		decimalDiff := baseDecimals - decimal
+		amounts[i] = bigInt(0).Div(amounts[i], shiftLeft(1, 100+decimalDiff))
+	}
+
 	return amounts, toVault
 }
 
@@ -518,6 +543,11 @@ func (s *ManagerFuzzSuite) printMetrics() {
 	for i, _ := range s.erc20Addresses {
 		fmt.Printf(" %v", toFraction(weights[i], weightsSum))
 	}
+	// fmt.Print(" |")
+	// for i, _ := range s.erc20Addresses {
+
+	// 	fmt.Printf(" %v", bigInt(0).Div(weights[i], shiftLeft(1, s.decimals[i])))
+	// }
 }
 
 // assertManagerCollateralizedOffChain is the same calculation that happens on-chain.
@@ -552,30 +582,41 @@ func (s *ManagerFuzzSuite) assertManagerCollateralizedOffChain() {
 
 }
 
-// getTotalERC20Quantity sums the total holdings of the proposer across all ERC20 tokens.
-func (s *ManagerFuzzSuite) getTotalERC20Quantity(acc common.Address) *big.Int {
-	sum := bigInt(0)
+// getERC20Balances returns the list of ERC20 balances the proposer has.
+func (s *ManagerFuzzSuite) getERC20Balances() []*big.Int {
+	var balances []*big.Int
 	for _, erc20 := range s.erc20s {
-		bal, err := erc20.BalanceOf(nil, acc)
+		bal, err := erc20.BalanceOf(nil, s.proposer.address())
 		s.Require().NoError(err)
-		sum = sum.Add(sum, bal)
+		balances = append(balances, bal)
 	}
-	return sum
+	return balances
 }
 
-// assertProposerDidNotGainValue asserts that the proposer now holds less than or the same
-// amount of value as they did previously when they had `oldVal`.
-func (s *ManagerFuzzSuite) assertProposerDidNotGainValue(oldVal *big.Int) {
-	// newVal := s.getTotalERC20Quantity(s.proposer.address())
-	// if newVal.Cmp(oldVal) == 1 {
-	// 	fmt.Println()
-	// 	fmt.Println("📢 Yuh oh 📢")
-	// 	fmt.Printf("The proposer started with: %v\n", oldVal)
-	// 	fmt.Printf("But they ended with: %v\n", newVal)
-	// 	fmt.Println()
-	// 	s.Require().True(false)
-	// }
+// printRoundingError prints the total winnings for the proposer.
+func (s *ManagerFuzzSuite) printRoundingError(oldBalances []*big.Int) {
+	newBalances := s.getERC20Balances()
 
+	total := bigInt(0)
+	// Multiply every gain by 1^100 so we can successfully divide out decimals.
+	for i := 0; i < s.numTokens; i++ {
+		diff := bigInt(0).Sub(newBalances[i], oldBalances[i])
+		diff = bigInt(0).Mul(diff, shiftLeft(1, 100))
+		diff = bigInt(0).Div(diff, shiftLeft(1, s.decimals[i]))
+		total = bigInt(0).Add(total, diff)
+	}
+
+	// Now we have a total that is 1e100 bigger than it should be.
+	// Divide by 1e94 to get things in terms of millionths.
+	total = bigInt(0).Div(total, shiftLeft(1, 94))
+	// fmt.Println(total.String())
+
+	// fmt.Println(oldBalances)
+	// fmt.Println(newBalances)
+
+	if total.Cmp(bigInt(0)) == 1 {
+		fmt.Printf(" -- Rounding error: %v/million", total.String())
+	}
 }
 
 // displayTxResult prints whether or not the tx succeeded.
@@ -616,7 +657,7 @@ func sumSwaps(amounts []*big.Int, toVault []bool) *big.Int {
 }
 
 // generateRandUpTo returns a random *big.Int between 0 and `n`.
-// This implementation is pretty fun :)
+// This implementation is pretty fun :) check it out
 func generateRandUpTo(n *big.Int) *big.Int {
 	if n.Cmp(bigInt(0)) == 0 { // the void basecase
 		return bigInt(0)

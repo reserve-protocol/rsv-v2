@@ -1,3 +1,5 @@
+// +build regular
+
 package tests
 
 import (

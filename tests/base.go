@@ -1,3 +1,5 @@
+// +build regular fuzz
+
 package tests
 
 import (
