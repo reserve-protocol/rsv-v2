@@ -93,8 +93,6 @@ contract Manager is Ownable {
     event Redemption(address indexed user, uint256 indexed amount);
 
     // Pause events
-    event FilterIssuersChanged(bool indexed oldVal, bool indexed newVal);
-    event IssuersChanged(address indexed issuer, bool indexed oldVal, bool indexed newVal);
     event IssuancePausedChanged(bool indexed oldVal, bool indexed newVal);
     event EmergencyChanged(bool indexed oldVal, bool indexed newVal);
     event OperatorChanged(address indexed oldAccount, address indexed newAccount);
