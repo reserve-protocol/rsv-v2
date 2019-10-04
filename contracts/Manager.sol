@@ -300,7 +300,12 @@ contract Manager is Ownable {
 
     /// Handles issuance.
     /// rsvAmount unit: qRSV
-    function issue(uint256 rsvAmount) external onlyIssuers issuanceNotPaused notEmergency vaultCollateralized {
+    function issue(uint256 rsvAmount) external 
+        onlyIssuers 
+        issuanceNotPaused 
+        notEmergency 
+        vaultCollateralized 
+    {
         require(rsvAmount > 0, "cannot issue zero RSV");
         require(trustedBasket.size() > 0, "basket cannot be empty");
 
