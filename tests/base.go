@@ -285,6 +285,7 @@ func (s *TestSuite) setup() {
 		s.Require().NoError(err)
 	}
 	s.signer = signer(s.account[0])
+	s.owner = s.account[0]
 
 	s.createFastNode()
 

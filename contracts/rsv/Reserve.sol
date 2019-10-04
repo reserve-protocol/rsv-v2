@@ -53,7 +53,7 @@ contract Reserve is IERC20, Ownable {
     event PauserChanged(address indexed newPauser);
     event FeeRecipientChanged(address indexed newFeeRecipient);
     event MaxSupplyChanged(uint256 indexed newMaxSupply);
-    event TxFeeHelperChanged(address indexed newTxFeeHelper)
+    event TxFeeHelperChanged(address indexed newTxFeeHelper);
 
     // Pause events
     event Paused(address indexed account);

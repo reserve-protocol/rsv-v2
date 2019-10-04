@@ -42,12 +42,17 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	}
 
 	s.requireTx(tx, err)(
-		abi.ReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.account[0].address()},
+		abi.ReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.owner.address()},
 	)
+
+	// Confirm it begins paused.
+	paused, err := reserve.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
 
 	// Unpause.
 	s.requireTxWithStrictEvents(reserve.Unpause(s.signer))(
-		abi.ReserveUnpaused{Account: s.account[0].address()},
+		abi.ReserveUnpaused{Account: s.owner.address()},
 	)
 
 	s.reserve = reserve
@@ -64,11 +69,11 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	// Accept ownership.
 	s.requireTxWithStrictEvents(s.eternalStorage.AcceptOwnership(s.signer))(
 		abi.ReserveEternalStorageOwnershipTransferred{
-			PreviousOwner: s.reserveAddress, NewOwner: s.account[0].address(),
+			PreviousOwner: s.reserveAddress, NewOwner: s.owner.address(),
 		},
 	)
 
-	deployerAddress := s.account[0].address()
+	deployerAddress := s.owner.address()
 
 	// Make the deployment account a minter, pauser, and freezer.
 	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, deployerAddress))(
@@ -77,9 +82,38 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	s.requireTxWithStrictEvents(s.reserve.ChangePauser(s.signer, deployerAddress))(
 		abi.ReservePauserChanged{NewPauser: deployerAddress},
 	)
+	s.requireTxWithStrictEvents(s.reserve.ChangeFeeRecipient(s.signer, deployerAddress))(
+		abi.ReserveFeeRecipientChanged{NewFeeRecipient: deployerAddress},
+	)
 }
 
 func (s *ReserveSuite) TestDeploy() {}
+
+func (s *ReserveSuite) TestConstructor() {
+	// `pauser`
+	pauser, err := s.reserve.Pauser(nil)
+	s.Require().NoError(err)
+	s.Equal(s.owner.address(), pauser)
+
+	// `feeRecipient`
+	feeRecipient, err := s.reserve.FeeRecipient(nil)
+	s.Require().NoError(err)
+	s.Equal(s.owner.address(), feeRecipient)
+
+	// `maxSupply`
+	maxSupply, err := s.reserve.MaxSupply(nil)
+	s.Require().NoError(err)
+	s.Equal(maxUint256().String(), maxSupply.String())
+
+	// `paused` is tested by BeforeTest
+
+	// `trustedTxFee`
+	trustedTxFee, err := s.reserve.TrustedTxFee(nil)
+	s.Require().NoError(err)
+	s.Equal(zeroAddress(), trustedTxFee)
+
+	// `trustedData` cannot be read because it is internal
+}
 
 func (s *ReserveSuite) TestBalanceOf() {
 	s.assertRSVBalance(zeroAddress(), bigInt(0))
@@ -113,9 +147,112 @@ func (s *ReserveSuite) TestAllowsMinting() {
 	)
 
 	// Check that balances are as expected.
-	s.assertRSVBalance(s.account[0].address(), bigInt(0))
+	s.assertRSVBalance(s.owner.address(), bigInt(0))
 	s.assertRSVBalance(recipient, amount)
 	s.assertRSVTotalSupply(amount)
+}
+
+func (s *ReserveSuite) TestChangeMinter() {
+	minter, err := s.reserve.Minter(nil)
+	s.Require().NoError(err)
+	s.Equal(s.owner.address(), minter)
+
+	// Change as owner.
+	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, s.account[2].address()))(
+		abi.ReserveMinterChanged{NewMinter: s.account[2].address()},
+	)
+
+	minter, err = s.reserve.Minter(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[2].address(), minter)
+
+	// Change as minter.
+	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(signer(s.account[2]), s.account[3].address()))(
+		abi.ReserveMinterChanged{NewMinter: s.account[3].address()},
+	)
+
+	minter, err = s.reserve.Minter(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[3].address(), minter)
+}
+
+func (s *ReserveSuite) TestChangePauser() {
+	pauser, err := s.reserve.Pauser(nil)
+	s.Require().NoError(err)
+	s.Equal(s.owner.address(), pauser)
+
+	// Change as owner.
+	s.requireTxWithStrictEvents(s.reserve.ChangePauser(s.signer, s.account[2].address()))(
+		abi.ReservePauserChanged{NewPauser: s.account[2].address()},
+	)
+
+	pauser, err = s.reserve.Pauser(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[2].address(), pauser)
+
+	// Change as pauser.
+	s.requireTxWithStrictEvents(s.reserve.ChangePauser(signer(s.account[2]), s.account[3].address()))(
+		abi.ReservePauserChanged{NewPauser: s.account[3].address()},
+	)
+
+	pauser, err = s.reserve.Pauser(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[3].address(), pauser)
+}
+
+func (s *ReserveSuite) TestChangeFeeRecipient() {
+	feeRecipient, err := s.reserve.FeeRecipient(nil)
+	s.Require().NoError(err)
+	s.Equal(s.owner.address(), feeRecipient)
+
+	// Change as owner.
+	s.requireTxWithStrictEvents(s.reserve.ChangeFeeRecipient(s.signer, s.account[2].address()))(
+		abi.ReserveFeeRecipientChanged{NewFeeRecipient: s.account[2].address()},
+	)
+
+	feeRecipient, err = s.reserve.FeeRecipient(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[2].address(), feeRecipient)
+
+	// Change as feeRecipient.
+	s.requireTxWithStrictEvents(s.reserve.ChangeFeeRecipient(signer(s.account[2]), s.account[3].address()))(
+		abi.ReserveFeeRecipientChanged{NewFeeRecipient: s.account[3].address()},
+	)
+
+	feeRecipient, err = s.reserve.FeeRecipient(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[3].address(), feeRecipient)
+}
+
+func (s *ReserveSuite) TestChangeTxFeeHelper() {
+	txFee, err := s.reserve.TrustedTxFee(nil)
+	s.Require().NoError(err)
+	s.Equal(zeroAddress(), txFee)
+
+	// Change as owner.
+	s.requireTxWithStrictEvents(s.reserve.ChangeTxFeeHelper(s.signer, s.account[2].address()))(
+		abi.ReserveTxFeeHelperChanged{NewTxFeeHelper: s.account[2].address()},
+	)
+
+	txFee, err = s.reserve.TrustedTxFee(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[2].address(), txFee)
+}
+
+func (s *ReserveSuite) TestChangeMaxSupply() {
+	maxSupply, err := s.reserve.MaxSupply(nil)
+	s.Require().NoError(err)
+	s.Equal(maxUint256(), maxSupply)
+
+	amount := bigInt(10)
+	// Change as owner.
+	s.requireTxWithStrictEvents(s.reserve.ChangeMaxSupply(s.signer, amount))(
+		abi.ReserveMaxSupplyChanged{NewMaxSupply: amount},
+	)
+
+	maxSupply, err = s.reserve.MaxSupply(nil)
+	s.Require().NoError(err)
+	s.Equal(amount, maxSupply)
 }
 
 func (s *ReserveSuite) TestTransfer() {
@@ -140,7 +277,7 @@ func (s *ReserveSuite) TestTransfer() {
 	// Check that balances are as expected.
 	s.assertRSVBalance(sender.address(), bigInt(0))
 	s.assertRSVBalance(recipient, amount)
-	s.assertRSVBalance(s.account[0].address(), bigInt(0))
+	s.assertRSVBalance(s.owner.address(), bigInt(0))
 	s.assertRSVTotalSupply(amount)
 }
 
@@ -161,7 +298,7 @@ func (s *ReserveSuite) TestTransferExceedsFunds() {
 	// Balances should be as we expect.
 	s.assertRSVBalance(sender.address(), smallAmount)
 	s.assertRSVBalance(recipient, bigInt(0))
-	s.assertRSVBalance(s.account[0].address(), bigInt(0))
+	s.assertRSVBalance(s.owner.address(), bigInt(0))
 	s.assertRSVTotalSupply(smallAmount)
 }
 
@@ -196,6 +333,9 @@ func (s *ReserveSuite) TestApprove() {
 	spender := s.account[2]
 	amount := bigInt(53)
 
+	// Allowance should start zero.
+	s.assertRSVAllowance(owner.address(), spender.address(), bigInt(0))
+
 	// Owner approves spender.
 	s.requireTxWithStrictEvents(s.reserve.Approve(signer(owner), spender.address(), amount))(
 		abi.ReserveApproval{Owner: owner.address(), Spender: spender.address(), Value: amount},
@@ -217,6 +357,9 @@ func (s *ReserveSuite) TestIncreaseAllowance() {
 	owner := s.account[1]
 	spender := s.account[2]
 	amount := bigInt(2000)
+
+	// Allowance should start zero.
+	s.assertRSVAllowance(owner.address(), spender.address(), bigInt(0))
 
 	// Owner approves spender through increaseAllowance.
 	s.requireTxWithStrictEvents(s.reserve.IncreaseAllowance(signer(owner), spender.address(), amount))(
@@ -260,6 +403,9 @@ func (s *ReserveSuite) TestDecreaseAllowance() {
 	s.requireTxWithStrictEvents(s.reserve.IncreaseAllowance(signer(owner), spender.address(), initialAmount))(
 		abi.ReserveApproval{Owner: owner.address(), Spender: spender.address(), Value: initialAmount},
 	)
+
+	// Allowance should be as we expect.
+	s.assertRSVAllowance(owner.address(), spender.address(), initialAmount)
 
 	// Owner decreases allowance.
 	s.requireTxWithStrictEvents(s.reserve.DecreaseAllowance(signer(owner), spender.address(), decrease))(
@@ -322,7 +468,7 @@ func (s *ReserveSuite) TestPausing() {
 
 	// Pause.
 	s.requireTxWithStrictEvents(s.reserve.Pause(s.signer))(
-		abi.ReservePaused{Account: s.account[0].address()},
+		abi.ReservePaused{Account: s.owner.address()},
 	)
 
 	// Minting is not allowed while paused.
@@ -352,7 +498,7 @@ func (s *ReserveSuite) TestPausing() {
 
 	// Unpause.
 	s.requireTxWithStrictEvents(s.reserve.Unpause(s.signer))(
-		abi.ReserveUnpaused{Account: s.account[0].address()},
+		abi.ReserveUnpaused{Account: s.owner.address()},
 	)
 
 	// Transfers are allowed while unpaused.
@@ -381,7 +527,7 @@ func (s *ReserveSuite) TestPausing() {
 }
 
 func (s *ReserveSuite) TestMintingBurningChain() {
-	deployerAddress := s.account[0].address()
+	deployerAddress := s.owner.address()
 	// Mint to recipient.
 	recipient := s.account[1]
 	amount := bigInt(100)
@@ -409,7 +555,7 @@ func (s *ReserveSuite) TestMintingBurningChain() {
 }
 
 func (s *ReserveSuite) TestMintingTransferBurningChain() {
-	deployerAddress := s.account[0].address()
+	deployerAddress := s.owner.address()
 	recipient := s.account[1]
 	amount := bigInt(100)
 
@@ -431,8 +577,8 @@ func (s *ReserveSuite) TestMintingTransferBurningChain() {
 	s.assertRSVBalance(recipient.address(), bigInt(0))
 
 	// Approve signer for burning.
-	s.requireTxWithStrictEvents(s.reserve.Approve(signer(target), s.account[0].address(), amount))(
-		abi.ReserveApproval{Owner: target.address(), Spender: s.account[0].address(), Value: amount},
+	s.requireTxWithStrictEvents(s.reserve.Approve(signer(target), s.owner.address(), amount))(
+		abi.ReserveApproval{Owner: target.address(), Spender: s.owner.address(), Value: amount},
 	)
 
 	// Burn from target.
@@ -447,7 +593,7 @@ func (s *ReserveSuite) TestMintingTransferBurningChain() {
 }
 
 func (s *ReserveSuite) TestBurnFromWouldUnderflow() {
-	deployerAddress := s.account[0].address()
+	deployerAddress := s.owner.address()
 	// Mint to recipient.
 	recipient := s.account[1]
 	amount := bigInt(100)
@@ -486,6 +632,9 @@ func (s *ReserveSuite) TestTransferFrom() {
 	s.assertRSVBalance(middleman.address(), bigInt(0))
 	s.assertRSVBalance(recipient.address(), bigInt(0))
 	s.assertRSVTotalSupply(amount)
+
+	// transferFrom fails before approval.
+	s.requireTxFails(s.reserve.TransferFrom(signer(middleman), sender.address(), recipient.address(), amount))
 
 	// Approve middleman to transfer funds from the sender.
 	s.requireTxWithStrictEvents(s.reserve.Approve(signer(sender), middleman.address(), amount))(
@@ -555,7 +704,7 @@ func (s *ReserveSuite) TestPauseFailsForNonPauser() {
 }
 
 func (s *ReserveSuite) TestUnpauseFailsForNonPauser() {
-	deployerAddress := s.account[0].address()
+	deployerAddress := s.owner.address()
 	s.requireTxWithStrictEvents(s.reserve.Pause(s.signer))(
 		abi.ReservePaused{Account: deployerAddress},
 	)
@@ -564,6 +713,20 @@ func (s *ReserveSuite) TestUnpauseFailsForNonPauser() {
 
 func (s *ReserveSuite) TestChangePauserFailsForNonPauser() {
 	s.requireTxFails(s.reserve.ChangePauser(signer(s.account[2]), s.account[1].address()))
+}
+
+//////////////////////
+
+func (s *ReserveSuite) TestChangeFeeRecipientFailsForNonFeeRecipient() {
+	s.requireTxFails(s.reserve.ChangeFeeRecipient(signer(s.account[2]), s.account[1].address()))
+}
+
+func (s *ReserveSuite) TestChangeTxFeeHelperFailsForNonOwner() {
+	s.requireTxFails(s.reserve.ChangeTxFeeHelper(signer(s.account[2]), s.account[1].address()))
+}
+
+func (s *ReserveSuite) TestChangeMaxSupplyFailsForNonOwner() {
+	s.requireTxFails(s.reserve.ChangeMaxSupply(signer(s.account[2]), bigInt(1)))
 }
 
 ///////////////////////
@@ -575,6 +738,12 @@ func (s *ReserveSuite) TestMintFailsForNonMinter() {
 
 func (s *ReserveSuite) TestChangeMinterFailsForNonMinter() {
 	s.requireTxFails(s.reserve.ChangeMinter(signer(s.account[2]), s.account[1].address()))
+}
+
+///////////////////////
+
+func (s *ReserveSuite) TestTransferEternalStorageFailsWhenUnpaused() {
+	s.requireTxFails(s.reserve.TransferEternalStorage(signer(s.account[2]), s.account[1].address()))
 }
 
 ///////////////////////
@@ -598,9 +767,14 @@ func (s *ReserveSuite) TestUpgrade() {
 
 	// Make the switch.
 	s.requireTxWithStrictEvents(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
-		PreviousOwner: s.account[0].address(), NewOwner: newTokenAddress,
+		PreviousOwner: s.owner.address(), NewOwner: newTokenAddress,
 	})
 	s.requireTxWithStrictEvents(newToken.CompleteHandoff(signer(newKey), s.reserveAddress))
+
+	// Old token's owner should be the zero address.
+	owner, err := s.reserve.Owner(nil)
+	s.Require().NoError(err)
+	s.Equal(zeroAddress(), owner)
 
 	// Old token should not be functional.
 	s.requireTxFails(s.reserve.Mint(s.signer, recipient.address(), big.NewInt(1500)))
@@ -655,14 +829,14 @@ func (s *ReserveSuite) TestEternalStorageOwner() {
 
 	// Check that owner and reserveAddress are initialized in the way we expect.
 	assertReserveAddress(s.reserveAddress)
-	assertOwner(s.account[0].address())
+	assertOwner(s.owner.address())
 
 	newOwner := s.account[3]
 
 	// Nominate a new owner.
 	s.requireTxWithStrictEvents(s.eternalStorage.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.ReserveEternalStorageNewOwnerNominated{
-			PreviousOwner: s.account[0].address(),
+			PreviousOwner: s.owner.address(),
 			NewOwner:      newOwner.address(),
 		},
 	)
@@ -670,7 +844,7 @@ func (s *ReserveSuite) TestEternalStorageOwner() {
 	// Accept ownership.
 	s.requireTxWithStrictEvents(s.eternalStorage.AcceptOwnership(signer(newOwner)))(
 		abi.ReserveEternalStorageOwnershipTransferred{
-			PreviousOwner: s.account[0].address(),
+			PreviousOwner: s.owner.address(),
 			NewOwner:      newOwner.address(),
 		},
 	)
