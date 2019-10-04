@@ -413,7 +413,7 @@ contract Manager is Ownable {
 
     /// Accepts a proposal for a new basket, beginning the required delay.
     function acceptProposal(uint256 id) external onlyOperator notEmergency vaultCollateralized {
-        require(proposalsLength > id, "proposals length > id");
+        require(proposalsLength > id, "proposals length < id");
         trustedProposals[id].accept(now.add(delay));
         emit ProposalAccepted(id, trustedProposals[id].proposer());
     }
@@ -427,14 +427,14 @@ contract Manager is Ownable {
             _msgSender() == operator,
             "cannot cancel"
         );
-        require(proposalsLength > id, "proposals length > id");
+        require(proposalsLength > id, "proposals length < id");
         trustedProposals[id].cancel();
         emit ProposalCanceled(id, trustedProposals[id].proposer(), _msgSender());
     }
 
     /// Executes a proposal by exchanging collateral tokens with the proposer.
     function executeProposal(uint256 id) external onlyOperator notEmergency vaultCollateralized {
-        require(proposalsLength > id, "proposals length > id");
+        require(proposalsLength > id, "proposals length < id");
         address proposer = trustedProposals[id].proposer();
         Basket trustedOldBasket = trustedBasket;
 
