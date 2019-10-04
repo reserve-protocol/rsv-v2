@@ -189,14 +189,6 @@ func (s *ManagerSuite) TestConstructor() {
 	s.Equal(bigInt(0).String(), seigniorage.String())
 
 	// `emergency` is tested in `BeforeTest`
-
-	filterOn, err := s.manager.FilterIssuers(nil)
-	s.Require().NoError(err)
-	s.Equal(true, filterOn)
-
-	isIssuer, err := s.manager.Issuers(nil, s.owner.address())
-	s.Require().NoError(err)
-	s.Equal(true, isIssuer)
 }
 
 // TestSetIssuancePaused tests that `setIssuancePaused` changes the state as expected.

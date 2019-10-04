@@ -77,8 +77,6 @@ contract Manager is Ownable {
     uint256 public delay = 24 hours;
 
     // Controls
-    mapping(address => bool) public issuers;  
-    bool public filterIssuers;
     bool public issuancePaused;
     bool public emergency;
 
@@ -137,8 +135,6 @@ contract Manager is Ownable {
         operator = operatorAddr;
         seigniorage = seigniorage_;
         emergency = true; // it's not an emergency, but we want everything to start paused.
-        filterIssuers = true;
-        issuers[_msgSender()] = true;
 
         // Start with the empty basket.
         trustedBasket = new Basket(Basket(0), new address[](0), new uint256[](0));
