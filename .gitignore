@@ -4,3 +4,4 @@ artifacts
 build
 evm
 sol-coverage-evm
+analysis

@@ -9,6 +9,7 @@ contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contrac
 sol := $(shell find contracts -name '*.sol' -not -name '.*' ) ## All Solidity files
 json := $(foreach contract,$(contracts),evm/$(contract).json) ## All JSON files
 abi := $(foreach contract,$(contracts),abi/$(contract).go) ## All ABI files
+myth_analyses := $(foreach solFile,$(sol),analysis/$(subst contracts/,,$(basename $(solFile))).myth.md)
 
 all: test json abi
 
@@ -19,16 +20,20 @@ test: abi
 	go test ./tests
 
 clean:
-	rm -rf abi evm sol-coverage-evm
+	rm -rf abi evm sol-coverage-evm analysis
 
 sizes: json
 	scripts/sizes $(json)
 
 check: $(sol)
 	slither contracts
-
 triage-check: $(sol)
 	slither --triage-mode contracts
+
+# Invoke this with parallel builds off: `make -j1 mythril`
+# If you have parallel make turned on, this won't work right, because mythril.
+mythril: $(myth_analyses)
+
 
 fmt:
 	npx solium -d contracts/ --fix
@@ -85,5 +90,32 @@ evm/BasicERC20.json: contracts/test/BasicERC20.sol $(sol)
 	$(call solc,1000000)
 
 
+# myth runs mythril, and plops its output in the "analysis" directory
+define myth
+@mkdir -p $(@D)
+myth a $< > $@
+endef
+
+# By default, don't specify the contract name
+analysis/%.myth.md: contracts/%.sol $(sol)
+	$(call myth)
+
+define myth_specific
+@mkdir -p $(@D)
+myth a $<:$1 > $@
+endef
+
+# But, where there's more than one contract in the source file, do.
+analysis/ProposalFactory.md: contracts/rsv/Proposal.sol $(sol)
+	$(call myth_specific ProposalFactory)
+
+analysis/WeightProposal.md: contracts/rsv/Proposal.sol $(sol)
+	$(call myth_specific WeightProposal)
+
+analysis/SwapProposal.md: contracts/rsv/Proposal.sol $(sol)
+	$(call myth_specific SwapProposal)
+
+
+
 # Mark "action" targets PHONY, to save occasional headaches.
-.PHONY: all clean json abi test check triage-check fmt run-geth sizes
+.PHONY: all clean json abi test check triage-check mythril fmt run-geth sizes
