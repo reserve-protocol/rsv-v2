@@ -509,6 +509,9 @@ func (s *TestSuite) changeBasketUsingWeightProposal(tokens []common.Address, wei
 	// Advance 24h.
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
 
+	// Confirm that non-operators cannot execute the proposal.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.account[3]), proposalID))
+
 	// Execute Proposal.
 	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
 
@@ -548,6 +551,9 @@ func (s *TestSuite) changeBasketUsingSwapProposal(tokens []common.Address, amoun
 
 	// Advance 24h.
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
+
+	// Confirm that non-operators cannot execute the proposal.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.account[3]), proposalID))
 
 	// Execute Proposal.
 	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
