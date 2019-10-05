@@ -3,7 +3,7 @@ export SOLC_VERSION = 0.5.7
 
 root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory
 rsv_contracts := Reserve ReserveEternalStorage
-test_contracts := BasicOwnable ReserveV2 BasicERC20
+test_contracts := BasicOwnable ReserveV2 BasicERC20 VaultV2
 contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
 
 sol := $(shell find contracts -name '*.sol' -not -name '.*' ) ## All Solidity files
@@ -94,6 +94,9 @@ evm/ReserveV2.json: contracts/test/ReserveV2.sol $(sol)
 
 evm/BasicERC20.json: contracts/test/BasicERC20.sol $(sol)
 	$(call solc,1000000)
+
+evm/VaultV2.json: contracts/test/VaultV2.sol $(sol)
+	$(call solc,1)
 
 
 # myth runs mythril, and plops its output in the "analysis" directory
