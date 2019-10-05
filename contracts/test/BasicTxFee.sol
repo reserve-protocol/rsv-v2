@@ -1,7 +1,5 @@
 pragma solidity 0.5.7;
 
-import "../zeppelin/math/SafeMath.sol";
-
 
 /**
  * Simple Transaction Fee contract for testing. 
