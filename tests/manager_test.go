@@ -200,7 +200,7 @@ func (s *ManagerSuite) TestSetIssuancePaused() {
 	s.Equal(false, paused)
 
 	// Pause.
-	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(signer(s.operator), true))(
 		abi.ManagerIssuancePausedChanged{OldVal: false, NewVal: true},
 	)
 
@@ -210,7 +210,7 @@ func (s *ManagerSuite) TestSetIssuancePaused() {
 	s.Equal(true, paused)
 
 	// Unpause.
-	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(signer(s.operator), false))(
 		abi.ManagerIssuancePausedChanged{OldVal: true, NewVal: false},
 	)
 
@@ -223,7 +223,7 @@ func (s *ManagerSuite) TestSetIssuancePaused() {
 // TestSetIssuancePausedIsProtected tests that `setIssuancePaused` can only be called by owner.
 func (s *ManagerSuite) TestSetIssuancePausedIsProtected() {
 	s.requireTxFails(s.manager.SetIssuancePaused(signer(s.account[2]), true))
-	s.requireTxFails(s.manager.SetIssuancePaused(signer(s.operator), true))
+	s.requireTxFails(s.manager.SetIssuancePaused(s.signer, true))
 }
 
 // TestSetEmergency tests that `setEmergency` changes the state as expected.
@@ -339,7 +339,7 @@ func (s *ManagerSuite) TestClearProposals() {
 	s.Equal(bigInt(1).String(), proposalsLength.String())
 
 	// Clear it.
-	s.requireTxWithStrictEvents(s.manager.ClearProposals(s.signer))(
+	s.requireTxWithStrictEvents(s.manager.ClearProposals(signer(s.operator)))(
 		abi.ManagerProposalsCleared{},
 	)
 
@@ -352,7 +352,7 @@ func (s *ManagerSuite) TestClearProposals() {
 // TestClearProposalsIsProtected tests that `clearProposals` can only be called by owner.
 func (s *ManagerSuite) TestClearProposalsIsProtected() {
 	s.requireTxFails(s.manager.ClearProposals(signer(s.account[2])))
-	s.requireTxFails(s.manager.ClearProposals(signer(s.operator)))
+	s.requireTxFails(s.manager.ClearProposals(s.signer))
 }
 
 // TestIssue tests that `issue` costs the correct amounts given basket + seigniorage.
@@ -423,7 +423,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
 
 	// Pause just issuance.
-	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(signer(s.operator), true))(
 		abi.ManagerIssuancePausedChanged{OldVal: false, NewVal: true},
 	)
 
@@ -436,7 +436,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
 
 	// Unpause issuance.
-	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(signer(s.operator), false))(
 		abi.ManagerIssuancePausedChanged{OldVal: true, NewVal: false},
 	)
 
