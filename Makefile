@@ -23,7 +23,7 @@ test: abi
 	go test ./tests -tags all
 
 fuzz: abi
-	go test ./tests -v -tags fuzz -args -decimals=${decimals} -runs=${runs}
+	go test ./tests -v -tags fuzz -args -decimals=$(decimals) -runs=$(runs)
 
 clean:
 	rm -rf abi evm sol-coverage-evm analysis
@@ -127,4 +127,4 @@ analysis/SwapProposal.md: contracts/rsv/Proposal.sol $(sol)
 
 
 # Mark "action" targets PHONY, to save occasional headaches.
-.PHONY: all clean json abi test check triage-check mythril fmt run-geth sizes
+.PHONY: all clean json abi test fuzz check triage-check mythril fmt run-geth sizes
