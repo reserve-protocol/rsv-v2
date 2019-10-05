@@ -136,7 +136,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.Equal(true, emergency)
 
 	// Unpause from emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -234,7 +234,7 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Equal(false, emergency)
 
 	// Pause for emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -244,7 +244,7 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Equal(true, emergency)
 
 	// Unpause for emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -254,10 +254,10 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Equal(false, emergency)
 }
 
-// TestSetEmergencyIsProtected tests that `setEmergency` can only be called by owner.
+// TestSetEmergencyIsProtected tests that `setEmergency` can only be called by operator.
 func (s *ManagerSuite) TestSetEmergencyIsProtected() {
 	s.requireTxFails(s.manager.SetEmergency(signer(s.account[2]), true))
-	s.requireTxFails(s.manager.SetEmergency(signer(s.operator), true))
+	s.requireTxFails(s.manager.SetEmergency(signer(s.owner), true))
 }
 
 // TestSetOperator tests that `setOperator` manipulates state correctly.
@@ -402,7 +402,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
 
 	// Set `emergency` to true.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -415,7 +415,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
 
 	// Set `emergency` to false.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -511,7 +511,7 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
 
 	// Emergency Pause.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -519,7 +519,7 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	s.requireTxFails(s.manager.Redeem(signer(s.proposer), bigInt(1)))
 
 	// Unpause from emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 

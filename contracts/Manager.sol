@@ -175,7 +175,7 @@ contract Manager is Ownable {
     }
 
     /// Set if all contract actions should be paused.
-    function setEmergency(bool val) external onlyOwner {
+    function setEmergency(bool val) external onlyOperator {
         emit EmergencyChanged(emergency, val);
         emergency = val;
     }
