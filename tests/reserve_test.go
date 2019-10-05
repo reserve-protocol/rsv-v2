@@ -77,6 +77,8 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 
 	deployerAddress := s.owner.address()
 
+	s.assertRSVTotalSupply(bigInt(0))
+
 	// Make the deployment account a minter, pauser, and freezer.
 	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, deployerAddress))(
 		abi.ReserveMinterChanged{NewMinter: deployerAddress},
