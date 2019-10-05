@@ -25,6 +25,8 @@ git checkout production
 git pull
 make json test
 
+# Also check that you have the latest `poke`! You'll have to `go install` it.
+
 cd evm
 
 # devchain test only: export POKE_FROM=@0
@@ -91,10 +93,18 @@ poke --address=$Basket Basket.json weights $TUSD
 
 
 # 6. Deploy Manager
+echo $Vault
+echo $Reserve
+echo $ProposalFactory
+echo $Basket
+echo $DAILY
 poke Manager.json deploy $Vault $Reserve $ProposalFactory $Basket $DAILY 0
 Manager=
 
-
+poke Manager.json trustedBasket --address=${Manager}
+poke Manager.json trustedRSV --address=${Manager}
+poke Manager.json trustedProposalFactory --address=${Manager}
+poke Manager.json trustedVault --address=${Manager}
 
 # 7. Update auth roles and contract back-links
 poke --address=$Vault Vault.json changeManager $Manager

@@ -34,7 +34,7 @@
       Ensure that there's only the one address with 10,000 RSV. (That's River@eth0/0)
 
 - [ ] DAILY and OWNER hardware keys are at hand.
-- [ ] DAILY and OWNER start out with at least 0.225 ETH
+- [ ] DAILY and OWNER start out with at least 0.225 ETH (Owner needs most of this)
 
 - [ ] Triple-check PAX, TUSD, and USDC addresses
 - [ ] Pull up https://ethgasstation.info for continuous monitoring
