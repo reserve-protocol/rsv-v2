@@ -33,7 +33,7 @@ type ManagerFuzzSuite struct {
 	addressToDecimals map[common.Address]uint32
 }
 
-var duration = flag.Int("runs", 100, "transactions to randomly generate")
+var duration = flag.Int("runs", 10, "transactions to randomly generate")
 var decimals = flag.String("decimals", "6,18,6", "number of decimals for each token")
 
 // Limitations: Only up to 10 tokens max
@@ -117,9 +117,43 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 	s.logParsers[propFactoryAddress] = propFactory
 	s.requireTx(tx, err)
 
+	// Deploy collateral ERC20s.
+	s.erc20s = make([]*abi.BasicERC20, s.numTokens)
+	s.erc20Addresses = make([]common.Address, s.numTokens)
+	for i := 0; i < s.numTokens; i++ {
+		erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
+		s.Require().NoError(err)
+
+		s.addressToDecimals[erc20Address] = s.decimals[i]
+		s.erc20s[i] = erc20
+		s.erc20Addresses[i] = erc20Address
+		s.logParsers[erc20Address] = erc20
+	}
+
+	// Make a simple basket
+	weights := s.generateWeights(s.erc20Addresses)
+	basketAddress, tx, basket, err := abi.DeployBasket(
+		s.signer,
+		s.node,
+		zeroAddress(),
+		s.erc20Addresses,
+		weights,
+	)
+
+	s.requireTxWithStrictEvents(tx, err)()
+	s.basketAddress = basketAddress
+	s.basket = basket
+
 	// Manager.
 	managerAddress, tx, manager, err := abi.DeployManager(
-		s.signer, s.node, vaultAddress, reserveAddress, propFactoryAddress, s.operator.address(), bigInt(0),
+		s.signer,
+		s.node,
+		vaultAddress,
+		reserveAddress,
+		propFactoryAddress,
+		basketAddress,
+		s.operator.address(),
+		bigInt(0),
 	)
 
 	s.logParsers[managerAddress] = manager
@@ -135,7 +169,7 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 	s.Require().Equal(true, emergency)
 
 	// Unpause from emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -155,40 +189,12 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 		abi.VaultManagerTransferred{PreviousManager: s.owner.address(), NewManager: managerAddress},
 	)
 
-	// Set the basket.
-	basketAddress, err := s.manager.TrustedBasket(nil)
-	s.Require().NoError(err)
-	s.NotEqual(zeroAddress(), basketAddress)
-
-	basket, err := abi.NewBasket(basketAddress, s.node)
-	s.Require().NoError(err)
-
-	s.basketAddress = basketAddress
-	s.basket = basket
-
-	// Deploy collateral ERC20s.
-	s.erc20s = make([]*abi.BasicERC20, s.numTokens)
-	s.erc20Addresses = make([]common.Address, s.numTokens)
-	for i := 0; i < s.numTokens; i++ {
-		erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
-		s.Require().NoError(err)
-
-		s.addressToDecimals[erc20Address] = s.decimals[i]
-		s.erc20s[i] = erc20
-		s.erc20Addresses[i] = erc20Address
-		s.logParsers[erc20Address] = erc20
-	}
-
 	// Fund and set allowances.
 	var amounts []*big.Int
 	for i := 0; i < s.numTokens; i++ {
 		amounts = append(amounts, shiftLeft(1, 48))
 	}
 	s.fundAccountWithErc20sAndApprove(s.proposer, amounts)
-
-	// Pass a WeightProposal so we are able to Issue/Redeem.
-	weights := s.generateWeights(s.erc20Addresses)
-	s.changeBasketUsingWeightProposal(s.erc20Addresses, weights)
 }
 
 // TestByFuzzing chooses between Issuing, Redeeming, WeightProposal, and SwapProposal for
@@ -593,7 +599,7 @@ func (s *ManagerFuzzSuite) printRoundingError(oldBalances []*big.Int) {
 	// fmt.Println(newBalances)
 
 	if total.Cmp(bigInt(0)) == 1 {
-		fmt.Printf(" -- Rounding error: %v/million", total.String())
+		fmt.Printf(" -- Cumulative qtoken gain by proposer: %v/million", total.String())
 	}
 }
 
