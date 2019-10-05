@@ -950,3 +950,74 @@ func (s *ReserveSuite) TestEternalStorageFunctionsAreProtected() {
 	// updateReserveAddress
 	s.requireTxFails(s.eternalStorage.UpdateReserveAddress(signer(balanceAcc), balanceAcc.address()))
 }
+
+//////////////////
+
+// TestTxFees tests that:
+// 1. We can upgrade the Transaction Fee contract.
+// 2. We can set who is the beneficiary of the transaction fees.
+// 3. If the transaction fee is too large, the transaction reverts appropriately.
+func (s *ReserveSuite) TestTxFees() {
+	firstFee := bigInt(1)
+	firstFeeRecipient := s.account[2]
+	secondFeeRecipient := s.account[3]
+
+	// Mint RSV to transactor.
+	sender := s.account[4]
+	receiver := s.account[5]
+	amount := bigInt(1000)
+
+	s.requireTx(s.reserve.Mint(s.signer, sender.address(), bigInt(0).Mul(amount, bigInt(4))))
+
+	// Confirm the two recipients have no initial balance.
+	s.assertRSVBalance(firstFeeRecipient.address(), bigInt(0))
+	s.assertRSVBalance(secondFeeRecipient.address(), bigInt(0))
+
+	// Deploy first Transaction Fee contract.
+	feeAddress, tx, _, err := abi.DeployBasicTxFee(s.signer, s.node, firstFee)
+
+	s.requireTx(tx, err)
+
+	// Set Transaction Fee Helper address.
+	s.requireTxWithStrictEvents(s.reserve.ChangeTxFeeHelper(s.signer, feeAddress))(
+		abi.ReserveTxFeeHelperChanged{NewTxFeeHelper: feeAddress},
+	)
+
+	// Set Transaction Fee recipient address.
+	s.requireTxWithStrictEvents(s.reserve.ChangeFeeRecipient(s.signer, firstFeeRecipient.address()))(
+		abi.ReserveFeeRecipientChanged{NewFeeRecipient: firstFeeRecipient.address()},
+	)
+
+	// Send RSV to a random.
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(sender), receiver.address(), amount))(
+		abi.ReserveTransfer{From: sender.address(), To: firstFeeRecipient.address(), Value: firstFee},
+		abi.ReserveTransfer{From: sender.address(), To: receiver.address(), Value: bigInt(0).Sub(amount, firstFee)},
+	)
+
+	// The firstFeeRecipient should have the fee.
+	s.assertRSVBalance(firstFeeRecipient.address(), firstFee)
+
+	// Now change who receives the fee.
+	s.requireTxWithStrictEvents(s.reserve.ChangeFeeRecipient(s.signer, secondFeeRecipient.address()))(
+		abi.ReserveFeeRecipientChanged{NewFeeRecipient: secondFeeRecipient.address()},
+	)
+
+	// Send RSV again, this time accumulating the second fee into the second fee recipient's account.
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(sender), receiver.address(), amount))(
+		abi.ReserveTransfer{From: sender.address(), To: secondFeeRecipient.address(), Value: firstFee},
+		abi.ReserveTransfer{From: sender.address(), To: receiver.address(), Value: bigInt(0).Sub(amount, firstFee)},
+	)
+
+	// The secondFeeRecipient should have the fee.
+	s.assertRSVBalance(secondFeeRecipient.address(), firstFee)
+
+	// Now upgrade our transaction fee contract. This time, an unrealistic fee.
+	newFeeAddress, tx, _, err := abi.DeployBasicTxFee(s.signer, s.node, bigInt(1000000000))
+	s.requireTx(tx, err)
+	s.requireTxWithStrictEvents(s.reserve.ChangeTxFeeHelper(s.signer, newFeeAddress))(
+		abi.ReserveTxFeeHelperChanged{NewTxFeeHelper: newFeeAddress},
+	)
+
+	// Try a transaction again, this time it should revert
+	s.requireTxFails(s.reserve.Transfer(signer(sender), receiver.address(), amount))
+}
