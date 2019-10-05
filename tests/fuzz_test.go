@@ -1,4 +1,4 @@
-// +build fuzz
+// +build all fuzz
 
 package tests
 

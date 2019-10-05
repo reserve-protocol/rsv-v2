@@ -20,7 +20,7 @@ abi: $(abi)
 json: $(json)
 
 test: abi
-	go test ./tests -tags regular
+	go test ./tests -tags all
 
 fuzz: abi
 	go test ./tests -v -tags fuzz -args -decimals=${decimals} -runs=${runs}
