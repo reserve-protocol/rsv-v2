@@ -11,7 +11,7 @@ contract BasicTxFee {
         fee = _fee;
     }
 
-    function calculateFee(address, address, uint256) external returns(uint256) {
+    function calculateFee(address, address, uint256) external view returns(uint256) {
         return fee;
     }
 }
