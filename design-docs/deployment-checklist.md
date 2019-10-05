@@ -135,7 +135,7 @@ CLI-level instructions are in `deployment-script.sh`. As you go:
 - Contracts and their critical initial state
   - Vault
     - owner = OWNER
-    - manager = Manager
+    - manager = Manager  [critical!]
 
   - Basket
     - tokens: [PAX, TUSD, USDC]
@@ -164,7 +164,7 @@ CLI-level instructions are in `deployment-script.sh`. As you go:
     - maxSupply: MAX_INT
     - paused: True
 
-    - minter: Manager
+    - minter: Manager  [critical!]
 
     - pauser: DAILY
     - feeRecipient: DAILY

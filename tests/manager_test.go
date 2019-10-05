@@ -243,6 +243,9 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Require().NoError(err)
 	s.Equal(true, emergency)
 
+	// Ensure econ functions can't be generally called during an emergency.
+	s.requireTxFails(s.manager.Issue(signer(s.proposer), shiftLeft(1, 20)))
+
 	// Unpause for emergency.
 	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
@@ -605,4 +608,45 @@ func (s *ManagerSuite) TestProposeSwapFullUsecase() {
 
 	// We should be back to zero RSV supply.
 	s.assertRSVTotalSupply(bigInt(0))
+}
+
+// TestRemoveTokenUsecase removes a token from the initial basket
+func (s *ManagerSuite) TestRemoveTokenUsecase() {
+	// Check basket size == 3
+	size, err := s.basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal("3", size.String())
+
+	// Change Basket
+	newTokenAddrs := s.erc20Addresses[:2]
+	newWeights := []*big.Int{shiftLeft(3, 35), shiftLeft(7, 35)}
+	s.changeBasketUsingWeightProposal(newTokenAddrs, newWeights)
+
+	// Check basket size == 2
+	size, err = s.basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal("2", size.String())
+}
+
+// TestRemoveTokenUsecase sets up a basket, issues RSV,
+// alters the basket to *remove* one of the tokens,
+// and redeems the RSV.
+func (s *ManagerSuite) TestAddTokenUsecase() {
+	// Check basket size == 3
+	size, err := s.basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal("3", size.String())
+
+	// Change Basket
+
+	newTokenAddr, _, _, err := abi.DeployBasicERC20(s.signer, s.node)
+	newTokenAddrs := append(s.erc20Addresses, newTokenAddr)
+	//fmt.Println(newTokenAddrs)
+	newWeights := []*big.Int{shiftLeft(1, 35), shiftLeft(2, 35), shiftLeft(3, 35), shiftLeft(4, 35)}
+	s.changeBasketUsingWeightProposal(newTokenAddrs, newWeights)
+
+	// Check basket size == 4
+	size, err = s.basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal("4", size.String())
 }
