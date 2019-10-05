@@ -80,7 +80,6 @@ contract Manager is Ownable {
     bool public issuancePaused;
     bool public emergency;
 
-
     // The spread between issuance and redemption in basis points (BPS).
     uint256 public seigniorage;              // 0.1% spread -> 10 BPS. unit: BPS
     uint256 constant BPS_FACTOR = 10000;     // This is what 100% looks like in BPS. unit: BPS
@@ -122,21 +121,22 @@ contract Manager is Ownable {
     // ============================ Constructor ===============================
 
     /// Begins in `emergency` state.
-    constructor(address vaultAddr,
+    constructor(
+        address vaultAddr,
         address rsvAddr,
         address proposalFactoryAddr,
+        address basketAddr,
         address operatorAddr,
-        uint256 _seigniorage) public {
+        uint256 _seigniorage) public
+    {
         require(_seigniorage <= 1000, "max seigniorage 10%");
         trustedVault = IVault(vaultAddr);
         trustedRSV = IRSV(rsvAddr);
         trustedProposalFactory = IProposalFactory(proposalFactoryAddr);
+        trustedBasket = Basket(basketAddr);
         operator = operatorAddr;
         seigniorage = _seigniorage;
         emergency = true; // it's not an emergency, but we want everything to start paused.
-
-        // Start with the empty basket.
-        trustedBasket = new Basket(Basket(0), new address[](0), new uint256[](0));
     }
 
     // ============================= Modifiers ================================
@@ -168,7 +168,7 @@ contract Manager is Ownable {
 
     // ========================= Public + External ============================
 
-    /// Set if issuance should be paused. 
+    /// Set if issuance should be paused.
     function setIssuancePaused(bool val) external onlyOwner {
         emit IssuancePausedChanged(issuancePaused, val);
         issuancePaused = val;
@@ -243,8 +243,8 @@ contract Manager is Ownable {
         for (uint256 i = 0; i < trustedBasket.size(); i++) {
             address trustedToken = trustedBasket.tokens(i);
             amounts[i] = _weighted(
-                effectiveAmount, 
-                trustedBasket.weights(trustedToken), 
+                effectiveAmount,
+                trustedBasket.weights(trustedToken),
                 RoundingMode.UP
             );
             // unit: qToken = _weighted(qRSV, aqToken/RSV, _)
@@ -265,8 +265,8 @@ contract Manager is Ownable {
         for (uint256 i = 0; i < trustedBasket.size(); i++) {
             address trustedToken = trustedBasket.tokens(i);
             amounts[i] = _weighted(
-                rsvAmount, 
-                trustedBasket.weights(trustedToken), 
+                rsvAmount,
+                trustedBasket.weights(trustedToken),
                 RoundingMode.DOWN
             );
             // unit: qToken = _weighted(qRSV, aqToken/RSV, _)
@@ -277,10 +277,10 @@ contract Manager is Ownable {
 
     /// Handles issuance.
     /// rsvAmount unit: qRSV
-    function issue(uint256 rsvAmount) external  
-        issuanceNotPaused 
-        notEmergency 
-        vaultCollateralized 
+    function issue(uint256 rsvAmount) external
+        issuanceNotPaused
+        notEmergency
+        vaultCollateralized
     {
         require(rsvAmount > 0, "cannot issue zero RSV");
         require(trustedBasket.size() > 0, "basket cannot be empty");
@@ -289,8 +289,8 @@ contract Manager is Ownable {
         uint256[] memory amounts = toIssue(rsvAmount); // unit: qToken[]
         for (uint256 i = 0; i < trustedBasket.size(); i++) {
             IERC20(trustedBasket.tokens(i)).safeTransferFrom(
-                _msgSender(), 
-                address(trustedVault), 
+                _msgSender(),
+                address(trustedVault),
                 amounts[i]
             );
             // unit check for amounts[i]: qToken.
@@ -371,9 +371,9 @@ contract Manager is Ownable {
         uint256 proposalID = proposalsLength++;
 
         trustedProposals[proposalID] = trustedProposalFactory.createSwapProposal(
-            _msgSender(), 
-            tokens, 
-            amounts, 
+            _msgSender(),
+            tokens,
+            amounts,
             toVault
         );
         trustedProposals[proposalID].acceptOwnership();
@@ -402,7 +402,7 @@ contract Manager is Ownable {
         uint256 proposalID = proposalsLength++;
 
         trustedProposals[proposalID] = trustedProposalFactory.createWeightProposal(
-            _msgSender(), 
+            _msgSender(),
             new Basket(Basket(0), tokens, weights)
         );
         trustedProposals[proposalID].acceptOwnership();
@@ -488,16 +488,16 @@ contract Manager is Ownable {
             // This token must increase in the vault, so transfer from proposer to vault.
             // (Transfer into vault: round up)
             uint256 transferAmount =_weighted(
-                trustedRSV.totalSupply(), 
-                newWeight.sub(oldWeight), 
+                trustedRSV.totalSupply(),
+                newWeight.sub(oldWeight),
                 RoundingMode.UP
             );
             // transferAmount unit: qTokens
 
             if (transferAmount > 0) {
                 IERC20(trustedToken).safeTransferFrom(
-                    proposer, 
-                    address(trustedVault), 
+                    proposer,
+                    address(trustedVault),
                     transferAmount
                 );
             }
@@ -506,8 +506,8 @@ contract Manager is Ownable {
             // This token will decrease in the vault, so transfer from vault to proposer.
             // (Transfer out of vault: round down)
             uint256 transferAmount =_weighted(
-                trustedRSV.totalSupply(), 
-                oldWeight.sub(newWeight), 
+                trustedRSV.totalSupply(),
+                oldWeight.sub(newWeight),
                 RoundingMode.DOWN
             );
             // transferAmount unit: qTokens
@@ -543,4 +543,3 @@ contract Manager is Ownable {
         return shiftedWeight.div(scaleFactor).add(1); // return unit: qTokens
     }
 }
-

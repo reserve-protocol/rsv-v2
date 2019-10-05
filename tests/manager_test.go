@@ -94,9 +94,33 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.proposalFactory = propFactory
 	s.proposalFactoryAddress = propFactoryAddress
 
+	// Deploy collateral ERC20s.
+	s.erc20s = make([]*abi.BasicERC20, 3)
+	s.erc20Addresses = make([]common.Address, 3)
+	for i := 0; i < 3; i++ {
+		erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
+		s.Require().NoError(err)
+
+		s.erc20s[i] = erc20
+		s.erc20Addresses[i] = erc20Address
+		s.logParsers[erc20Address] = erc20
+	}
+
+	// Basket.
+	s.weights = []*big.Int{shiftLeft(1, 36), shiftLeft(2, 36), shiftLeft(3, 36)}
+
+	// Make a simple basket
+	basketAddress, tx, basket, err := abi.DeployBasket(
+		s.signer, s.node, zeroAddress(), s.erc20Addresses, s.weights,
+	)
+	s.requireTxWithStrictEvents(tx, err)
+	s.NotEqual(zeroAddress(), basketAddress)
+	s.basketAddress, s.basket = basketAddress, basket
+
 	// Manager.
 	managerAddress, tx, manager, err := abi.DeployManager(
-		s.signer, s.node, vaultAddress, reserveAddress, propFactoryAddress, s.operator.address(), bigInt(0),
+		s.signer, s.node,
+		vaultAddress, reserveAddress, propFactoryAddress, basketAddress, s.operator.address(), bigInt(0),
 	)
 
 	s.logParsers[managerAddress] = manager
@@ -131,29 +155,6 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.requireTxWithStrictEvents(s.vault.ChangeManager(s.signer, managerAddress))(
 		abi.VaultManagerTransferred{PreviousManager: s.owner.address(), NewManager: managerAddress},
 	)
-
-	// Set the basket.
-	basketAddress, err := s.manager.TrustedBasket(nil)
-	s.Require().NoError(err)
-	s.NotEqual(zeroAddress(), basketAddress)
-
-	basket, err := abi.NewBasket(basketAddress, s.node)
-	s.Require().NoError(err)
-
-	s.basketAddress = basketAddress
-	s.basket = basket
-
-	// Deploy collateral ERC20s.
-	s.erc20s = make([]*abi.BasicERC20, 3)
-	s.erc20Addresses = make([]common.Address, 3)
-	for i := 0; i < 3; i++ {
-		erc20Address, _, erc20, err := abi.DeployBasicERC20(s.signer, s.node)
-		s.Require().NoError(err)
-
-		s.erc20s[i] = erc20
-		s.erc20Addresses[i] = erc20Address
-		s.logParsers[erc20Address] = erc20
-	}
 
 	// Fund and set allowances.
 	amounts := []*big.Int{shiftLeft(1, 46), shiftLeft(1, 46), shiftLeft(1, 46)}
