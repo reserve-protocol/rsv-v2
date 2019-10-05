@@ -14,9 +14,9 @@ import "../zeppelin/GSN/Context.sol";
  */
 contract Ownable is Context {
     address private _owner;
-    address public _nominatedOwner;
+    address private _nominatedOwner;
 
-    event NewOwnerNominated(address indexed previousOwner, address indexed newOwner);
+    event NewOwnerNominated(address indexed previousOwner, address indexed nominee);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
@@ -33,6 +33,13 @@ contract Ownable is Context {
      */
     function owner() public view returns (address) {
         return _owner;
+    }
+
+    /**
+     * @dev Returns the address of the current nominated owner.
+     */
+    function nominatedOwner() public view returns (address) {
+        return _nominatedOwner;
     }
 
     /**

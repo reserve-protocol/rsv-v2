@@ -774,7 +774,7 @@ func (s *ReserveSuite) TestUpgrade() {
 
 	// Make the switch.
 	s.requireTxWithStrictEvents(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
-		PreviousOwner: s.owner.address(), NewOwner: newTokenAddress,
+		PreviousOwner: s.owner.address(), Nominee: newTokenAddress,
 	})
 	s.requireTx(newToken.CompleteHandoff(signer(newKey), s.reserveAddress))(
 		abi.ReserveEternalStorageTransferred{NewReserveAddress: newTokenAddress},
@@ -846,7 +846,7 @@ func (s *ReserveSuite) TestEternalStorageOwner() {
 	s.requireTxWithStrictEvents(s.eternalStorage.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.ReserveEternalStorageNewOwnerNominated{
 			PreviousOwner: s.owner.address(),
-			NewOwner:      newOwner.address(),
+			Nominee:       newOwner.address(),
 		},
 	)
 
@@ -883,7 +883,7 @@ func (s *ReserveSuite) TestEternalStorageOwner() {
 	s.requireTxWithStrictEvents(s.eternalStorage.NominateNewOwner(signer(newOwner), s.account[5].address()))(
 		abi.ReserveEternalStorageNewOwnerNominated{
 			PreviousOwner: newOwner.address(),
-			NewOwner:      s.account[5].address(),
+			Nominee:       s.account[5].address(),
 		},
 	)
 }

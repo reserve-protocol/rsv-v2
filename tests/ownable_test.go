@@ -76,7 +76,7 @@ func (s *OwnableSuite) TestNominateNewOwner() {
 	newOwner := s.account[1]
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 
@@ -95,7 +95,7 @@ func (s *OwnableSuite) TestNominateNewOwnerNegativeCases() {
 	// Check that the nominated owner cannot call nominateNewOwner.
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 
@@ -107,7 +107,7 @@ func (s *OwnableSuite) TestAcceptOwnershipByNominatedOwner() {
 	newOwner := s.account[1]
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 
@@ -134,7 +134,7 @@ func (s *OwnableSuite) TestAcceptOwnershipNegativeCases() {
 	// Set nominatedOwner.
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 
@@ -168,7 +168,7 @@ func (s *OwnableSuite) TestRenounceOwnershipNegativeCases() {
 	newOwner := s.account[1]
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 	s.requireTxFails(s.ownable.RenounceOwnership(signer(newOwner), pledge))
