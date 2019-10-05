@@ -25,9 +25,10 @@ contract Basket {
     mapping(address => uint256) public weights; // unit: aqToken/RSV
     mapping(address => bool) public has;
     // INVARIANT: {addr | addr in tokens} == {addr | has[addr] == true}
-
+    
     // SECURITY PROPERTY: The value of prev is always a Basket, and cannot be set by any user.
-    // SECURITY PROPERTY: A basket can be of size 0. It is the Manager's responsibility
+    
+    // WARNING: A basket can be of size 0. It is the Manager's responsibility
     //                    to ensure Issuance does not happen against an empty basket.
 
     /// Construct a new basket from an old Basket `prev`, and a list of tokens and weights with
@@ -38,6 +39,7 @@ contract Basket {
         // Initialize data from input arrays
         tokens = new address[](_tokens.length);
         for (uint256 i = 0; i < _tokens.length; i++) {
+            require(!has[_tokens[i]], "duplicate token entries");
             weights[_tokens[i]] = _weights[i];
             has[_tokens[i]] = true;
             tokens[i] = _tokens[i];
