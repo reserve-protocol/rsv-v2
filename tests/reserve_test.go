@@ -822,7 +822,7 @@ func (s *ReserveSuite) TestUpgrade() {
 	assertRSVBalance(s.account[3].address(), big.NewInt(10))
 }
 
-// Test that we can use the owner in ReserveEternalStorage.
+// TestEternalStorageOwner tests that we can use the owner in ReserveEternalStorage.
 func (s *ReserveSuite) TestEternalStorageOwner() {
 	assertReserveAddress := func(expected common.Address) {
 		reserveAddress, err := s.eternalStorage.ReserveAddress(nil)
@@ -888,7 +888,7 @@ func (s *ReserveSuite) TestEternalStorageOwner() {
 	)
 }
 
-// Test that setBalance works as expected on ReserveEternalStorage.
+// TestEternalStorageSetBalance that setBalance works as expected on ReserveEternalStorage.
 // It is not used by the current Reserve contract, but is present as a bit
 // of potential future-proofing for upgrades.
 func (s *ReserveSuite) TestEternalStorageSetBalance() {
@@ -913,4 +913,40 @@ func (s *ReserveSuite) TestEternalStorageSetBalance() {
 	balance, err := s.eternalStorage.Balance(nil, newOwner.address())
 	s.NoError(err)
 	s.Equal(amount.String(), balance.String())
+}
+
+// TestEternalStorageFunctionsAreProtected makes sure that all the functions cannot be called by anyone
+// other than the allowed accounts.
+func (s *ReserveSuite) TestEternalStorageFunctionsAreProtected() {
+	// Set Reserve address
+	newReserveAccount := s.account[4]
+	s.requireTxWithStrictEvents(s.eternalStorage.UpdateReserveAddress(s.signer, newReserveAccount.address()))(
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: s.reserveAddress,
+			NewReserveAddress: newReserveAccount.address(),
+		},
+	)
+
+	balanceAcc := s.account[5]
+	value := bigInt(1)
+
+	// addBalance
+	s.requireTxFails(s.eternalStorage.AddBalance(s.signer, balanceAcc.address(), value))
+	s.requireTxFails(s.eternalStorage.AddBalance(signer(balanceAcc), balanceAcc.address(), value))
+
+	// subBalance
+	s.requireTx(s.eternalStorage.AddBalance(signer(newReserveAccount), balanceAcc.address(), value))
+	s.requireTxFails(s.eternalStorage.SubBalance(s.signer, balanceAcc.address(), value))
+	s.requireTxFails(s.eternalStorage.SubBalance(signer(balanceAcc), balanceAcc.address(), value))
+
+	// setBalance
+	s.requireTxFails(s.eternalStorage.SetBalance(s.signer, balanceAcc.address(), value))
+	s.requireTxFails(s.eternalStorage.SetBalance(signer(balanceAcc), balanceAcc.address(), value))
+
+	// setAllowed
+	s.requireTxFails(s.eternalStorage.SetAllowed(s.signer, balanceAcc.address(), s.owner.address(), value))
+	s.requireTxFails(s.eternalStorage.SetAllowed(signer(balanceAcc), balanceAcc.address(), s.owner.address(), value))
+
+	// updateReserveAddress
+	s.requireTxFails(s.eternalStorage.UpdateReserveAddress(signer(balanceAcc), balanceAcc.address()))
 }
