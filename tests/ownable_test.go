@@ -65,7 +65,7 @@ func (s *OwnableSuite) TestConstructor() {
 	s.Require().NoError(err)
 	s.Equal(s.owner.address(), ownerAddress)
 
-	// Initial nominated owner should be the zero address
+	// Initial nominated owner should be the zero address.
 	nominatedOwnerAddress, err := s.ownable.NominatedOwner(nil)
 	s.Require().NoError(err)
 	s.Equal(zeroAddress(), nominatedOwnerAddress)
@@ -140,6 +140,9 @@ func (s *OwnableSuite) TestAcceptOwnershipNegativeCases() {
 
 	// Check that a random address cannot accept ownership for the nominatedOwner.
 	s.requireTxFails(s.ownable.AcceptOwnership(signer(s.account[2])))
+
+	// Check that the current owner cannot force ownership onto the nominatedOwner.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
 }
 
 // TestRenounceOwnership unit tests the renounceOwnership function.
@@ -172,4 +175,77 @@ func (s *OwnableSuite) TestRenounceOwnershipNegativeCases() {
 		},
 	)
 	s.requireTxFails(s.ownable.RenounceOwnership(signer(newOwner), pledge))
+}
+
+// TestUseCases chains a bunch of calls into each other in a more realistic test of things.
+func (s *OwnableSuite) TestUseCases() {
+	firstOwner := s.account[1]
+	secondOwner := s.account[2]
+
+	// Nominate the first owner.
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, firstOwner.address()))(
+		abi.BasicOwnableNewOwnerNominated{
+			PreviousOwner: s.owner.address(), Nominee: firstOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(secondOwner)))
+
+	// Check that the nominated owner can accept ownership.
+	s.requireTxWithStrictEvents(s.ownable.AcceptOwnership(signer(firstOwner)))(
+		abi.BasicOwnableOwnershipTransferred{
+			PreviousOwner: s.owner.address(), NewOwner: firstOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else after either.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(secondOwner)))
+
+	// Even the original owner shouldn't be able to call nominate again, especially on themselves.
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, s.owner.address()))
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, secondOwner.address()))
+
+	// Nominate the second owner.
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(signer(firstOwner), secondOwner.address()))(
+		abi.BasicOwnableNewOwnerNominated{
+			PreviousOwner: firstOwner.address(), Nominee: secondOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(firstOwner)))
+
+	// Check that the nominated owner can accept ownership.
+	s.requireTxWithStrictEvents(s.ownable.AcceptOwnership(signer(secondOwner)))(
+		abi.BasicOwnableOwnershipTransferred{
+			PreviousOwner: firstOwner.address(), NewOwner: secondOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else after either.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(firstOwner)))
+
+	// Even the original owner shouldn't be able to call nominate again, especially on themselves.
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, s.owner.address()))
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, firstOwner.address()))
+
+	// And calling AcceptOwnership again shouldn't matter, but should emit a weird looking event.
+	s.requireTxWithStrictEvents(s.ownable.AcceptOwnership(signer(secondOwner)))(
+		abi.BasicOwnableOwnershipTransferred{
+			PreviousOwner: secondOwner.address(), NewOwner: secondOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else after either.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(firstOwner)))
+
+	// Even the original owner shouldn't be able to call nominate again, especially on themselves.
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, s.owner.address()))
+	s.requireTxFails(s.ownable.NominateNewOwner(signer(firstOwner), firstOwner.address()))
 }
