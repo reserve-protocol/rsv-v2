@@ -63,22 +63,22 @@ solc --allow-paths $(REPO_DIR)/contracts --optimize --optimize-runs $1 \
 endef
 
 evm/Basket.json : contracts/Basket.sol $(sol)
-	$(call solc,1)
+	$(call solc,100000)
 
 evm/Manager.json: contracts/Manager.sol $(sol)
-	$(call solc,1)
+	$(call solc,10000)
 
 evm/ProposalFactory.json: contracts/Proposal.sol $(sol)
-	$(call solc,1)
+	$(call solc,100)
 
 evm/SwapProposal.json: contracts/Proposal.sol $(sol)
-	$(call solc,1)
+	$(call solc,3)
 
 evm/WeightProposal.json: contracts/Proposal.sol $(sol)
-	$(call solc,1)
+	$(call solc,3)
 
 evm/Vault.json: contracts/Vault.sol $(sol)
-	$(call solc,1)
+	$(call solc,100000)
 
 evm/Reserve.json: contracts/rsv/Reserve.sol $(sol)
 	$(call solc,1000000)
