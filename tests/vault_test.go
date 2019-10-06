@@ -4,6 +4,7 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
 	"os/exec"
 	"testing"
 
@@ -255,4 +256,76 @@ func (s *VaultSuite) TestWithdrawToProtected() {
 	s.requireTxFails(
 		s.vault.WithdrawTo(signer(receiver), s.erc20Addresses[0], val, receiver.address()),
 	)
+}
+
+///
+func (s *VaultSuite) TestUpgrade() {
+	newKey := s.account[3]
+
+	// Set up a Basket.
+	weights := []*big.Int{shiftLeft(1, 36), shiftLeft(2, 36), shiftLeft(3, 36)}
+	basketAddress, tx, _, err := abi.DeployBasket(
+		s.signer, s.node, zeroAddress(), s.erc20Addresses, weights,
+	)
+	s.requireTxWithStrictEvents(tx, err)
+	s.NotEqual(zeroAddress(), basketAddress)
+
+	// Manager.
+	managerAddress, tx, manager, err := abi.DeployManager(
+		s.signer, s.node,
+		s.vaultAddress, s.account[2].address(), s.account[2].address(),
+		basketAddress, s.account[2].address(), bigInt(0),
+	)
+
+	s.logParsers[managerAddress] = manager
+	s.requireTx(tx, err)(abi.ManagerOwnershipTransferred{
+		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
+	})
+
+	// Deploy the new vault.
+	newVaultAddress, tx, newVault, err := abi.DeployVaultV2(signer(newKey), s.node)
+	s.logParsers[newVaultAddress] = newVault
+	s.requireTx(tx, err)(
+		abi.VaultV2OwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: newKey.address()},
+	)
+	s.requireTxWithStrictEvents(newVault.ChangeManager(signer(newKey), managerAddress))(
+		abi.VaultV2ManagerTransferred{PreviousManager: newKey.address(), NewManager: managerAddress},
+	)
+
+	// Switch over.
+	s.requireTxWithStrictEvents(s.vault.NominateNewOwner(s.signer, newVaultAddress))(
+		abi.VaultNewOwnerNominated{PreviousOwner: s.owner.address(), Nominee: newVaultAddress},
+	)
+	s.requireTxWithStrictEvents(manager.NominateNewOwner(s.signer, newVaultAddress))(
+		abi.ManagerNewOwnerNominated{PreviousOwner: s.owner.address(), Nominee: newVaultAddress},
+	)
+	s.requireTx(newVault.CompleteHandoff(signer(newKey), s.vaultAddress, managerAddress))(
+		abi.ManagerVaultChanged{OldVaultAddr: s.vaultAddress, NewVaultAddr: newVaultAddress},
+		abi.VaultOwnershipTransferred{PreviousOwner: s.owner.address(), NewOwner: newVaultAddress},
+		abi.ManagerOwnershipTransferred{PreviousOwner: s.owner.address(), NewOwner: newVaultAddress},
+		abi.ManagerNewOwnerNominated{PreviousOwner: newVaultAddress, Nominee: newKey.address()},
+		abi.VaultNewOwnerNominated{PreviousOwner: newVaultAddress, Nominee: newKey.address()},
+	)
+
+	// Make sure we can grab ownership back from VaultV2.
+	s.requireTxWithStrictEvents(manager.AcceptOwnership(signer(newKey)))(
+		abi.ManagerOwnershipTransferred{
+			PreviousOwner: newVaultAddress,
+			NewOwner:      newKey.address(),
+		},
+	)
+	s.requireTxWithStrictEvents(s.vault.AcceptOwnership(signer(newKey)))(
+		abi.VaultOwnershipTransferred{
+			PreviousOwner: newVaultAddress,
+			NewOwner:      newKey.address(),
+		},
+	)
+
+	// Assert balances in new vault are same as what was passed into original vault in `BeforeTest`.
+	for _, erc20 := range s.erc20s {
+		bal, err := erc20.BalanceOf(nil, newVaultAddress)
+		s.Require().NoError(err)
+		s.Equal(bigInt(1000), bal)
+	}
+
 }

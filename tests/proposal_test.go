@@ -547,7 +547,7 @@ func (s *SwapProposalSuite) TestCancelIsProtected() {
 	s.requireTxFails(s.proposal.Cancel(signer(s.proposer)))
 }
 
-// Test that `cancel` reverts if the state is completed..
+// Test that `cancel` reverts if the state is completed.
 func (s *SwapProposalSuite) TestCancelRequiresNotCompleted() {
 	futureTime := bigInt(0)
 
@@ -656,3 +656,12 @@ func (s *SwapProposalSuite) TestCompleteCannotHappenBeforeNow() {
 	// Now the proposal can be completed.
 	s.requireTx(s.proposal.Complete(s.signer, s.reserveAddress, s.basketAddress))
 }
+
+// On proposal upgrades:
+//   There is no reason to upgrade SwapProposal or WeightProposal. They can just be replaced by changes to
+//   ProposalFactory.
+//   There is no state in ProposalFactory, so upgrading it just amounts to either
+//   (1) deploying a new ProposalFactory contract and changing the pointer in the Manager or
+//   (2) upgrading the Manager contract, if the ProposalFactory and related code are changed enough
+//   that it would require a Manager upgrade to handle proposals in the new way.
+//   TODO: Move these thoughts to the design documentation and change these comments to point to that.
