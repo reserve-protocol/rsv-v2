@@ -1,3 +1,5 @@
+// +build all fuzz
+
 package tests
 
 import (
@@ -8,6 +10,9 @@ import (
 	"math"
 	"math/big"
 	"os"
+
+	"os/exec"
+	"reflect"
 	"strings"
 	"time"
 
@@ -41,23 +46,29 @@ type TestSuite struct {
 		bind.ContractBackend
 		TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
 	}
-	owner                 account
-	reserve               *abi.Reserve
-	reserveAddress        common.Address
-	eternalStorage        *abi.ReserveEternalStorage
-	eternalStorageAddress common.Address
-	manager               *abi.Manager
-	managerAddress        common.Address
-	vault                 *abi.Vault
-	vaultAddress          common.Address
-	basket                *abi.Basket
-	basketAddress         common.Address
-	erc20s                []*abi.BasicERC20
-	erc20Addresses        []common.Address
+	owner                  account
+	reserve                *abi.Reserve
+	reserveAddress         common.Address
+	eternalStorage         *abi.ReserveEternalStorage
+	eternalStorageAddress  common.Address
+	manager                *abi.Manager
+	managerAddress         common.Address
+	vault                  *abi.Vault
+	vaultAddress           common.Address
+	basket                 *abi.Basket
+	basketAddress          common.Address
+	erc20s                 []*abi.BasicERC20
+	erc20Addresses         []common.Address
+	proposalFactory        *abi.ProposalFactory
+	proposalFactoryAddress common.Address
 
 	utilContract *bind.BoundContract
 
 	logParsers map[common.Address]logParser
+
+	operator account
+	proposer account
+	weights  []*big.Int
 }
 
 var coverageEnabled = os.Getenv("COVERAGE_ENABLED") != ""
@@ -282,6 +293,7 @@ func (s *TestSuite) setup() {
 		s.Require().NoError(err)
 	}
 	s.signer = signer(s.account[0])
+	s.owner = s.account[0]
 
 	s.createFastNode()
 
@@ -298,6 +310,26 @@ func (s *TestSuite) setup() {
 	_, tx, utilContract, err := bind.DeployContract(s.signer, utilABI, code, s.node)
 	s.requireTx(tx, err)( /* assert zero events */ )
 	s.utilContract = utilContract
+}
+
+// TearDownSuite runs once, after all of the tests in the suite.
+func (s *TestSuite) TearDownSuite() {
+	if coverageEnabled {
+		// Write coverage profile to disk.
+		s.Assert().NoError(s.node.(*soltools.Backend).WriteCoverage())
+
+		// Close the node.js process.
+		s.Assert().NoError(s.node.(*soltools.Backend).Close())
+
+		// Process coverage profile into an HTML report.
+		if out, err := exec.Command("npx", "istanbul", "report", "html").CombinedOutput(); err != nil {
+			fmt.Println()
+			fmt.Println("I generated coverage information in coverage/coverage.json.")
+			fmt.Println("I tried to process it with `istanbul` to turn it into a readable report, but failed.")
+			fmt.Println("The error I got when running istanbul was:", err)
+			fmt.Println("Istanbul's output was:\n" + string(out))
+		}
+	}
 }
 
 // backend is a wrapper around *backends.SimulatedBackend.
@@ -398,4 +430,227 @@ func containsAddress(a []common.Address, x common.Address) bool {
 		}
 	}
 	return false
+}
+
+// TestSuite Helpers
+
+func (s *TestSuite) fundAccountWithErc20sAndApprove(acc account, amounts []*big.Int) {
+	// Transfer all of the ERC20 tokens to `proposer`.
+	for i, amount := range amounts {
+		s.requireTxWithStrictEvents(s.erc20s[i].Transfer(s.signer, acc.address(), amount))(
+			abi.BasicERC20Transfer{
+				From: s.owner.address(), To: acc.address(), Value: amount,
+			},
+		)
+		// Have `proposer` approve the Manager to spend its funds.
+		s.requireTxWithStrictEvents(s.erc20s[i].Approve(signer(acc), s.managerAddress, amount))(
+			abi.BasicERC20Approval{
+				Owner: acc.address(), Spender: s.managerAddress, Value: amount,
+			},
+		)
+	}
+}
+
+func (s *TestSuite) changeBasketUsingWeightProposal(tokens []common.Address, weights []*big.Int) {
+	// Propose the new basket.
+	s.requireTx(s.manager.ProposeWeights(signer(s.proposer), tokens, weights))
+
+	// Confirm proposals length increments.
+	proposalsLength, err := s.manager.ProposalsLength(nil)
+	s.Require().NoError(err)
+	proposalID := bigInt(0).Sub(proposalsLength, bigInt(1))
+
+	// Construct Proposal binding.
+	proposalAddress, err := s.manager.TrustedProposals(nil, proposalID)
+	s.Require().NoError(err)
+	proposal, err := abi.NewWeightProposal(proposalAddress, s.node)
+	s.Require().NoError(err)
+
+	s.logParsers[proposalAddress] = proposal
+
+	// Get Proposal Basket.
+	proposalBasketAddress, err := proposal.TrustedBasket(nil)
+	s.Require().NoError(err)
+	s.NotEqual(zeroAddress(), proposalBasketAddress)
+	s.basketAddress = proposalBasketAddress
+
+	basket, err := abi.NewBasket(proposalBasketAddress, s.node)
+	s.Require().NoError(err)
+	s.basket = basket
+
+	s.logParsers[proposalBasketAddress] = basket
+
+	// Check Basket has correct fields
+	// Tokens
+	basketTokens, err := basket.GetTokens(nil)
+	s.Require().NoError(err)
+	s.True(reflect.DeepEqual(basketTokens, tokens))
+
+	// Size
+	basketSize, err := basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(uint32(len(tokens))).String(), basketSize.String())
+
+	// Weights
+	for i := 0; i < len(weights); i++ {
+		foundBacking, err := basket.Weights(nil, tokens[i])
+		s.Require().NoError(err)
+		s.Equal(weights[i], foundBacking)
+	}
+
+	// Accept the Proposal.
+	s.requireTx(s.manager.AcceptProposal(signer(s.operator), proposalID))(
+		abi.ManagerProposalAccepted{
+			Id: proposalID, Proposer: s.proposer.address(),
+		},
+	)
+
+	// Confirm we cannot execute the proposal yet.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.operator), proposalID))
+
+	// Advance 24h.
+	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
+
+	// Confirm that non-operators cannot execute the proposal.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.account[3]), proposalID))
+
+	// Execute Proposal.
+	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
+
+	// Gets the current basket and makes sure it is correct.
+	s.assertBasket(basket, tokens, weights)
+
+	// Assert that the vault is still collateralized.
+	s.assertManagerCollateralized()
+
+}
+
+func (s *TestSuite) changeBasketUsingSwapProposal(tokens []common.Address, amounts []*big.Int, toVault []bool) {
+	// Propose the new basket.
+	s.requireTx(s.manager.ProposeSwap(signer(s.proposer), tokens, amounts, toVault))
+
+	// Confirm proposals length increments.
+	proposalsLength, err := s.manager.ProposalsLength(nil)
+	s.Require().NoError(err)
+	proposalID := bigInt(0).Sub(proposalsLength, bigInt(1))
+
+	// Construct Proposal binding.
+	proposalAddress, err := s.manager.TrustedProposals(nil, proposalID)
+	s.Require().NoError(err)
+	proposal, err := abi.NewSwapProposal(proposalAddress, s.node)
+	s.Require().NoError(err)
+
+	s.logParsers[proposalAddress] = proposal
+
+	// Accept the Proposal.
+	s.requireTx(s.manager.AcceptProposal(signer(s.operator), proposalID))(
+		abi.ManagerProposalAccepted{
+			Id: proposalID, Proposer: s.proposer.address(),
+		},
+	)
+
+	// Confirm we cannot execute the proposal yet.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.operator), proposalID))
+
+	// Advance 24h.
+	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
+
+	// Confirm that non-operators cannot execute the proposal.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.account[3]), proposalID))
+
+	// Execute Proposal.
+	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
+
+	// Gets the current basket and makes sure it is correct.
+	// s.assertBasket(basket, tokens, weights)
+
+	// Assert that the vault is still collateralized.
+	s.assertManagerCollateralized()
+}
+
+func (s *TestSuite) computeExpectedIssueAmounts(
+	seigniorage *big.Int, rsvSupply *big.Int,
+) []*big.Int {
+	BPS_FACTOR := bigInt(10000)
+
+	// Get current basket.
+	basketAddress, err := s.manager.TrustedBasket(nil)
+	s.Require().NoError(err)
+	basket, err := abi.NewBasket(basketAddress, s.node)
+	s.Require().NoError(err)
+	size, err := basket.Size(nil)
+	s.Require().NoError(err)
+
+	// Compute expected amounts.
+	var expectedAmounts []*big.Int
+	for i := bigInt(0); i.Cmp(size) == -1; i.Add(i, bigInt(1)) {
+		token, err := basket.Tokens(nil, i)
+		s.Require().NoError(err)
+		weight, err := basket.Weights(nil, token)
+		s.Require().NoError(err)
+
+		// Compute expectedAmount.
+		sum := bigInt(0).Add(BPS_FACTOR, seigniorage)
+		effectiveAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, sum), BPS_FACTOR)
+		expectedAmount := bigInt(0).Div(bigInt(0).Mul(effectiveAmount, weight), shiftLeft(1, 36))
+		expectedAmounts = append(expectedAmounts, expectedAmount)
+	}
+
+	return expectedAmounts
+}
+
+func (s *TestSuite) computeExpectedRedeemAmounts(rsvSupply *big.Int) []*big.Int {
+	// Get current basket.
+	basketAddress, err := s.manager.TrustedBasket(nil)
+	s.Require().NoError(err)
+	basket, err := abi.NewBasket(basketAddress, s.node)
+	s.Require().NoError(err)
+	size, err := basket.Size(nil)
+	s.Require().NoError(err)
+
+	// Compute expected amounts.
+	var expectedAmounts []*big.Int
+	for i := bigInt(0); i.Cmp(size) == -1; i.Add(i, bigInt(1)) {
+		token, err := basket.Tokens(nil, i)
+		s.Require().NoError(err)
+		weight, err := basket.Weights(nil, token)
+		s.Require().NoError(err)
+
+		// Compute expectedAmount.
+		expectedAmount := bigInt(0).Div(bigInt(0).Mul(rsvSupply, weight), shiftLeft(1, 36))
+		expectedAmounts = append(expectedAmounts, expectedAmount)
+	}
+
+	return expectedAmounts
+}
+
+func (s *TestSuite) newWeights(
+	oldWeights []*big.Int, amounts []*big.Int, toVault []bool,
+) []*big.Int {
+	// Find rsv supply
+	rsvSupply, err := s.reserve.TotalSupply(nil)
+	s.Require().NoError(err)
+
+	// Compute newWeights.
+	var newWeights []*big.Int
+	for i, _ := range s.erc20s {
+		weight := oldWeights[i]
+		oldAmount := bigInt(0).Mul(weight, rsvSupply)
+
+		var newAmount *big.Int
+		if toVault[i] {
+			newAmount = bigInt(0).Add(oldAmount, amounts[i])
+		} else {
+			newAmount = bigInt(0).Sub(oldAmount, amounts[i])
+		}
+
+		// TODO: Rounding?
+		if rsvSupply.Cmp(newAmount) == 1 {
+			newWeights[i] = bigInt(0).Div(newAmount, rsvSupply)
+		} else {
+			newWeights[i] = bigInt(0)
+		}
+	}
+
+	return newWeights
 }

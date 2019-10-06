@@ -1,9 +1,9 @@
+// +build all
+
 package tests
 
 import (
-	"fmt"
 	"math/big"
-	"os/exec"
 	"reflect"
 	"testing"
 
@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/reserve-protocol/rsv-beta/abi"
-	"github.com/reserve-protocol/rsv-beta/soltools"
 )
 
 func TestBasket(t *testing.T) {
@@ -37,30 +36,8 @@ func (s *BasketSuite) SetupSuite() {
 	s.setup()
 }
 
-// TearDownSuite runs once, after all of the tests in the suite.
-func (s *BasketSuite) TearDownSuite() {
-	if coverageEnabled {
-		// Write coverage profile to disk.
-		s.Assert().NoError(s.node.(*soltools.Backend).WriteCoverage())
-
-		// Close the node.js process.
-		s.Assert().NoError(s.node.(*soltools.Backend).Close())
-
-		// Process coverage profile into an HTML report.
-		if out, err := exec.Command("npx", "istanbul", "report", "html").CombinedOutput(); err != nil {
-			fmt.Println()
-			fmt.Println("I generated coverage information in coverage/coverage.json.")
-			fmt.Println("I tried to process it with `istanbul` to turn it into a readable report, but failed.")
-			fmt.Println("The error I got when running istanbul was:", err)
-			fmt.Println("Istanbul's output was:\n" + string(out))
-		}
-	}
-}
-
 // BeforeTest runs before each test in the suite.
 func (s *BasketSuite) BeforeTest(suiteName, testName string) {
-	s.owner = s.account[0]
-
 	// Deploy collateral ERC20s
 	s.erc20s = make([]*abi.BasicERC20, 3)
 	s.erc20Addresses = make([]common.Address, 3)
@@ -105,7 +82,7 @@ func (s *BasketSuite) TestState() {
 	}
 }
 
-// TestGetters checks to make sure the view functions work as expected.
+// TestViews checks to make sure the view functions work as expected.
 func (s *BasketSuite) TestViews() {
 	// `getTokens` function.
 	tokens, err := s.basket.GetTokens(nil)
@@ -116,6 +93,11 @@ func (s *BasketSuite) TestViews() {
 	size, err := s.basket.Size(nil)
 	s.Require().NoError(err)
 	s.Equal(bigInt(uint32(len(s.erc20Addresses))).String(), size.String())
+
+	// `has` should return false for tokens not in the basket.
+	foundHas, err := s.basket.Has(nil, s.account[3].address())
+	s.Require().NoError(err)
+	s.Equal(false, foundHas)
 }
 
 // TestSuccessiveBasketWithEmptyParams tries deploying a second basket from a different account.
@@ -172,16 +154,20 @@ func (s *BasketSuite) TestSuccessiveBasketWithEmptyParams() {
 	s.Equal(firstSize, secondSize)
 }
 
-// TestSuccessiveBasketWithAdditionalParams deploys a 2nd basket with a new token.
-func (s *BasketSuite) TestSuccessiveBasketWithAdditionalParams() {
+// TestSuccessiveBasketWithAdditionalParams deploys a 2nd basket with a new token, and one token
+// that overlaps with the previous basket.
+func (s *BasketSuite) TestSuccessiveBasketWithAdditionalTokens() {
 	deployer := s.account[1]
 	newToken := s.account[2].address()
 	newWeight := bigInt(uint32(9))
+	recurringToken := s.erc20Addresses[0]
+	recurringTokenNewWeight := bigInt(uint32(10))
 
-	moreTokens := []common.Address{newToken}
-	moreWeights := []*big.Int{newWeight}
+	moreTokens := []common.Address{newToken, recurringToken}
+	moreWeights := []*big.Int{newWeight, recurringTokenNewWeight}
+
 	// Deploy a new basket from a different account, but based off the first basket.
-	_, tx, basket, err := abi.DeployBasket(
+	_, tx, newBasket, err := abi.DeployBasket(
 		signer(deployer),
 		s.node,
 		s.basketAddress,
@@ -191,50 +177,65 @@ func (s *BasketSuite) TestSuccessiveBasketWithAdditionalParams() {
 
 	s.requireTxWithStrictEvents(tx, err)()
 
-	// The second basket should be bigger.
+	// The second newBasket should be bigger by 1.
 	firstSize, err := s.basket.Size(nil)
 	s.Require().NoError(err)
-	secondSize, err := basket.Size(nil)
+	secondSize, err := newBasket.Size(nil)
 	s.Equal(bigInt(0).Add(firstSize, bigInt(1)), secondSize)
 
 	// The token lists should differ by 1 token address.
 	firstTokens, err := s.basket.GetTokens(nil)
 	s.Require().NoError(err)
-	secondTokens, err := basket.GetTokens(nil)
+	secondTokens, err := newBasket.GetTokens(nil)
 	s.Require().NoError(err)
-	var expectedTokens []common.Address
-	expectedTokens = append(expectedTokens, newToken)
+	expectedTokens := []common.Address{newToken, recurringToken}
 	for _, tok := range firstTokens {
-		expectedTokens = append(expectedTokens, tok)
+		if tok != recurringToken {
+			expectedTokens = append(expectedTokens, tok)
+		}
 	}
 	s.True(reflect.DeepEqual(expectedTokens, secondTokens))
 
 	// The new token should have the right weight.
-	weight, err := basket.Weights(nil, newToken)
+	weight, err := newBasket.Weights(nil, newToken)
 	s.Require().NoError(err)
 	s.Equal(newWeight.String(), weight.String())
 
-	// After that, our two baskets should be identical in every way for the erc20Addresses.
+	// The recurring token should have the new weight, not the old one.
+	weight, err = newBasket.Weights(nil, recurringToken)
+	s.Require().NoError(err)
+	s.Equal(recurringTokenNewWeight.String(), weight.String())
+
+	// After that, our two baskets should be identical in every way for the 3 original tokens, except for
+	// the recurring token's new value.
 	for i, _ := range s.erc20Addresses {
-		// State
 		firstToken, err := s.basket.Tokens(nil, bigInt(uint32(i)))
 		s.Require().NoError(err)
-		secondToken, err := basket.Tokens(nil, bigInt(uint32(i+1)))
+		secondToken, err := newBasket.Tokens(nil, bigInt(uint32(i+1)))
 		s.Require().NoError(err)
 		s.Equal(firstToken, secondToken)
 
 		firstWeight, err := s.basket.Weights(nil, firstToken)
 		s.Require().NoError(err)
-		secondWeight, err := basket.Weights(nil, firstToken)
+		secondWeight, err := newBasket.Weights(nil, firstToken)
 		s.Require().NoError(err)
-		s.Equal(firstWeight.String(), secondWeight.String())
+		if firstToken == recurringToken {
+			s.NotEqual(firstWeight.String(), secondWeight.String())
+		} else {
+			s.Equal(firstWeight.String(), secondWeight.String())
+		}
 
 		firstHas, err := s.basket.Has(nil, firstToken)
 		s.Require().NoError(err)
-		secondHas, err := basket.Has(nil, firstToken)
+		secondHas, err := newBasket.Has(nil, firstToken)
 		s.Require().NoError(err)
 		s.Equal(firstHas, secondHas)
 	}
+
+	// Finally the new basket should have the new token.
+	newHas, err := newBasket.Has(nil, newToken)
+	s.Require().NoError(err)
+	s.Equal(true, newHas)
 }
 
 // TestNegativeCases checks to make sure invalid basket constructions revert.
@@ -242,7 +243,7 @@ func (s *BasketSuite) TestNegativeCases() {
 	// Case 1: Tokens is longer than Weights.
 	deployer := s.account[1]
 	tokens := s.erc20Addresses
-	var weights []*big.Int
+	weights := []*big.Int{bigInt(0)}
 	_, tx, _, err := abi.DeployBasket(
 		signer(deployer),
 		s.node,
@@ -253,8 +254,8 @@ func (s *BasketSuite) TestNegativeCases() {
 	s.requireTxFails(tx, err)
 
 	// Case 2: Weights is longer than Tokens.
-	tokens = []common.Address{}
-	weights = []*big.Int{bigInt(1)}
+	tokens = []common.Address{s.account[1].address()}
+	weights = []*big.Int{bigInt(1), bigInt(2)}
 	_, tx, _, err = abi.DeployBasket(
 		signer(deployer),
 		s.node,
@@ -264,11 +265,11 @@ func (s *BasketSuite) TestNegativeCases() {
 	)
 	s.requireTxFails(tx, err)
 
-	// Case 3: Basket is too big.
+	// Case 3: Basket is too big after addition of tokens from old address.
 	var longTokens []common.Address
 	var longWeights []*big.Int
-	for i := 0; i < 99; i++ {
-		longTokens = append(longTokens, s.account[2].address())
+	for i := 0; i < 98; i++ {
+		longTokens = append(longTokens, common.BigToAddress(bigInt(uint32(100+i))))
 		longWeights = append(longWeights, bigInt(1))
 	}
 	_, tx, _, err = abi.DeployBasket(
@@ -280,13 +281,41 @@ func (s *BasketSuite) TestNegativeCases() {
 	)
 	s.requireTxFails(tx, err)
 
-	// Case 4: PrevBasket is not actually a basket.
+	// Case 4: Basket is too big, even with the zero address basket as its prev.
+	var extraLongTokens []common.Address
+	var extraLongWeights []*big.Int
+	for i := 0; i < 101; i++ {
+		extraLongTokens = append(extraLongTokens, common.BigToAddress(bigInt(uint32(100+i))))
+		extraLongWeights = append(extraLongWeights, bigInt(1))
+	}
+	_, tx, _, err = abi.DeployBasket(
+		signer(deployer),
+		s.node,
+		zeroAddress(),
+		extraLongTokens,
+		extraLongWeights,
+	)
+	s.requireTxFails(tx, err)
+
+	// Case 5: PrevBasket is not actually a basket.
 	tokens = []common.Address{s.account[2].address()}
 	weights = []*big.Int{bigInt(1)}
 	_, tx, _, err = abi.DeployBasket(
 		signer(deployer),
 		s.node,
 		s.account[3].address(),
+		tokens,
+		weights,
+	)
+	s.requireTxFails(tx, err)
+
+	// Case 6: Duplicate tokens in the basket.
+	tokens = []common.Address{s.account[2].address(), s.account[2].address()}
+	weights = []*big.Int{bigInt(1), bigInt(2)}
+	_, tx, _, err = abi.DeployBasket(
+		signer(deployer),
+		s.node,
+		s.basketAddress,
 		tokens,
 		weights,
 	)

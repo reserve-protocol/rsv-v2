@@ -22,7 +22,7 @@ When in doubt, state each of these as: "A {user} can {act} in order to {satisfy 
 ## Basics
 1. A user can transfer their RSV tokens to any other account, in order to pay for goods and services.
     - In general, RSV serves the purposes of an ERC-20 token. We ... don't need to belabor this further.
-    
+
 2. A user can buy or sell RSV on the open market at 1 USD, in order to:
     - stably store value
     - exchange goods or services
@@ -34,9 +34,8 @@ When in doubt, state each of these as: "A {user} can {act} in order to {satisfy 
 2. The owner can transfer ownership to a different user.
     - But not without a signed messagae from that user! (Avoid losing auth to typos or miscommunication.)
 
-3. The owner can disown ownership. TODO: Can it really?
-    - But not easily or accidentally! This function should not be simple to invoke, or invokable without delay.
-    - TODO: Scrutinize for security!
+3. The owner can disown ownership.
+    - But not easily or accidentally! This function should not be simple to invoke, or invokable without delay by a "fast" key.
 
 ## Economics of Issuance and Redemption
 1. The manager maintains which tokens are in the basket, and the basket weight for each.
@@ -55,7 +54,7 @@ When in doubt, state each of these as: "A {user} can {act} in order to {satisfy 
 5. When a maker redeems an amount `amt` of RSV:
     - The manager burns that RSV from the maker.
     - For each basket asset, the maker receives `amt` times the asset's basket weight.
-    
+
 6. For any amount `amt` of RSV to be issued, if a maker has enough of each basket asset, the maker can set the manager's allowance on that asset to at least `amt` times that asset's basket weight, and then call `Manager.issue(amt)`. Then:
     - The manager transfers `amt * weight` of each basket asset, from the maker, to the vault.
     - The manager mints and issues `amt` RSV to the maker.
@@ -90,8 +89,6 @@ Upon deployment:
     - The owner can do this without changing the Vault address.
 
 3. The owner can change how fees are computed on RSV transactions, issuance, and redemption.
-
-
 
 ## ... ?
 

@@ -6,8 +6,3 @@ In general, all of this documentation should be viewed as a place to explicate a
 
 Fundamentally, all of this design documentation is about writing correct contracts. A major operational goal of all this is to guide our testing, and to spot the level of code review that we require.
 
-# Table of Contents
-
-TODO
-
-

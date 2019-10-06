@@ -1,15 +1,14 @@
+// +build all
+
 package tests
 
 import (
-	"fmt"
-	"os/exec"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/reserve-protocol/rsv-beta/abi"
-	"github.com/reserve-protocol/rsv-beta/soltools"
 )
 
 func TestOwnable(t *testing.T) {
@@ -35,26 +34,6 @@ var (
 // SetupSuite runs once, before all of the tests in the suite.
 func (s *OwnableSuite) SetupSuite() {
 	s.setup()
-}
-
-// TearDownSuite runs once, after all of the tests in the suite.
-func (s *OwnableSuite) TearDownSuite() {
-	if coverageEnabled {
-		// Write coverage profile to disk.
-		s.Assert().NoError(s.node.(*soltools.Backend).WriteCoverage())
-
-		// Close the node.js process.
-		s.Assert().NoError(s.node.(*soltools.Backend).Close())
-
-		// Process coverage profile into an HTML report.
-		if out, err := exec.Command("npx", "istanbul", "report", "html").CombinedOutput(); err != nil {
-			fmt.Println()
-			fmt.Println("I generated coverage information in coverage/coverage.json.")
-			fmt.Println("I tried to process it with `istanbul` to turn it into a readable report, but failed.")
-			fmt.Println("The error I got when running istanbul was:", err)
-			fmt.Println("Istanbul's output was:\n" + string(out))
-		}
-	}
 }
 
 // BeforeTest runs before each test in the suite.
@@ -86,7 +65,7 @@ func (s *OwnableSuite) TestConstructor() {
 	s.Require().NoError(err)
 	s.Equal(s.owner.address(), ownerAddress)
 
-	// Initial nominated owner should be the zero address
+	// Initial nominated owner should be the zero address.
 	nominatedOwnerAddress, err := s.ownable.NominatedOwner(nil)
 	s.Require().NoError(err)
 	s.Equal(zeroAddress(), nominatedOwnerAddress)
@@ -97,7 +76,7 @@ func (s *OwnableSuite) TestNominateNewOwner() {
 	newOwner := s.account[1]
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 
@@ -116,7 +95,7 @@ func (s *OwnableSuite) TestNominateNewOwnerNegativeCases() {
 	// Check that the nominated owner cannot call nominateNewOwner.
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 
@@ -128,7 +107,7 @@ func (s *OwnableSuite) TestAcceptOwnershipByNominatedOwner() {
 	newOwner := s.account[1]
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 
@@ -155,18 +134,22 @@ func (s *OwnableSuite) TestAcceptOwnershipNegativeCases() {
 	// Set nominatedOwner.
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
 
 	// Check that a random address cannot accept ownership for the nominatedOwner.
 	s.requireTxFails(s.ownable.AcceptOwnership(signer(s.account[2])))
+
+	// Check that the current owner cannot force ownership onto the nominatedOwner.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
 }
 
 // TestRenounceOwnership unit tests the renounceOwnership function.
 func (s *OwnableSuite) TestRenounceOwnership() {
 	// Check that the owner can renounce ownership.
-	s.requireTxWithStrictEvents(s.ownable.RenounceOwnership(s.signer))(
+	pledge := "I hereby renounce ownership of this contract forever."
+	s.requireTxWithStrictEvents(s.ownable.RenounceOwnership(s.signer, pledge))(
 		abi.BasicOwnableOwnershipTransferred{
 			PreviousOwner: s.owner.address(), NewOwner: zeroAddress(),
 		},
@@ -180,14 +163,89 @@ func (s *OwnableSuite) TestRenounceOwnership() {
 
 // TestRenounceOwnershipNegativeCases makes sure renounceOwnership can only be called by owner.
 func (s *OwnableSuite) TestRenounceOwnershipNegativeCases() {
-	s.requireTxFails(s.ownable.RenounceOwnership(signer(s.account[1])))
+	pledge := "I hereby renounce ownership of this contract forever."
+	s.requireTxFails(s.ownable.RenounceOwnership(signer(s.account[1]), pledge))
+	s.requireTxFails(s.ownable.RenounceOwnership(s.signer, "mumble frotz"))
 
 	// Check that the nominated owner cannot call nominateNewOwner.
 	newOwner := s.account[1]
 	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, newOwner.address()))(
 		abi.BasicOwnableNewOwnerNominated{
-			PreviousOwner: s.owner.address(), NewOwner: newOwner.address(),
+			PreviousOwner: s.owner.address(), Nominee: newOwner.address(),
 		},
 	)
-	s.requireTxFails(s.ownable.RenounceOwnership(signer(newOwner)))
+	s.requireTxFails(s.ownable.RenounceOwnership(signer(newOwner), pledge))
+}
+
+// TestUseCases chains a bunch of calls into each other in a more realistic test of things.
+func (s *OwnableSuite) TestUseCases() {
+	firstOwner := s.account[1]
+	secondOwner := s.account[2]
+
+	// Nominate the first owner.
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(s.signer, firstOwner.address()))(
+		abi.BasicOwnableNewOwnerNominated{
+			PreviousOwner: s.owner.address(), Nominee: firstOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(secondOwner)))
+
+	// Check that the nominated owner can accept ownership.
+	s.requireTxWithStrictEvents(s.ownable.AcceptOwnership(signer(firstOwner)))(
+		abi.BasicOwnableOwnershipTransferred{
+			PreviousOwner: s.owner.address(), NewOwner: firstOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else after either.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(secondOwner)))
+
+	// Even the original owner shouldn't be able to call nominate again, especially on themselves.
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, s.owner.address()))
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, secondOwner.address()))
+
+	// Nominate the second owner.
+	s.requireTxWithStrictEvents(s.ownable.NominateNewOwner(signer(firstOwner), secondOwner.address()))(
+		abi.BasicOwnableNewOwnerNominated{
+			PreviousOwner: firstOwner.address(), Nominee: secondOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(firstOwner)))
+
+	// Check that the nominated owner can accept ownership.
+	s.requireTxWithStrictEvents(s.ownable.AcceptOwnership(signer(secondOwner)))(
+		abi.BasicOwnableOwnershipTransferred{
+			PreviousOwner: firstOwner.address(), NewOwner: secondOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else after either.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(firstOwner)))
+
+	// Even the original owner shouldn't be able to call nominate again, especially on themselves.
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, s.owner.address()))
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, firstOwner.address()))
+
+	// And calling AcceptOwnership again shouldn't matter, but should emit a weird looking event.
+	s.requireTxWithStrictEvents(s.ownable.AcceptOwnership(signer(secondOwner)))(
+		abi.BasicOwnableOwnershipTransferred{
+			PreviousOwner: secondOwner.address(), NewOwner: secondOwner.address(),
+		},
+	)
+
+	// Should not be able to accept as anyone else after either.
+	s.requireTxFails(s.ownable.AcceptOwnership(s.signer))
+	s.requireTxFails(s.ownable.AcceptOwnership(signer(firstOwner)))
+
+	// Even the original owner shouldn't be able to call nominate again, especially on themselves.
+	s.requireTxFails(s.ownable.NominateNewOwner(s.signer, s.owner.address()))
+	s.requireTxFails(s.ownable.NominateNewOwner(signer(firstOwner), firstOwner.address()))
 }

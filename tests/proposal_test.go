@@ -1,9 +1,9 @@
+// +build all
+
 package tests
 
 import (
-	"fmt"
 	"math/big"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/reserve-protocol/rsv-beta/abi"
-	"github.com/reserve-protocol/rsv-beta/soltools"
 )
 
 func TestProposal(t *testing.T) {
@@ -61,46 +60,6 @@ func (s *WeightProposalSuite) SetupSuite() {
 // SetupSuite runs once, before all of the tests in the suite.
 func (s *SwapProposalSuite) SetupSuite() {
 	s.setup()
-}
-
-// TearDownSuite runs once, after all of the tests in the suite.
-func (s *WeightProposalSuite) TearDownSuite() {
-	if coverageEnabled {
-		// Write coverage profile to disk.
-		s.Assert().NoError(s.node.(*soltools.Backend).WriteCoverage())
-
-		// Close the node.js process.
-		s.Assert().NoError(s.node.(*soltools.Backend).Close())
-
-		// Process coverage profile into an HTML report.
-		if out, err := exec.Command("npx", "istanbul", "report", "html").CombinedOutput(); err != nil {
-			fmt.Println()
-			fmt.Println("I generated coverage information in coverage/coverage.json.")
-			fmt.Println("I tried to process it with `istanbul` to turn it into a readable report, but failed.")
-			fmt.Println("The error I got when running istanbul was:", err)
-			fmt.Println("Istanbul's output was:\n" + string(out))
-		}
-	}
-}
-
-// TearDownSuite runs once, after all of the tests in the suite.
-func (s *SwapProposalSuite) TearDownSuite() {
-	if coverageEnabled {
-		// Write coverage profile to disk.
-		s.Assert().NoError(s.node.(*soltools.Backend).WriteCoverage())
-
-		// Close the node.js process.
-		s.Assert().NoError(s.node.(*soltools.Backend).Close())
-
-		// Process coverage profile into an HTML report.
-		if out, err := exec.Command("npx", "istanbul", "report", "html").CombinedOutput(); err != nil {
-			fmt.Println()
-			fmt.Println("I generated coverage information in coverage/coverage.json.")
-			fmt.Println("I tried to process it with `istanbul` to turn it into a readable report, but failed.")
-			fmt.Println("The error I got when running istanbul was:", err)
-			fmt.Println("Istanbul's output was:\n" + string(out))
-		}
-	}
 }
 
 // ========================= WeightProposal Tests =================================

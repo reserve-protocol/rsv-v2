@@ -6,17 +6,17 @@ import "../zeppelin/GSN/Context.sol";
  * (owner) that can be granted exclusive access to specific functions.
  *
  * This module is used through inheritance by using the modifier `onlyOwner`.
- * 
+ *
  * To change ownership, use a 2-part nominate-accept pattern.
- * 
+ *
  * This contract is loosely based off of https://git.io/JenNF but additionally requires new owners
  * to accept ownership before the transition occurs.
  */
 contract Ownable is Context {
     address private _owner;
-    address public _nominatedOwner;
+    address private _nominatedOwner;
 
-    event NewOwnerNominated(address indexed previousOwner, address indexed newOwner);
+    event NewOwnerNominated(address indexed previousOwner, address indexed nominee);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /**
@@ -36,6 +36,13 @@ contract Ownable is Context {
     }
 
     /**
+     * @dev Returns the address of the current nominated owner.
+     */
+    function nominatedOwner() public view returns (address) {
+        return _nominatedOwner;
+    }
+
+    /**
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() {
@@ -49,7 +56,7 @@ contract Ownable is Context {
 
     /**
      * @dev Nominates a new owner `newOwner`.
-     * Requires a follow-up `acceptOwnership`. 
+     * Requires a follow-up `acceptOwnership`.
      * Can only be called by the current owner.
      */
     function nominateNewOwner(address newOwner) external onlyOwner {
@@ -63,15 +70,22 @@ contract Ownable is Context {
      */
     function acceptOwnership() external {
         require(_nominatedOwner == _msgSender(), "unauthorized");
-        require(_nominatedOwner != address(0), "cannot accept for 0 address");
         emit OwnershipTransferred(_owner, _nominatedOwner);
         _owner = _nominatedOwner;
     }
 
     /** Set `_owner` to the 0 address.
      * Only do this to deliberately lock in the current permissions.
+     *
+     * THIS CANNOT BE UNDONE! Call this only if you know what you're doing and why you're doing it!
      */
-    function renounceOwnership() external onlyOwner {
+    function renounceOwnership(string calldata declaration) external onlyOwner {
+        string memory requiredDeclaration = "I hereby renounce ownership of this contract forever.";
+        require(
+            keccak256(abi.encodePacked(declaration)) ==
+            keccak256(abi.encodePacked(requiredDeclaration)),
+            "declaration incorrect");
+
         emit OwnershipTransferred(_owner, address(0));
         _owner = address(0);
     }

@@ -11,7 +11,6 @@ This security policy is actually complete when we're convinced by an _explicit_,
 
 
 - Always, if the manager is unpaused, the total weight in the basket is > 0.
-  [TODO: in fact, it should probably be larger than some minimum epsilon, to account for rounding effects.]
 
 - The owner of any contract can only be changed by owner.
 - The owner of any contract can only be changed to an address that has sent an explicit "acceptOwnership" message.
@@ -21,6 +20,5 @@ This security policy is actually complete when we're convinced by an _explicit_,
 - The owner cannot accept an arbitrary basket proposal with only brief, customary key access.
 - The owner can accept a previously-approved alternative basket proposal with only brief, customary key access.
     - For each asset in the current basket, there is almost always an available, alternative basket proposal that does not contain that asset. ("Almost always" because this can't really be ensured through each basket transition; it's fine, though, for that change to be unavailable for a day or less after each basket transition.)
-
 
 - We never have access to third-party private keys.

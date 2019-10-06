@@ -53,6 +53,8 @@ contract Reserve is IERC20, Ownable {
     event PauserChanged(address indexed newPauser);
     event FeeRecipientChanged(address indexed newFeeRecipient);
     event MaxSupplyChanged(uint256 indexed newMaxSupply);
+    event EternalStorageTransferred(address indexed newReserveAddress);
+    event TxFeeHelperChanged(address indexed newTxFeeHelper);
 
     // Pause events
     event Paused(address indexed account);
@@ -65,16 +67,16 @@ contract Reserve is IERC20, Ownable {
 
     /// Initialize critical fields.
     constructor() public {
-        trustedData = new ReserveEternalStorage();
-        trustedData.nominateNewOwner(msg.sender);
-        trustedTxFee = ITXFee(address(0));
-
         pauser = msg.sender;
         feeRecipient = msg.sender;
         // minter defaults to the zero address.
 
         maxSupply = 2 ** 256 - 1;
         paused = true;
+
+        trustedTxFee = ITXFee(address(0));
+        trustedData = new ReserveEternalStorage();
+        trustedData.nominateNewOwner(msg.sender);
     }
 
     /// Accessor for eternal storage contract address.
@@ -119,12 +121,15 @@ contract Reserve is IERC20, Ownable {
     /// This will break this contract, so only do it if you're
     /// abandoning this contract, e.g., for an upgrade.
     function transferEternalStorage(address newReserveAddress) external onlyOwner isPaused {
+        require(newReserveAddress != address(0), "zero address");
+        emit EternalStorageTransferred(newReserveAddress);
         trustedData.updateReserveAddress(newReserveAddress);
     }
 
     /// Change the contract that helps with transaction fee calculation.
     function changeTxFeeHelper(address newTrustedTxFee) external onlyOwner {
         trustedTxFee = ITXFee(newTrustedTxFee);
+        emit TxFeeHelperChanged(newTrustedTxFee);
     }
 
     /// Change the maximum supply allowed.
@@ -241,8 +246,8 @@ contract Reserve is IERC20, Ownable {
         returns (bool)
     {
         _approve(
-            msg.sender, 
-            spender, 
+            msg.sender,
+            spender,
             trustedData.allowed(msg.sender, spender).sub(subtractedValue)
         );
         return true;
@@ -281,7 +286,7 @@ contract Reserve is IERC20, Ownable {
 
         if (address(trustedTxFee) != address(0)) {
             fee = trustedTxFee.calculateFee(from, to, value);
-            require((fee >= 0) && (fee <= value), "transaction fee out of bounds");
+            require(fee <= value, "transaction fee out of bounds");
 
             trustedData.addBalance(feeRecipient, fee);
             emit Transfer(from, feeRecipient, fee);

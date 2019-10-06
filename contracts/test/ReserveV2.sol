@@ -11,20 +11,20 @@ contract ReserveV2 is Reserve {
     function completeHandoff(address previousImplementation) external onlyOwner {
         Reserve previous = Reserve(previousImplementation);
         trustedData = ReserveEternalStorage(previous.getEternalStorageAddress());
-        previous.acceptOwnership();
-
-        //Take control of Eternal Storage.
-        previous.changePauser(address(this));
-        previous.pause();
-        previous.transferEternalStorage(address(this));
-
         // Unpause.
         paused = false;
         emit Unpaused(pauser);
 
+        previous.acceptOwnership();
+
+        // Take control of Eternal Storage.
+        previous.changePauser(address(this));
+        previous.pause();
+        previous.transferEternalStorage(address(this));
+
         // Burn the bridge behind us.
         previous.changeMinter(address(0));
         previous.changePauser(address(0));
-        previous.renounceOwnership();
+        previous.renounceOwnership("I hereby renounce ownership of this contract forever.");
     }
 }
