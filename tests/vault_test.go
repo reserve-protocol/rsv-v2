@@ -193,7 +193,7 @@ func (s *VaultSuite) TestWithdrawTo() {
 	}
 }
 
-// TestBatchWithdrawToVoidWithdrawal makes sure we perform the void withdrawal.
+// TestWithdrawToVoidWithdrawal makes sure we perform the void withdrawal.
 func (s *VaultSuite) TestWithdrawToVoidWithdrawal() {
 	receiver := s.account[2]
 
