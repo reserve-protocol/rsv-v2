@@ -14,10 +14,6 @@ contract VaultV2 is Vault {
 
         previousVault.changeManager(address(this));
 
-        // Pause the Manager, since we don't want state like the vault balances to change while
-        // we're transferring them to the new vault.
-        manager.setEmergency(true);
-
         // Transfer tokens from old vault to new vault.
         Basket trustedBasket = manager.trustedBasket();
 
@@ -33,9 +29,6 @@ contract VaultV2 is Vault {
 
         // Point manager at the new vault.
         manager.setVault(address(this));
-
-        // Done doing things that might affect Manager operations.
-        manager.setEmergency(false);
 
     }
 }
