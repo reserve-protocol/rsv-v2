@@ -321,7 +321,7 @@ func (s *VaultSuite) TestUpgrade() {
 		},
 	)
 
-	//
+	// Assert balances in new vault are same as what was passed into original vault in `BeforeTest`.
 	for _, erc20 := range s.erc20s {
 		bal, err := erc20.BalanceOf(nil, newVaultAddress)
 		s.Require().NoError(err)
