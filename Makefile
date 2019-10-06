@@ -10,6 +10,7 @@ sol := $(shell find contracts -name '*.sol' -not -name '.*' ) ## All Solidity fi
 json := $(foreach contract,$(contracts),evm/$(contract).json) ## All JSON files
 abi := $(foreach contract,$(contracts),abi/$(contract).go) ## All ABI files
 myth_analyses := $(foreach solFile,$(sol),analysis/$(subst contracts/,,$(basename $(solFile))).myth.md)
+flat := $(foreach solFile,$(sol),flat/$(subst contracts/,,$(solFile)))
 
 runs := 100
 decimals := "6,18,6" # up to 10 tokens max, probably stay between 1 and 36 decimals
@@ -18,6 +19,7 @@ all: test json abi
 
 abi: $(abi)
 json: $(json)
+flat: $(flat)
 
 test: abi
 	go test ./tests -tags all
@@ -26,7 +28,7 @@ fuzz: abi
 	go test ./tests -v -tags fuzz -args -decimals=$(decimals) -runs=$(runs)
 
 clean:
-	rm -rf abi evm sol-coverage-evm analysis
+	rm -rf abi evm sol-coverage-evm analysis flat
 
 sizes: json
 	scripts/sizes $(json)
@@ -118,16 +120,19 @@ myth a $<:$1 > $@
 endef
 
 # But, where there's more than one contract in the source file, do.
-analysis/ProposalFactory.md: contracts/rsv/Proposal.sol $(sol)
+analysis/ProposalFactory.myth.md: contracts/rsv/Proposal.sol $(sol)
 	$(call myth_specific ProposalFactory)
 
-analysis/WeightProposal.md: contracts/rsv/Proposal.sol $(sol)
+analysis/WeightProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
 	$(call myth_specific WeightProposal)
 
-analysis/SwapProposal.md: contracts/rsv/Proposal.sol $(sol)
+analysis/SwapProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
 	$(call myth_specific SwapProposal)
 
 
+flat/%.sol: contracts/%.sol
+	@mkdir -p $(@D)
+	go run github.com/coburncoburn/SolidityFlattery -input $< -output $@
 
 # Mark "action" targets PHONY, to save occasional headaches.
-.PHONY: all clean json abi test fuzz check triage-check mythril fmt run-geth sizes
+.PHONY: all clean json abi test fuzz check triage-check mythril fmt run-geth sizes flat
