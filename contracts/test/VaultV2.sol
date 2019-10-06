@@ -33,7 +33,6 @@ contract VaultV2 is Vault {
         manager.acceptOwnership();
         manager.setVault(address(this));
         manager.nominateNewOwner(_msgSender());
-
         previousVault.nominateNewOwner(_msgSender());
     }
 }

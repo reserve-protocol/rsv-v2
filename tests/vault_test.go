@@ -4,8 +4,8 @@ package tests
 
 import (
 	"fmt"
-	"os/exec"
 	"math/big"
+	"os/exec"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -260,18 +260,12 @@ func (s *VaultSuite) TestWithdrawToProtected() {
 
 ///
 func (s *VaultSuite) TestUpgrade() {
-	receiver := s.account[2]
 	newKey := s.account[3]
-	erc20Address, tx, erc20, err := abi.DeployBasicERC20(signer(newKey), s.node)
-	s.logParsers[erc20Address] = erc20
-	s.requireTx(tx, err)
-
-	amount := bigInt(10)
 
 	// Set up a Basket.
-	weights := []*big.Int{shiftLeft(1, 36)}
+	weights := []*big.Int{shiftLeft(1, 36), shiftLeft(2, 36), shiftLeft(3, 36)}
 	basketAddress, tx, _, err := abi.DeployBasket(
-		s.signer, s.node, zeroAddress(), []common.Address{erc20Address}, weights,
+		s.signer, s.node, zeroAddress(), s.erc20Addresses, weights,
 	)
 	s.requireTxWithStrictEvents(tx, err)
 	s.NotEqual(zeroAddress(), basketAddress)
@@ -288,11 +282,6 @@ func (s *VaultSuite) TestUpgrade() {
 		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
 	})
 
-	s.requireTxWithStrictEvents(erc20.Transfer(signer(newKey), s.vaultAddress, amount))(
-		abi.BasicERC20Transfer{
-			From: newKey.address(), To: s.vaultAddress, Value: amount,
-		},)
-
 	// Deploy the new vault.
 	newVaultAddress, tx, newVault, err := abi.DeployVaultV2(signer(newKey), s.node)
 	s.logParsers[newVaultAddress] = newVault
@@ -301,17 +290,16 @@ func (s *VaultSuite) TestUpgrade() {
 	)
 	s.requireTxWithStrictEvents(newVault.ChangeManager(signer(newKey), managerAddress))(
 		abi.VaultV2ManagerTransferred{PreviousManager: newKey.address(), NewManager: managerAddress},
-		)
-
+	)
 
 	// Switch over.
 	s.requireTxWithStrictEvents(s.vault.NominateNewOwner(s.signer, newVaultAddress))(
 		abi.VaultNewOwnerNominated{PreviousOwner: s.owner.address(), Nominee: newVaultAddress},
 	)
-	s.requireTx(manager.NominateNewOwner(s.signer, newVaultAddress))(
+	s.requireTxWithStrictEvents(manager.NominateNewOwner(s.signer, newVaultAddress))(
 		abi.ManagerNewOwnerNominated{PreviousOwner: s.owner.address(), Nominee: newVaultAddress},
-		)
-	s.requireTxWithStrictEvents(newVault.CompleteHandoff(signer(newKey), s.vaultAddress, s.managerAddress))(
+	)
+	s.requireTx(newVault.CompleteHandoff(signer(newKey), s.vaultAddress, managerAddress))(
 		abi.ManagerVaultChanged{OldVaultAddr: s.vaultAddress, NewVaultAddr: newVaultAddress},
 		abi.VaultOwnershipTransferred{PreviousOwner: s.owner.address(), NewOwner: newVaultAddress},
 		abi.ManagerOwnershipTransferred{PreviousOwner: s.owner.address(), NewOwner: newVaultAddress},
@@ -319,31 +307,25 @@ func (s *VaultSuite) TestUpgrade() {
 		abi.VaultNewOwnerNominated{PreviousOwner: newVaultAddress, Nominee: newKey.address()},
 	)
 
-	// Verify that the new vault can withdraw.
-	balance, err := erc20.BalanceOf(nil, s.vaultAddress)
-	s.Require().NoError(err)
-
-	expected := balance
-
-	s.requireTxWithStrictEvents(newVault.ChangeManager(signer(newKey), managerAddress))(
-		abi.VaultV2ManagerTransferred{PreviousManager: managerAddress, NewManager: newKey.address()},
-	)
-
-	// Make transfer.
-	s.requireTxWithStrictEvents(
-		newVault.WithdrawTo(signer(newKey), erc20Address, amount, receiver.address()),
-	)(
-		abi.BasicERC20Transfer{
-			From: newVaultAddress, To: receiver.address(), Value: amount,
+	// Make sure we can grab ownership back from VaultV2.
+	s.requireTxWithStrictEvents(manager.AcceptOwnership(signer(newKey)))(
+		abi.ManagerOwnershipTransferred{
+			PreviousOwner: newVaultAddress,
+			NewOwner:      newKey.address(),
 		},
-		abi.VaultV2Withdrawal{
-			Token: erc20Address, Amount: amount, To: receiver.address(),
+	)
+	s.requireTxWithStrictEvents(s.vault.AcceptOwnership(signer(newKey)))(
+		abi.VaultOwnershipTransferred{
+			PreviousOwner: newVaultAddress,
+			NewOwner:      newKey.address(),
 		},
 	)
 
-	// Check that resultant balance is as expected.
-	newBalance, err := erc20.BalanceOf(nil, s.vaultAddress)
-	s.Require().NoError(err)
-	s.Equal(expected, newBalance)
+	//
+	for _, erc20 := range s.erc20s {
+		bal, err := erc20.BalanceOf(nil, newVaultAddress)
+		s.Require().NoError(err)
+		s.Equal(bigInt(1000), bal)
+	}
 
 }
