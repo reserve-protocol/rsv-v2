@@ -135,7 +135,7 @@ analysis/SwapProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
 
 flat/%.sol: contracts/%.sol
 	@mkdir -p $(@D)
-	go run github.com/coburncoburn/SolidityFlattery -input $< -output $@
+	go run github.com/coburncoburn/SolidityFlattery -input $< -output $(basename $@)
 
 # Mark "action" targets PHONY, to save occasional headaches.
 .PHONY: all clean json abi test fuzz check triage-check mythril fmt run-geth sizes flat
