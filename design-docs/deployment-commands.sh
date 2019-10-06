@@ -8,7 +8,7 @@ export SOLC_VERSION=0.5.7
 export POKE_FROM=hardware
 export POKE_NODE=https://mainnet.infura.io/v3/d884cdc2e05b4f0897f6dffd0bdc1821
 export POKE_DERIVATION_PATH="m/44'/60'/0'/0/3"   # This is eth0/3. We'll use this for both OWNER and DAILY.
-export POKE_GASPRICE=2
+export POKE_GASPRICE=8
 #   Or whatever gas price. Keep an eye on ethgasstation, and adjust
 #   as needed, either in the env variable, or using the -g flag to poke
 
@@ -47,19 +47,19 @@ echo $DAILY                      # Set the "DAILY" address from here. We'll be u
 poke Vault.json deploy
 # The actual address here is just for example. copy-paste the POKE_ADDRESS result off the commandline.
 # (The same is true for all the other Something=... lines that follow a `poke deploy` line.)
-Vault=0x......
+Vault=0xAeDCFcdD80573c2a312d15d6Bb9d921a01E4FB0f
 
 
 
 # 2. Deploy Reserve
 poke Reserve.json deploy
-Reserve=
+Reserve=0x1C5857e110CD8411054660F60B5De6a6958CfAE2
 
 
 
 # 3. Take ownership of ReserveEternalStorage
 poke --address=${Reserve} Reserve.json getEternalStorageAddress
-ReserveES=
+ReserveES=0xb8bF093045D5f2E4AAc9062bD11A8f599f6565B5
 
 poke --address=${ReserveES} ReserveEternalStorage.json acceptOwnership
 
@@ -68,7 +68,7 @@ poke --address=${ReserveES} ReserveEternalStorage.json acceptOwnership
 
 # 4. Deploy ProposalFactory
 poke ProposalFactory.json deploy
-ProposalFactory=
+ProposalFactory=0x06FA956887524836C8ff54F2f57695762fF0A037
 
 
 
@@ -83,7 +83,7 @@ TUSD=0x0000000000085d4780B73119b644AE5ecd22b376
 ZERO=0x0000000000000000000000000000000000000000
 
 poke Basket.json deploy $ZERO "[$PAX, $TUSD, $USDC]" "[.333333e36, .333333e36, 333334e18]"
-Basket=
+Basket=0x7CC227729270426da6e9E3f51838CF5C7dbc1588
 
 # Really double-check these values! Oh man!
 poke --address=$Basket Basket.json weights $PAX
@@ -99,7 +99,7 @@ echo $ProposalFactory
 echo $Basket
 echo $DAILY
 poke Manager.json deploy $Vault $Reserve $ProposalFactory $Basket $DAILY 0
-Manager=
+Manager=0x5BA9d812f5533F7Cf2854963f7A9d212f8f28673
 
 poke Manager.json trustedBasket --address=${Manager}
 poke Manager.json trustedRSV --address=${Manager}
@@ -111,6 +111,9 @@ poke --address=$Vault Vault.json changeManager $Manager
 poke --address=$Reserve Reserve.json changeMinter $Manager
 poke --address=$Reserve Reserve.json changePauser $DAILY
 poke --address=$Reserve Reserve.json changeFeeRecipient $DAILY
+
+poke --address=$Reserve Reserve.json changeMaxSupply 1e23
+
 
 ############################
 # STOP! Take out the OWNER key!

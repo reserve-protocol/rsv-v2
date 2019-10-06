@@ -23,30 +23,30 @@
 
 # Pre-deployment checklist
 
-- [ ] Double-check github issues. Anything outstanding that we really should deal with?
+- [x] Double-check github issues. Anything outstanding that we really should deal with?
   (Any other todo lists, or places where notes would've gotten stashed?)
-- [ ] Double-check `make sizes`. Everything below 24K?
+- [x] Double-check `make sizes`. Everything below 24K?
 
-- [ ] In `git status` output, we are on branch `production`, and nothing is modified or untracked.
-- [ ] In `git log -1` output, the commit-hash prefix matches current hash prefix on Github
+- [x] In `git status` output, we are on branch `production`, and nothing is modified or untracked.
+- [x] In `git log -1` output, the commit-hash prefix matches current hash prefix on Github
 
-- [ ] Double check the state of RSV-alpha: https://etherscan.io/token/0x1dcac83e90775b5f4bc2ffac5a5749e25acc610d?a=0x04a1cd180c1414629ce4512da70d9c71d79771a2
+- [x] Double check the state of RSV-alpha: https://etherscan.io/token/0x1dcac83e90775b5f4bc2ffac5a5749e25acc610d?a=0x04a1cd180c1414629ce4512da70d9c71d79771a2
       Ensure that there's only the one address with 10,000 RSV. (That's River@eth0/0)
 
-- [ ] DAILY and OWNER hardware keys are at hand.
-- [ ] DAILY and OWNER start out with at least 0.225 ETH (Owner needs most of this)
+- [x] DAILY and OWNER hardware keys are at hand.
+- [x] DAILY and OWNER start out with at least 0.225 ETH (Owner needs most of this)
 
-- [ ] Triple-check PAX, TUSD, and USDC addresses
-- [ ] Pull up https://ethgasstation.info for continuous monitoring
+- [x] Triple-check PAX, TUSD, and USDC addresses
+- [x] Pull up https://ethgasstation.info for continuous monitoring
 
 POKE NODES:
 - Set in deployment script: https://mainnet.infura.io/v3/d884cdc2e05b4f0897f6dffd0bdc1821
 - Alternate node for checker: https://eth-mainnet.alchemyapi.io/jsonrpc/-vPGIFwUyjlMRF9beTLXiGQUK6Nf3k8z
 
-- [ ] Tools on system:
-    - freshly-pulled poke. Reinstall with `go install`
-    - solc-select (for SOLC_VERSION), or your local `solc --version` yields 0.5.7
-    - freshly-pulled rsv-beta, from production. Do `make test`.
+- [x] Tools on system:
+    - [x] freshly-pulled poke. Reinstall with `go install`
+    - [x] solc-select (for SOLC_VERSION), or your local `solc --version` yields 0.5.7
+    - [x] freshly-pulled rsv-beta, from production. Do `make test`.
 
 # Deployment Checklist
 
@@ -54,77 +54,78 @@ CLI-level instructions are in `deployment-script.sh`. As you go:
 
 - [ ] After each `deploy` command:
 
-  - [ ] Vault
-      - [ ] Slack: Post the address in Slack
-      - [ ] Env Var: record the address as a variable for further use in that session
-      - [ ] Alt Node: we can poke that contract, from another machine, through the alt node
-      - [ ] Etherscan: etherscan says that we've deployed something to that address
+  - [x] Vault
+      - [x] Slack: Post the address in Slack
+      - [x] Env Var: record the address as a variable for further use in that session
+      - [x] Alt Node: we can poke that contract, from another machine, through the alt node
+      - [x] Etherscan: etherscan says that we've deployed something to that address
       - [ ] Keybase: Save in our keybase deployment record
 
-  - [ ] ReserveEternalStorage
-      - [ ] Slack: Post the address in Slack
-      - [ ] Env Var: record the address as a variable for further use in that session
-      - [ ] Alt Node: we can poke that contract, from another machine, through the alt node
-      - [ ] Etherscan: etherscan says that we've deployed something to that address
-      - [ ] Keybase: Save in our keybase deployment record
+  - [x] ReserveEternalStorage
+      - [x] Slack: Post the address in Slack
+      - [x] Env Var: record the address as a variable for further use in that session
+      - [x] Alt Node: we can poke that contract, from another machine, through the alt node
+      - [x] Etherscan: etherscan says that we've deployed something to that address
+      - [x] Keybase: Save in our keybase deployment record
 
-  - [ ] Reserve
-      - [ ] Slack: Post the address in Slack
-      - [ ] Env Var: record the address as a variable for further use in that session
-      - [ ] Alt Node: we can poke that contract, from another machine, through the alt node
-      - [ ] Etherscan: etherscan says that we've deployed something to that address
-      - [ ] Keybase: Save in our keybase deployment record
+  - [x] Reserve
+      - [x] Slack: Post the address in Slack
+      - [x] Env Var: record the address as a variable for further use in that session
+      - [x] Alt Node: we can poke that contract, from another machine, through the alt node
+      - [x] Etherscan: etherscan says that we've deployed something to that address
+      - [x] Keybase: Save in our keybase deployment record
 
-  - [ ] ProposalFactory
-      - [ ] Slack: Post the address in Slack
-      - [ ] Env Var: record the address as a variable for further use in that session
-      - [ ] Alt Node: we can poke that contract, from another machine, through the alt node
-      - [ ] Etherscan: etherscan says that we've deployed something to that address
-      - [ ] Keybase: Save in our keybase deployment record
+  - [x] ProposalFactory
+      - [x] Slack: Post the address in Slack
+      - [x] Env Var: record the address as a variable for further use in that session
+      - [x] Alt Node: we can poke that contract, from another machine, through the alt node
+      - [x] Etherscan: etherscan says that we've deployed something to that address
+      - [x] Keybase: Save in our keybase deployment record
 
-  - [ ] Basket
-      - [ ] Slack: Post the address in Slack
-      - [ ] Env Var: record the address as a variable for further use in that session
-      - [ ] Alt Node: we can poke that contract, from another machine, through the alt node
-      - [ ] Etherscan: etherscan says that we've deployed something to that address
-      - [ ] Keybase: Save in our keybase deployment record
+  - [x] Basket
+      - [x] Slack: Post the address in Slack
+      - [x] Env Var: record the address as a variable for further use in that session
+      - [x] Alt Node: we can poke that contract, from another machine, through the alt node
+      - [x] Etherscan: etherscan says that we've deployed something to that address
+      - [x] Keybase: Save in our keybase deployment record
 
-  - [ ] Manager
-      - [ ] Slack: Post the address in Slack
-      - [ ] Env Var: record the address as a variable for further use in that session
-      - [ ] Alt Node: we can poke that contract, from another machine, through the alt node
-      - [ ] Etherscan: etherscan says that we've deployed something to that address
-      - [ ] Keybase: Save in our keybase deployment record
+  - [x] Manager
+      - [x] Slack: Post the address in Slack
+      - [x] Env Var: record the address as a variable for further use in that session
+      - [x] Alt Node: we can poke that contract, from another machine, through the alt node
+      - [x] Etherscan: etherscan says that we've deployed something to that address
+      - [x] Keybase: Save in our keybase deployment record
 
 
-- [ ] At "Check the states of things using poke" make `poke` calls to check:
-    - [ ] All of the state of the contracts matches the "initial target system"
+- [x] At "Check the states of things using poke" make `poke` calls to check:
+    - [x] All of the state of the contracts matches the "initial target system"
           (Except that Reserve.paused and Manager.emergency are both true)
-        - [ ] Vault
-        - [ ] Basket
-        - [ ] ReserveEternalStorage
-        - [ ] Manager
-        - [ ] Reserve
-    - [ ] Manager.toIssue(1e18) is sensible
-    - [ ] Manager.toRedeem(1e18) is also sensible
+        - [x] Vault
+        - [x] Basket
+        - [x] ReserveEternalStorage
+        - [x] Manager
+        - [x] Reserve
+    - [x] Manager.toIssue(1e18) is sensible
+    - [x] Manager.toRedeem(1e18) is also sensible
 
 
 # Post-Deployment checklist
 
-- [ ] Get source code verified on etherscan! This might help: https://github.com/BlockCatIO/solidity-flattener
-    - [ ] Vault
-    - [ ] Basket
-    - [ ] ReserveEternalStorage
-    - [ ] Manager
-    - [ ] Reserve
+- [x] Get source code verified on etherscan! This might help: https://github.com/BlockCatIO/solidity-flattener
+    - [x] Vault
+    - [x] Basket
+    - [x] ReserveEternalStorage
+    - [x] Manager
+    - [x] Reserve
 
-- [ ] Per etherscan views, all of the state of the contracts matches the "initial target system"
-    - [ ] Vault
-    - [ ] Basket
-    - [ ] ReserveEternalStorage
-    - [ ] Manager
-    - [ ] Reserve
+- [x] Per etherscan views, all of the state of the contracts matches the "initial target system"
+    - [x] Vault
+    - [x] Basket
+    - [x] ReserveEternalStorage
+    - [x] Manager
+    - [x] Reserve
 
+- [x] Issue 10,000 RSV to River @ eth0/1
 
 # Initial target system
 
