@@ -18,13 +18,14 @@ contract VaultV2 is Vault {
         Basket trustedBasket = manager.trustedBasket();
 
         for (uint256 i = 0; i < trustedBasket.size(); i++) {
-            address tok = trustedBasket.tokens(i);
-            IERC20(tok).safeTransferFrom(
+            address tokenAddr = trustedBasket.tokens(i);
+            IERC20 token = IERC20(tokenAddr);
+
+            token.safeTransferFrom(
                 previousVaultAddress,
                 address(this),
-                trustedBasket.weights(tok)
+                token.balanceOf(address(previousVaultAddress))
             );
-            // unit check for amounts[i]: qToken.
         }
 
         // Point manager at the new vault.
