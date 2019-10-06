@@ -114,7 +114,7 @@ define myth_specific
 myth a $<:$1 > $@
 endef
 
-# But, where there's more than one contract in the source file, do.
+# But where there's more than one contract in the source file, do.
 analysis/ProposalFactory.md: contracts/rsv/Proposal.sol $(sol)
 	$(call myth_specific ProposalFactory)
 
