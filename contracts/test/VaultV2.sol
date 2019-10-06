@@ -32,7 +32,7 @@ contract VaultV2 is Vault {
         }
 
         // Point manager at the new vault.
-        manager.setVault(IVault(address(this)));
+        manager.setVault(address(this));
 
         // Done doing things that might affect Manager operations.
         manager.setEmergency(false);

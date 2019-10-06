@@ -96,7 +96,7 @@ contract Manager is Ownable {
     event EmergencyChanged(bool indexed oldVal, bool indexed newVal);
     event OperatorChanged(address indexed oldAccount, address indexed newAccount);
     event SeigniorageChanged(uint256 oldVal, uint256 newVal);
-    event VaultChanged(IVault oldVault, IVault newVault);
+    event VaultChanged(address indexed oldVaultAddr, address indexed newVaultAddr);
     event DelayChanged(uint256 oldVal, uint256 newVal);
 
     // Proposals
@@ -182,9 +182,9 @@ contract Manager is Ownable {
     }
 
     /// Set the vault.
-    function setVault(IVault _trustedVault) external onlyOwner {
-        emit VaultChanged(trustedVault, _trustedVault);
-        trustedVault = _trustedVault;
+    function setVault(address newVaultAddress) external onlyOwner {
+        emit VaultChanged(address(trustedVault), newVaultAddress);
+        trustedVault = IVault(newVaultAddress);
     }
 
     /// Set the operator.
