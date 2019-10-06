@@ -1,4 +1,4 @@
-// +build regular
+// +build all
 
 package tests
 
@@ -136,7 +136,7 @@ func (s *ManagerSuite) BeforeTest(suiteName, testName string) {
 	s.Equal(true, emergency)
 
 	// Unpause from emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -200,7 +200,7 @@ func (s *ManagerSuite) TestSetIssuancePaused() {
 	s.Equal(false, paused)
 
 	// Pause.
-	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(signer(s.operator), true))(
 		abi.ManagerIssuancePausedChanged{OldVal: false, NewVal: true},
 	)
 
@@ -210,7 +210,7 @@ func (s *ManagerSuite) TestSetIssuancePaused() {
 	s.Equal(true, paused)
 
 	// Unpause.
-	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(signer(s.operator), false))(
 		abi.ManagerIssuancePausedChanged{OldVal: true, NewVal: false},
 	)
 
@@ -223,7 +223,7 @@ func (s *ManagerSuite) TestSetIssuancePaused() {
 // TestSetIssuancePausedIsProtected tests that `setIssuancePaused` can only be called by owner.
 func (s *ManagerSuite) TestSetIssuancePausedIsProtected() {
 	s.requireTxFails(s.manager.SetIssuancePaused(signer(s.account[2]), true))
-	s.requireTxFails(s.manager.SetIssuancePaused(signer(s.operator), true))
+	s.requireTxFails(s.manager.SetIssuancePaused(s.signer, true))
 }
 
 // TestSetEmergency tests that `setEmergency` changes the state as expected.
@@ -234,7 +234,7 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Equal(false, emergency)
 
 	// Pause for emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -243,8 +243,11 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Require().NoError(err)
 	s.Equal(true, emergency)
 
+	// Ensure econ functions can't be generally called during an emergency.
+	s.requireTxFails(s.manager.Issue(signer(s.proposer), shiftLeft(1, 20)))
+
 	// Unpause for emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -254,10 +257,10 @@ func (s *ManagerSuite) TestSetEmergency() {
 	s.Equal(false, emergency)
 }
 
-// TestSetEmergencyIsProtected tests that `setEmergency` can only be called by owner.
+// TestSetEmergencyIsProtected tests that `setEmergency` can only be called by operator.
 func (s *ManagerSuite) TestSetEmergencyIsProtected() {
 	s.requireTxFails(s.manager.SetEmergency(signer(s.account[2]), true))
-	s.requireTxFails(s.manager.SetEmergency(signer(s.operator), true))
+	s.requireTxFails(s.manager.SetEmergency(signer(s.owner), true))
 }
 
 // TestSetOperator tests that `setOperator` manipulates state correctly.
@@ -339,7 +342,7 @@ func (s *ManagerSuite) TestClearProposals() {
 	s.Equal(bigInt(1).String(), proposalsLength.String())
 
 	// Clear it.
-	s.requireTxWithStrictEvents(s.manager.ClearProposals(s.signer))(
+	s.requireTxWithStrictEvents(s.manager.ClearProposals(signer(s.operator)))(
 		abi.ManagerProposalsCleared{},
 	)
 
@@ -352,7 +355,7 @@ func (s *ManagerSuite) TestClearProposals() {
 // TestClearProposalsIsProtected tests that `clearProposals` can only be called by owner.
 func (s *ManagerSuite) TestClearProposalsIsProtected() {
 	s.requireTxFails(s.manager.ClearProposals(signer(s.account[2])))
-	s.requireTxFails(s.manager.ClearProposals(signer(s.operator)))
+	s.requireTxFails(s.manager.ClearProposals(s.signer))
 }
 
 // TestIssue tests that `issue` costs the correct amounts given basket + seigniorage.
@@ -402,7 +405,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
 
 	// Set `emergency` to true.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -415,7 +418,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
 
 	// Set `emergency` to false.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -423,7 +426,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTx(s.manager.Issue(signer(s.proposer), amount))
 
 	// Pause just issuance.
-	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(signer(s.operator), true))(
 		abi.ManagerIssuancePausedChanged{OldVal: false, NewVal: true},
 	)
 
@@ -436,7 +439,7 @@ func (s *ManagerSuite) TestIssueIsProtected() {
 	s.requireTxFails(s.manager.Issue(signer(s.proposer), amount))
 
 	// Unpause issuance.
-	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetIssuancePaused(signer(s.operator), false))(
 		abi.ManagerIssuancePausedChanged{OldVal: true, NewVal: false},
 	)
 
@@ -511,7 +514,7 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	s.requireTx(s.manager.Redeem(signer(s.proposer), bigInt(1)))
 
 	// Emergency Pause.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, true))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), true))(
 		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
 	)
 
@@ -519,7 +522,7 @@ func (s *ManagerSuite) TestRedeemIsProtected() {
 	s.requireTxFails(s.manager.Redeem(signer(s.proposer), bigInt(1)))
 
 	// Unpause from emergency.
-	s.requireTxWithStrictEvents(s.manager.SetEmergency(s.signer, false))(
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), false))(
 		abi.ManagerEmergencyChanged{OldVal: true, NewVal: false},
 	)
 
@@ -605,4 +608,131 @@ func (s *ManagerSuite) TestProposeSwapFullUsecase() {
 
 	// We should be back to zero RSV supply.
 	s.assertRSVTotalSupply(bigInt(0))
+}
+
+// TestRemoveTokenUsecase removes a token from the initial basket
+func (s *ManagerSuite) TestRemoveTokenUsecase() {
+	// Check basket size == 3
+	size, err := s.basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal("3", size.String())
+
+	// Change Basket
+	newTokenAddrs := s.erc20Addresses[:2]
+	newWeights := []*big.Int{shiftLeft(3, 35), shiftLeft(7, 35)}
+	s.changeBasketUsingWeightProposal(newTokenAddrs, newWeights)
+
+	// Check basket size == 2
+	size, err = s.basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal("2", size.String())
+}
+
+// TestRemoveTokenUsecase sets up a basket, issues RSV,
+// alters the basket to *remove* one of the tokens,
+// and redeems the RSV.
+func (s *ManagerSuite) TestAddTokenUsecase() {
+	// Check basket size == 3
+	size, err := s.basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal("3", size.String())
+
+	// Change Basket
+
+	newTokenAddr, _, _, err := abi.DeployBasicERC20(s.signer, s.node)
+	newTokenAddrs := append(s.erc20Addresses, newTokenAddr)
+	//fmt.Println(newTokenAddrs)
+	newWeights := []*big.Int{shiftLeft(1, 35), shiftLeft(2, 35), shiftLeft(3, 35), shiftLeft(4, 35)}
+	s.changeBasketUsingWeightProposal(newTokenAddrs, newWeights)
+
+	// Check basket size == 4
+	size, err = s.basket.Size(nil)
+	s.Require().NoError(err)
+	s.Equal("4", size.String())
+}
+
+// TestUpgrade tests that we can upgrade to a new Manager smoothly.
+func (s *ManagerSuite) TestUpgrade() {
+	// Pause the old Manager.
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), true))(
+		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
+	)
+
+	// Record the operator.
+	operator, err := s.manager.Operator(nil)
+	s.Require().NoError(err)
+
+	// Record the old seigniorage.
+	seigniorage, err := s.manager.Seigniorage(nil)
+	s.Require().NoError(err)
+
+	// Deploy ManagerV2.
+	v2Address, tx, v2, err := abi.DeployManagerV2(
+		s.signer,
+		s.node,
+		s.vaultAddress,
+		s.reserveAddress,
+		s.proposalFactoryAddress,
+		s.basketAddress,
+		operator,
+		seigniorage,
+	)
+
+	s.logParsers[v2Address] = v2
+
+	s.requireTxWithStrictEvents(tx, err)(
+		abi.ManagerV2OwnershipTransferred{
+			PreviousOwner: zeroAddress(),
+			NewOwner:      s.owner.address(),
+		},
+	)
+
+	// Update the Vault.
+	s.requireTxWithStrictEvents(s.vault.ChangeManager(s.signer, v2Address))(
+		abi.VaultManagerTransferred{
+			PreviousManager: s.managerAddress,
+			NewManager:      v2Address,
+		},
+	)
+
+	// Set Reserve auths to new Manager.
+	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, v2Address))(
+		abi.ReserveMinterChanged{NewMinter: v2Address},
+	)
+	s.requireTxWithStrictEvents(s.reserve.ChangePauser(s.signer, v2Address))(
+		abi.ReservePauserChanged{NewPauser: v2Address},
+	)
+
+	// Unpause from emergency.
+	s.requireTxWithStrictEvents(v2.SetEmergency(signer(s.operator), false))(
+		abi.ManagerV2EmergencyChanged{OldVal: true, NewVal: false},
+	)
+
+	// Confirm we are unpaused from emergency.
+	emergency, err := v2.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(false, emergency)
+
+	// Set the operator to the old Manager as the zero address to wrap things up.
+	// Note: The owner of old Manager remains valid, just in case.
+	s.requireTxWithStrictEvents(s.manager.SetOperator(s.signer, zeroAddress()))(
+		abi.ManagerOperatorChanged{
+			OldAccount: s.operator.address(),
+			NewAccount: zeroAddress(),
+		},
+	)
+
+	// Confirm we have upgraded.
+	version, err := v2.VERSION(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(2), version)
+
+	// Actually do something that uses RSV and the Vault to make sure this worked.
+	amount := bigInt(1)
+	for _, erc20 := range s.erc20s {
+		erc20.Approve(signer(s.proposer), v2Address, amount)
+	}
+	s.requireTx(v2.Issue(signer(s.proposer), amount))
+	s.requireTx(s.reserve.Approve(signer(s.proposer), v2Address, amount))
+	s.requireTx(v2.Redeem(signer(s.proposer), amount))
 }

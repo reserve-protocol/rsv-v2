@@ -38,7 +38,7 @@ contract Ownable is Context {
     /**
      * @dev Returns the address of the current nominated owner.
      */
-    function nominatedOwner() public view returns (address) {
+    function nominatedOwner() external view returns (address) {
         return _nominatedOwner;
     }
 

@@ -170,13 +170,13 @@ contract Manager is Ownable {
     // ========================= Public + External ============================
 
     /// Set if issuance should be paused.
-    function setIssuancePaused(bool val) external onlyOwner {
+    function setIssuancePaused(bool val) external onlyOperator {
         emit IssuancePausedChanged(issuancePaused, val);
         issuancePaused = val;
     }
 
     /// Set if all contract actions should be paused.
-    function setEmergency(bool val) external onlyOwner {
+    function setEmergency(bool val) external onlyOperator {
         emit EmergencyChanged(emergency, val);
         emergency = val;
     }
@@ -185,6 +185,11 @@ contract Manager is Ownable {
     function setVault(address newVaultAddress) external onlyOwner {
         emit VaultChanged(address(trustedVault), newVaultAddress);
         trustedVault = IVault(newVaultAddress);
+
+    /// Clear the list of proposals.
+    function clearProposals() external onlyOperator {
+        proposalsLength = 0;
+        emit ProposalsCleared();
     }
 
     /// Set the operator.
@@ -204,12 +209,6 @@ contract Manager is Ownable {
     function setDelay(uint256 _delay) external onlyOwner {
         emit DelayChanged(delay, _delay);
         delay = _delay;
-    }
-
-    /// Clear the list of proposals.
-    function clearProposals() external onlyOwner {
-        proposalsLength = 0;
-        emit ProposalsCleared();
     }
 
     /// Ensure that the Vault is fully collateralized.  That this is true should be an

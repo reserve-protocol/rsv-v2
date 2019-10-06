@@ -35,8 +35,7 @@ When in doubt, state each of these as: "A {user} can {act} in order to {satisfy 
     - But not without a signed messagae from that user! (Avoid losing auth to typos or miscommunication.)
 
 3. The owner can disown ownership.
-    - But not easily or accidentally! This function should not be simple to invoke, or invokable without delay.
-    - TODO: Scrutinize for security!
+    - But not easily or accidentally! This function should not be simple to invoke, or invokable without delay by a "fast" key.
 
 ## Economics of Issuance and Redemption
 1. The manager maintains which tokens are in the basket, and the basket weight for each.

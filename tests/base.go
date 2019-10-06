@@ -1,4 +1,4 @@
-// +build regular fuzz
+// +build all fuzz
 
 package tests
 
@@ -472,9 +472,11 @@ func (s *TestSuite) changeBasketUsingWeightProposal(tokens []common.Address, wei
 	proposalBasketAddress, err := proposal.TrustedBasket(nil)
 	s.Require().NoError(err)
 	s.NotEqual(zeroAddress(), proposalBasketAddress)
+	s.basketAddress = proposalBasketAddress
 
 	basket, err := abi.NewBasket(proposalBasketAddress, s.node)
 	s.Require().NoError(err)
+	s.basket = basket
 
 	s.logParsers[proposalBasketAddress] = basket
 
@@ -509,6 +511,9 @@ func (s *TestSuite) changeBasketUsingWeightProposal(tokens []common.Address, wei
 	// Advance 24h.
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
 
+	// Confirm that non-operators cannot execute the proposal.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.account[3]), proposalID))
+
 	// Execute Proposal.
 	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))
 
@@ -517,6 +522,7 @@ func (s *TestSuite) changeBasketUsingWeightProposal(tokens []common.Address, wei
 
 	// Assert that the vault is still collateralized.
 	s.assertManagerCollateralized()
+
 }
 
 func (s *TestSuite) changeBasketUsingSwapProposal(tokens []common.Address, amounts []*big.Int, toVault []bool) {
@@ -548,6 +554,9 @@ func (s *TestSuite) changeBasketUsingSwapProposal(tokens []common.Address, amoun
 
 	// Advance 24h.
 	s.Require().NoError(s.node.(backend).AdjustTime(24 * time.Hour))
+
+	// Confirm that non-operators cannot execute the proposal.
+	s.requireTxFails(s.manager.ExecuteProposal(signer(s.account[3]), proposalID))
 
 	// Execute Proposal.
 	s.requireTx(s.manager.ExecuteProposal(signer(s.operator), proposalID))

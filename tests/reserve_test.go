@@ -1,4 +1,4 @@
-// +build regular
+// +build all
 
 package tests
 
@@ -76,6 +76,8 @@ func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	)
 
 	deployerAddress := s.owner.address()
+
+	s.assertRSVTotalSupply(bigInt(0))
 
 	// Make the deployment account a minter, pauser, and freezer.
 	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, deployerAddress))(
@@ -822,7 +824,7 @@ func (s *ReserveSuite) TestUpgrade() {
 	assertRSVBalance(s.account[3].address(), big.NewInt(10))
 }
 
-// Test that we can use the owner in ReserveEternalStorage.
+// TestEternalStorageOwner tests that we can use the owner in ReserveEternalStorage.
 func (s *ReserveSuite) TestEternalStorageOwner() {
 	assertReserveAddress := func(expected common.Address) {
 		reserveAddress, err := s.eternalStorage.ReserveAddress(nil)
@@ -888,7 +890,7 @@ func (s *ReserveSuite) TestEternalStorageOwner() {
 	)
 }
 
-// Test that setBalance works as expected on ReserveEternalStorage.
+// TestEternalStorageSetBalance that setBalance works as expected on ReserveEternalStorage.
 // It is not used by the current Reserve contract, but is present as a bit
 // of potential future-proofing for upgrades.
 func (s *ReserveSuite) TestEternalStorageSetBalance() {
@@ -913,4 +915,111 @@ func (s *ReserveSuite) TestEternalStorageSetBalance() {
 	balance, err := s.eternalStorage.Balance(nil, newOwner.address())
 	s.NoError(err)
 	s.Equal(amount.String(), balance.String())
+}
+
+// TestEternalStorageFunctionsAreProtected makes sure that all the functions cannot be called by anyone
+// other than the allowed accounts.
+func (s *ReserveSuite) TestEternalStorageFunctionsAreProtected() {
+	// Set Reserve address
+	newReserveAccount := s.account[4]
+	s.requireTxWithStrictEvents(s.eternalStorage.UpdateReserveAddress(s.signer, newReserveAccount.address()))(
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: s.reserveAddress,
+			NewReserveAddress: newReserveAccount.address(),
+		},
+	)
+
+	balanceAcc := s.account[5]
+	value := bigInt(1)
+
+	// addBalance
+	s.requireTxFails(s.eternalStorage.AddBalance(s.signer, balanceAcc.address(), value))
+	s.requireTxFails(s.eternalStorage.AddBalance(signer(balanceAcc), balanceAcc.address(), value))
+
+	// subBalance
+	s.requireTx(s.eternalStorage.AddBalance(signer(newReserveAccount), balanceAcc.address(), value))
+	s.requireTxFails(s.eternalStorage.SubBalance(s.signer, balanceAcc.address(), value))
+	s.requireTxFails(s.eternalStorage.SubBalance(signer(balanceAcc), balanceAcc.address(), value))
+
+	// setBalance
+	s.requireTxFails(s.eternalStorage.SetBalance(s.signer, balanceAcc.address(), value))
+	s.requireTxFails(s.eternalStorage.SetBalance(signer(balanceAcc), balanceAcc.address(), value))
+
+	// setAllowed
+	s.requireTxFails(s.eternalStorage.SetAllowed(s.signer, balanceAcc.address(), s.owner.address(), value))
+	s.requireTxFails(s.eternalStorage.SetAllowed(signer(balanceAcc), balanceAcc.address(), s.owner.address(), value))
+
+	// updateReserveAddress
+	s.requireTxFails(s.eternalStorage.UpdateReserveAddress(signer(balanceAcc), balanceAcc.address()))
+}
+
+//////////////////
+
+// TestTxFees tests that:
+// 1. We can upgrade the Transaction Fee contract.
+// 2. We can set who is the beneficiary of the transaction fees.
+// 3. If the transaction fee is too large, the transaction reverts appropriately.
+func (s *ReserveSuite) TestTxFees() {
+	firstFee := bigInt(1)
+	firstFeeRecipient := s.account[2]
+	secondFeeRecipient := s.account[3]
+
+	// Mint RSV to transactor.
+	sender := s.account[4]
+	receiver := s.account[5]
+	amount := bigInt(1000)
+
+	s.requireTx(s.reserve.Mint(s.signer, sender.address(), bigInt(0).Mul(amount, bigInt(4))))
+
+	// Confirm the two recipients have no initial balance.
+	s.assertRSVBalance(firstFeeRecipient.address(), bigInt(0))
+	s.assertRSVBalance(secondFeeRecipient.address(), bigInt(0))
+
+	// Deploy first Transaction Fee contract.
+	feeAddress, tx, _, err := abi.DeployBasicTxFee(s.signer, s.node, firstFee)
+
+	s.requireTx(tx, err)
+
+	// Set Transaction Fee Helper address.
+	s.requireTxWithStrictEvents(s.reserve.ChangeTxFeeHelper(s.signer, feeAddress))(
+		abi.ReserveTxFeeHelperChanged{NewTxFeeHelper: feeAddress},
+	)
+
+	// Set Transaction Fee recipient address.
+	s.requireTxWithStrictEvents(s.reserve.ChangeFeeRecipient(s.signer, firstFeeRecipient.address()))(
+		abi.ReserveFeeRecipientChanged{NewFeeRecipient: firstFeeRecipient.address()},
+	)
+
+	// Send RSV to a random.
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(sender), receiver.address(), amount))(
+		abi.ReserveTransfer{From: sender.address(), To: firstFeeRecipient.address(), Value: firstFee},
+		abi.ReserveTransfer{From: sender.address(), To: receiver.address(), Value: bigInt(0).Sub(amount, firstFee)},
+	)
+
+	// The firstFeeRecipient should have the fee.
+	s.assertRSVBalance(firstFeeRecipient.address(), firstFee)
+
+	// Now change who receives the fee.
+	s.requireTxWithStrictEvents(s.reserve.ChangeFeeRecipient(s.signer, secondFeeRecipient.address()))(
+		abi.ReserveFeeRecipientChanged{NewFeeRecipient: secondFeeRecipient.address()},
+	)
+
+	// Send RSV again, this time accumulating the second fee into the second fee recipient's account.
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(sender), receiver.address(), amount))(
+		abi.ReserveTransfer{From: sender.address(), To: secondFeeRecipient.address(), Value: firstFee},
+		abi.ReserveTransfer{From: sender.address(), To: receiver.address(), Value: bigInt(0).Sub(amount, firstFee)},
+	)
+
+	// The secondFeeRecipient should have the fee.
+	s.assertRSVBalance(secondFeeRecipient.address(), firstFee)
+
+	// Now upgrade our transaction fee contract. This time, an unrealistic fee.
+	newFeeAddress, tx, _, err := abi.DeployBasicTxFee(s.signer, s.node, bigInt(1000000000))
+	s.requireTx(tx, err)
+	s.requireTxWithStrictEvents(s.reserve.ChangeTxFeeHelper(s.signer, newFeeAddress))(
+		abi.ReserveTxFeeHelperChanged{NewTxFeeHelper: newFeeAddress},
+	)
+
+	// Try a transaction again, this time it should revert
+	s.requireTxFails(s.reserve.Transfer(signer(sender), receiver.address(), amount))
 }

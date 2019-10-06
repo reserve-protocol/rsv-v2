@@ -1,4 +1,4 @@
-// +build regular
+// +build all
 
 package tests
 

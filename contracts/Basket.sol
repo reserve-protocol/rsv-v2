@@ -56,7 +56,7 @@ contract Basket {
                 }
             }
         }
-        require(tokens.length <= 100, "Basket: bad length");
+        require(tokens.length <= 10, "Basket: bad length");
     }
 
     function getTokens() external view returns(address[] memory) {

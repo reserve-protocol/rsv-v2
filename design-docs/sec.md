@@ -21,5 +21,4 @@ This security policy is actually complete when we're convinced by an _explicit_,
 - The owner can accept a previously-approved alternative basket proposal with only brief, customary key access.
     - For each asset in the current basket, there is almost always an available, alternative basket proposal that does not contain that asset. ("Almost always" because this can't really be ensured through each basket transition; it's fine, though, for that change to be unavailable for a day or less after each basket transition.)
 
-
 - We never have access to third-party private keys.
