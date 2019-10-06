@@ -3,7 +3,7 @@ export SOLC_VERSION = 0.5.7
 
 root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory
 rsv_contracts := Reserve ReserveEternalStorage
-test_contracts := BasicOwnable ReserveV2 BasicERC20 BasicTxFee
+test_contracts := BasicOwnable ReserveV2 ManagerV2 BasicERC20 BasicTxFee
 contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
 
 sol := $(shell find contracts -name '*.sol' -not -name '.*' ) ## All Solidity files
@@ -91,6 +91,9 @@ evm/BasicOwnable.json: contracts/test/BasicOwnable.sol $(sol)
 
 evm/ReserveV2.json: contracts/test/ReserveV2.sol $(sol)
 	$(call solc,1000000)
+
+evm/ManagerV2.json: contracts/test/ManagerV2.sol $(sol)
+	$(call solc,10000)
 
 evm/BasicERC20.json: contracts/test/BasicERC20.sol $(sol)
 	$(call solc,1000000)
