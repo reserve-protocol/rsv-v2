@@ -650,3 +650,89 @@ func (s *ManagerSuite) TestAddTokenUsecase() {
 	s.Require().NoError(err)
 	s.Equal("4", size.String())
 }
+
+// TestUpgrade tests that we can upgrade to a new Manager smoothly.
+func (s *ManagerSuite) TestUpgrade() {
+	// Pause the old Manager.
+	s.requireTxWithStrictEvents(s.manager.SetEmergency(signer(s.operator), true))(
+		abi.ManagerEmergencyChanged{OldVal: false, NewVal: true},
+	)
+
+	// Record the operator.
+	operator, err := s.manager.Operator(nil)
+	s.Require().NoError(err)
+
+	// Record the old seigniorage.
+	seigniorage, err := s.manager.Seigniorage(nil)
+	s.Require().NoError(err)
+
+	// Deploy ManagerV2.
+	v2Address, tx, v2, err := abi.DeployManagerV2(
+		s.signer,
+		s.node,
+		s.vaultAddress,
+		s.reserveAddress,
+		s.proposalFactoryAddress,
+		s.basketAddress,
+		operator,
+		seigniorage,
+	)
+
+	s.logParsers[v2Address] = v2
+
+	s.requireTxWithStrictEvents(tx, err)(
+		abi.ManagerV2OwnershipTransferred{
+			PreviousOwner: zeroAddress(),
+			NewOwner:      s.owner.address(),
+		},
+	)
+
+	// Update the Vault.
+	s.requireTxWithStrictEvents(s.vault.ChangeManager(s.signer, v2Address))(
+		abi.VaultManagerTransferred{
+			PreviousManager: s.managerAddress,
+			NewManager:      v2Address,
+		},
+	)
+
+	// Set Reserve auths to new Manager.
+	s.requireTxWithStrictEvents(s.reserve.ChangeMinter(s.signer, v2Address))(
+		abi.ReserveMinterChanged{NewMinter: v2Address},
+	)
+	s.requireTxWithStrictEvents(s.reserve.ChangePauser(s.signer, v2Address))(
+		abi.ReservePauserChanged{NewPauser: v2Address},
+	)
+
+	// Unpause from emergency.
+	s.requireTxWithStrictEvents(v2.SetEmergency(signer(s.operator), false))(
+		abi.ManagerV2EmergencyChanged{OldVal: true, NewVal: false},
+	)
+
+	// Confirm we are unpaused from emergency.
+	emergency, err := v2.Emergency(nil)
+	s.Require().NoError(err)
+	s.Equal(false, emergency)
+
+	// Set the operator to the old Manager as the zero address to wrap things up.
+	// Note: The owner of old Manager remains valid, just in case.
+	s.requireTxWithStrictEvents(s.manager.SetOperator(s.signer, zeroAddress()))(
+		abi.ManagerOperatorChanged{
+			OldAccount: s.operator.address(),
+			NewAccount: zeroAddress(),
+		},
+	)
+
+	// Confirm we have upgraded.
+	version, err := v2.VERSION(nil)
+	s.Require().NoError(err)
+	s.Equal(bigInt(2), version)
+
+	// Actually do something that uses RSV and the Vault to make sure this worked.
+	amount := bigInt(1)
+	for _, erc20 := range s.erc20s {
+		erc20.Approve(signer(s.proposer), v2Address, amount)
+	}
+	s.requireTx(v2.Issue(signer(s.proposer), amount))
+	s.requireTx(s.reserve.Approve(signer(s.proposer), v2Address, amount))
+	s.requireTx(v2.Redeem(signer(s.proposer), amount))
+}
