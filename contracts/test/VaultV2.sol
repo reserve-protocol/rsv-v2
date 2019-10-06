@@ -7,8 +7,9 @@ import "../rsv/IRSV.sol";
 
 contract VaultV2 is Vault {
 
-    function completeHandoff(address previousVaultAddress, Manager manager) external onlyOwner {
+    function completeHandoff(address previousVaultAddress, address managerAddress) external onlyOwner {
         Vault previousVault = Vault(previousVaultAddress);
+        Manager manager = Manager(managerAddress);
 
         previousVault.acceptOwnership();
 
@@ -21,15 +22,18 @@ contract VaultV2 is Vault {
             address tokenAddr = trustedBasket.tokens(i);
             IERC20 token = IERC20(tokenAddr);
 
-            token.safeTransferFrom(
-                previousVaultAddress,
-                address(this),
-                token.balanceOf(address(previousVaultAddress))
+            previousVault.withdrawTo(
+                tokenAddr,
+                token.balanceOf(address(previousVaultAddress)),
+                address(this)
             );
         }
 
         // Point manager at the new vault.
+        manager.acceptOwnership();
         manager.setVault(address(this));
+        manager.nominateNewOwner(_msgSender());
 
+        previousVault.nominateNewOwner(_msgSender());
     }
 }

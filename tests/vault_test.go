@@ -5,6 +5,7 @@ package tests
 import (
 	"fmt"
 	"os/exec"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -261,52 +262,88 @@ func (s *VaultSuite) TestWithdrawToProtected() {
 func (s *VaultSuite) TestUpgrade() {
 	receiver := s.account[2]
 	newKey := s.account[3]
+	erc20Address, tx, erc20, err := abi.DeployBasicERC20(signer(newKey), s.node)
+	s.logParsers[erc20Address] = erc20
+	s.requireTx(tx, err)
+
+	amount := bigInt(10)
+
+	// Set up a Basket.
+	weights := []*big.Int{shiftLeft(1, 36)}
+	basketAddress, tx, _, err := abi.DeployBasket(
+		s.signer, s.node, zeroAddress(), []common.Address{erc20Address}, weights,
+	)
+	s.requireTxWithStrictEvents(tx, err)
+	s.NotEqual(zeroAddress(), basketAddress)
+
+	// Manager.
+	managerAddress, tx, manager, err := abi.DeployManager(
+		s.signer, s.node,
+		s.vaultAddress, s.account[2].address(), s.account[2].address(),
+		basketAddress, s.account[2].address(), bigInt(0),
+	)
+
+	s.logParsers[managerAddress] = manager
+	s.requireTx(tx, err)(abi.ManagerOwnershipTransferred{
+		PreviousOwner: zeroAddress(), NewOwner: s.owner.address(),
+	})
+
+	s.requireTxWithStrictEvents(erc20.Transfer(signer(newKey), s.vaultAddress, amount))(
+		abi.BasicERC20Transfer{
+			From: newKey.address(), To: s.vaultAddress, Value: amount,
+		},)
 
 	// Deploy the new vault.
 	newVaultAddress, tx, newVault, err := abi.DeployVaultV2(signer(newKey), s.node)
-
-	newVault.ChangeManager(signer(newKey), s.managerAddress)
-	//s.requireTx(newVault.ChangeManager(signer(newKey), s.managerAddress))(
-	//	abi.VaultV2ManagerTransferred{PreviousManager: zeroAddress(), NewManager: s.managerAddress},
-	//	)
-
 	s.logParsers[newVaultAddress] = newVault
 	s.requireTx(tx, err)(
 		abi.VaultV2OwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: newKey.address()},
 	)
+	s.requireTxWithStrictEvents(newVault.ChangeManager(signer(newKey), managerAddress))(
+		abi.VaultV2ManagerTransferred{PreviousManager: newKey.address(), NewManager: managerAddress},
+		)
+
 
 	// Switch over.
-	s.requireTxWithStrictEvents(s.vault.NominateNewOwner(s.signer, newVaultAddress))(abi.VaultNewOwnerNominated{
-		PreviousOwner: s.owner.address(), Nominee: newVaultAddress},
+	s.requireTxWithStrictEvents(s.vault.NominateNewOwner(s.signer, newVaultAddress))(
+		abi.VaultNewOwnerNominated{PreviousOwner: s.owner.address(), Nominee: newVaultAddress},
 	)
-	newVault.CompleteHandoff(signer(newKey), s.vaultAddress, s.managerAddress)
-	//s.requireTx(newVault.CompleteHandoff(signer(newKey), s.vaultAddress, s.managerAddress))(
-	//	abi.VaultOwnershipTransferred{PreviousOwner: s.owner.address(), NewOwner: newVaultAddress},
-	//)
+	s.requireTx(manager.NominateNewOwner(s.signer, newVaultAddress))(
+		abi.ManagerNewOwnerNominated{PreviousOwner: s.owner.address(), Nominee: newVaultAddress},
+		)
+	s.requireTxWithStrictEvents(newVault.CompleteHandoff(signer(newKey), s.vaultAddress, s.managerAddress))(
+		abi.ManagerVaultChanged{OldVaultAddr: s.vaultAddress, NewVaultAddr: newVaultAddress},
+		abi.VaultOwnershipTransferred{PreviousOwner: s.owner.address(), NewOwner: newVaultAddress},
+		abi.ManagerOwnershipTransferred{PreviousOwner: s.owner.address(), NewOwner: newVaultAddress},
+		abi.ManagerNewOwnerNominated{PreviousOwner: newVaultAddress, Nominee: newKey.address()},
+		abi.VaultNewOwnerNominated{PreviousOwner: newVaultAddress, Nominee: newKey.address()},
+	)
 
 	// Verify that the new vault can withdraw.
-	balance, err := s.erc20s[0].BalanceOf(nil, s.vaultAddress)
+	balance, err := erc20.BalanceOf(nil, s.vaultAddress)
 	s.Require().NoError(err)
 
-	val := bigInt(0)
 	expected := balance
+
+	s.requireTxWithStrictEvents(newVault.ChangeManager(signer(newKey), managerAddress))(
+		abi.VaultV2ManagerTransferred{PreviousManager: managerAddress, NewManager: newKey.address()},
+	)
 
 	// Make transfer.
 	s.requireTxWithStrictEvents(
-		newVault.WithdrawTo(signer(newKey), s.erc20Addresses[0], val, receiver.address()),
+		newVault.WithdrawTo(signer(newKey), erc20Address, amount, receiver.address()),
 	)(
 		abi.BasicERC20Transfer{
-			From: newVaultAddress, To: receiver.address(), Value: val,
+			From: newVaultAddress, To: receiver.address(), Value: amount,
 		},
 		abi.VaultV2Withdrawal{
-			Token: s.erc20Addresses[0], Amount: val, To: receiver.address(),
+			Token: erc20Address, Amount: amount, To: receiver.address(),
 		},
 	)
 
 	// Check that resultant balance is as expected.
-	newBalance, err := s.erc20s[0].BalanceOf(nil, s.vaultAddress)
+	newBalance, err := erc20.BalanceOf(nil, s.vaultAddress)
 	s.Require().NoError(err)
 	s.Equal(expected, newBalance)
-
 
 }
