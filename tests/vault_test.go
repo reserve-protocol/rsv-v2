@@ -258,7 +258,8 @@ func (s *VaultSuite) TestWithdrawToProtected() {
 	)
 }
 
-///
+// TestUpgrade tests that we can upgrade to a new Vault and successfully pass ownership
+// back to the original Manager, while maintaining Vault collateral.
 func (s *VaultSuite) TestUpgrade() {
 	newKey := s.account[3]
 
@@ -307,19 +308,29 @@ func (s *VaultSuite) TestUpgrade() {
 		abi.VaultNewOwnerNominated{PreviousOwner: newVaultAddress, Nominee: newKey.address()},
 	)
 
-	// Make sure we can grab ownership back from VaultV2.
+	// Grab ownership back for the Manager.
 	s.requireTxWithStrictEvents(manager.AcceptOwnership(signer(newKey)))(
 		abi.ManagerOwnershipTransferred{
 			PreviousOwner: newVaultAddress,
 			NewOwner:      newKey.address(),
 		},
 	)
+
+	newManagerOwner, err := manager.Owner(nil)
+	s.Require().NoError(err)
+	s.Equal(newKey.address(), newManagerOwner)
+
+	// Grab ownership back for the old Vault.
 	s.requireTxWithStrictEvents(s.vault.AcceptOwnership(signer(newKey)))(
 		abi.VaultOwnershipTransferred{
 			PreviousOwner: newVaultAddress,
 			NewOwner:      newKey.address(),
 		},
 	)
+
+	newVaultOwner, err := s.vault.Owner(nil)
+	s.Require().NoError(err)
+	s.Equal(newKey.address(), newVaultOwner)
 
 	// Assert balances in new vault are same as what was passed into original vault in `BeforeTest`.
 	for _, erc20 := range s.erc20s {

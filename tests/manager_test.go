@@ -263,6 +263,31 @@ func (s *ManagerSuite) TestSetEmergencyIsProtected() {
 	s.requireTxFails(s.manager.SetEmergency(signer(s.owner), true))
 }
 
+// TestSetVault tests that `setVault` changes the state as expected.
+func (s *ManagerSuite) TestSetVault() {
+	newVault := s.account[3]
+	// Read out current vault.
+	vaultAddr, err := s.manager.TrustedVault(nil)
+	s.Require().NoError(err)
+	s.Equal(s.vaultAddress, vaultAddr)
+
+	// Change the Vault.
+	s.requireTxWithStrictEvents(s.manager.SetVault(s.signer, newVault.address()))(
+		abi.ManagerVaultChanged{OldVaultAddr: s.vaultAddress, NewVaultAddr: newVault.address()},
+	)
+
+	// Confirm it is changed.
+	vaultAddr, err = s.manager.TrustedVault(nil)
+	s.Require().NoError(err)
+	s.Equal(newVault.address(), vaultAddr)
+}
+
+// TestSetVaultIsProtected tests that `setVault` can only be called by owner.
+func (s *ManagerSuite) TestSetVaultIsProtected() {
+	s.requireTxFails(s.manager.SetVault(signer(s.account[2]), s.account[3].address()))
+	s.requireTxFails(s.manager.SetVault(signer(s.operator), s.account[3].address()))
+}
+
 // TestSetOperator tests that `setOperator` manipulates state correctly.
 func (s *ManagerSuite) TestSetOperator() {
 	newOperator := s.account[5].address()
