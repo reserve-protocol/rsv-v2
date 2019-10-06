@@ -185,6 +185,7 @@ contract Manager is Ownable {
     function setVault(address newVaultAddress) external onlyOwner {
         emit VaultChanged(address(trustedVault), newVaultAddress);
         trustedVault = IVault(newVaultAddress);
+    }
 
     /// Clear the list of proposals.
     function clearProposals() external onlyOperator {
