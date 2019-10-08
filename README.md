@@ -1,2 +1,2 @@
 # RSV Beta
-This is a simple RSV protocol implementation. 
+For a more in-depth discussion, see [here](https://medium.com/reserve-currency/reserve-beta-launch-86855468d506). 
