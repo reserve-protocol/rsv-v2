@@ -39,10 +39,11 @@ The center of this system are the smart contracts in `contracts/` and `contracts
     - `Proposal`: The base proposal class. A proposal has a state machine describing its current state in the proposal acceptance-or-rejection process, and must implement a function that yields a basket at completion time.
     - `WeightProposal`: A proposal that yields a static, proposed basket at completion time.
     - `SwapProposal`: A proposal to exchange specific quantities of specific tokens, and which will compute its precise basket at completion time.
-    - `ProposalFactory`: A factory for new `SwapProposal`s and `WeightProposal`s. This exists instead of the equivalent `new` statements in `Manager`, because `new` in `Manager` would force `Manager` over the 24-KB contract bytecode limit, due to EIP-170.
+    - `ProposalFactory`: A factory for new `SwapProposal`s and `WeightProposal`s. This exists instead of the equivalent `new` statements in `Manager`, because `new` in `Manager` would force `Manager` over the 24-KB contract bytecode limit due to [EIP 170][].
 
 For greater technical detail, see the source code itself -- each of these contracts' interfaces are generally documented in detail there.
 
+[EIP 170]: https://eips.ethereum.org/EIPS/eip-170
 [whitepaper]: https://reserve.org/whitepaper
 [ethereum]: https://www.ethereum.org/
 [blog post]: https://medium.com/reserve-currency/reserve-beta-launch-86855468d506
