@@ -123,13 +123,13 @@ myth a $<:$1 > $@
 endef
 
 # But, where there's more than one contract in the source file, do.
-analysis/ProposalFactory.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/ProposalFactory.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific ProposalFactory)
 
-analysis/WeightProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/WeightProposal.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific WeightProposal)
 
-analysis/SwapProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/SwapProposal.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific SwapProposal)
 
 
