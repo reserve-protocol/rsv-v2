@@ -53,8 +53,8 @@ For greater technical detail, see the source code itself -- each of these contra
 
 To build and test these contracts, your development environment will need:
 
-- **Make**
-- **Go** 1.12 or later
+- Make
+- Go 1.12 or later
 - Either [solc-select][], or a manual installation of [solc][] version 0.5.7
 - [slither][], for basic source analysis.
 
