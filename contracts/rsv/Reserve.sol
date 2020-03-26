@@ -300,17 +300,6 @@ contract Reserve is IERC20, Ownable {
         return true;
     }
 
-    function relayTransferFrom(address spender, address holder, address to, uint256 value) 
-        external 
-        notPaused
-        only(address(trustedRelayer))
-        returns (bool)
-    {
-        _transfer(holder, to, value);
-        _approve(holder, spender, trustedData.allowed(holder, spender).sub(value));
-        return true;
-    }
-
     function relayApprove(address holder, address spender, uint256 value) 
         external 
         notPaused
@@ -318,6 +307,17 @@ contract Reserve is IERC20, Ownable {
         returns (bool)
     {
         _approve(holder, spender, value);
+        return true;
+    }
+
+    function relayTransferFrom(address holder, address spender, address to, uint256 value) 
+        external 
+        notPaused
+        only(address(trustedRelayer))
+        returns (bool)
+    {
+        _transfer(holder, to, value);
+        _approve(holder, spender, trustedData.allowed(holder, spender).sub(value));
         return true;
     }
 

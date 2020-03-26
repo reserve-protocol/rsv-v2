@@ -5,6 +5,8 @@ pragma solidity 0.5.7;
  *
  * These functions can be used to verify that a message was signed by the holder
  * of the private keys of a given address.
+ *
+ * All credit to OpenZeppelin. Taken from: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/cryptography/ECDSA.sol.
  */
 library ECDSA {
     /**
@@ -60,7 +62,7 @@ library ECDSA {
 
         // If the signature is valid (and not malleable), return the signer address
         address signer = ecrecover(hash, v, r, s);
-        require(signer != address(0), "ECDSA: invalid signature");
+        // require(signer != address(0), "ECDSA: invalid signature");
 
         return signer;
     }

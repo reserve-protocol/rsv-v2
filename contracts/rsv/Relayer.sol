@@ -11,11 +11,13 @@ contract Relayer is Ownable {
 
     event RSVChanged(address indexed oldRSVAddr, address indexed newRSVAddr);
     event TransferForwarded(bytes sig, address indexed from, address indexed to, uint256 indexed amount, uint256 fee);
-    event TransferFromForwarded(bytes sig, address indexed spender, address indexed holder, address indexed to, uint256 amount, uint256 fee);
-    event ApproveForwarded(bytes sig, address indexed holder, address indexed spender, uint256 indexed amount, uint256 fee);
+    event TransferFromForwarded(bytes sig, address indexed holder, address indexed spender, address indexed to, uint256 amount, uint256 fee);
+    event ApproveForwarded(bytes sig, address indexed holder, address indexed spender, uint256 amount, uint256 fee);
     event FeeTaken(address indexed from, address indexed to, uint256 indexed value);
 
-    constructor() public {}
+    constructor(address rsvAddress) public {
+        trustedRSV = IRSV(rsvAddress);
+    }
 
     /// Set the Reserve contract address.
     function setRSV(address newTrustedRSV) external onlyOwner {
@@ -35,7 +37,7 @@ contract Relayer is Ownable {
     {
         bytes32 hash = keccak256(abi.encodePacked(
             address(trustedRSV),
-            "transfer",
+            "forwardTransfer",
             from,
             to,
             amount,
@@ -44,8 +46,7 @@ contract Relayer is Ownable {
         ));
         nonce[from]++;
 
-        bytes32 ethMessageHash = ECDSA.toEthSignedMessageHash(hash);
-        address recoveredSigner = ECDSA.recover(ethMessageHash, sig);
+        address recoveredSigner = _recoverSignerAddress(hash, sig);
         require(recoveredSigner == from, "invalid signature");
 
         if (fee > 0) {
@@ -60,8 +61,8 @@ contract Relayer is Ownable {
     // than `holder`.
     function forwardTransferFrom(
         bytes calldata sig, 
-        address spender,
         address holder,
+        address spender,
         address to,
         uint256 amount,
         uint256 fee
@@ -70,9 +71,9 @@ contract Relayer is Ownable {
     {
         bytes32 hash = keccak256(abi.encodePacked(
             address(trustedRSV),
-            "transferFrom",
-            spender,
+            "forwardTransferFrom",
             holder,
+            spender,
             to,
             amount,
             fee,
@@ -80,16 +81,15 @@ contract Relayer is Ownable {
         ));
         nonce[spender]++;
 
-        bytes32 ethMessageHash = ECDSA.toEthSignedMessageHash(hash);
-        address recoveredSigner = ECDSA.recover(ethMessageHash, sig);
+        address recoveredSigner = _recoverSignerAddress(hash, sig);
         require(recoveredSigner == spender, "invalid signature");
 
         if (fee > 0) {
             require(trustedRSV.relayTransfer(spender, msg.sender, fee), "fee transfer failed");
             emit FeeTaken(spender, msg.sender, fee);
         }
-        require(trustedRSV.relayTransferFrom(spender, holder, to, amount));
-        emit TransferFromForwarded(sig, spender, holder, to, amount, fee);
+        require(trustedRSV.relayTransferFrom(holder, spender, to, amount));
+        emit TransferFromForwarded(sig, holder, spender, to, amount, fee);
     }
 
     // note that `fee` is not deducted from `amount`.
@@ -104,7 +104,7 @@ contract Relayer is Ownable {
     {
         bytes32 hash = keccak256(abi.encodePacked(
             address(trustedRSV),
-            "approve",
+            "forwardApprove",
             holder,
             spender,
             amount,
@@ -113,8 +113,7 @@ contract Relayer is Ownable {
         ));
         nonce[holder]++;
 
-        bytes32 ethMessageHash = ECDSA.toEthSignedMessageHash(hash);
-        address recoveredSigner = ECDSA.recover(ethMessageHash, sig);
+        address recoveredSigner = _recoverSignerAddress(hash, sig);
         require(recoveredSigner == holder, "invalid signature");
 
         if (fee > 0) {
@@ -123,5 +122,10 @@ contract Relayer is Ownable {
         }
         require(trustedRSV.relayApprove(holder, spender, amount));
         emit ApproveForwarded(sig, holder, spender, amount, fee);
+    }
+
+    function _recoverSignerAddress(bytes32 hash, bytes memory sig) internal pure returns (address) {
+      bytes32 ethMessageHash = ECDSA.toEthSignedMessageHash(hash);
+      return ECDSA.recover(ethMessageHash, sig);
     }
 }
