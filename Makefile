@@ -2,10 +2,9 @@ export REPO_DIR = $(shell pwd)
 export SOLC_VERSION = 0.5.7
 
 root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory
-rsv_contracts := Reserve ReserveEternalStorage
+rsv_contracts := Reserve ReserveEternalStorage Relayer
 test_contracts := BasicOwnable ReserveV2 ManagerV2 BasicERC20 VaultV2 BasicTxFee
-oz_libraries := ECDSA
-contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) $(oz_libraries) ## All contract names
+contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
 
 sol := $(shell find contracts -name '*.sol' -not -name '.*' ) ## All Solidity files
 json := $(foreach contract,$(contracts),evm/$(contract).json) ## All JSON files
@@ -83,7 +82,7 @@ evm/WeightProposal.json: contracts/Proposal.sol $(sol)
 evm/Vault.json: contracts/Vault.sol $(sol)
 	$(call solc,100000)
 
-evm/ECDSA.json: contracts/zeppelin/utils/ECDSA.sol $(sol)
+evm/Relayer.json: contracts/rsv/Relayer.sol $(sol)
 	$(call solc,1000000)
 
 evm/Reserve.json: contracts/rsv/Reserve.sol $(sol)

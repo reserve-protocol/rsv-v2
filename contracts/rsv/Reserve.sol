@@ -4,6 +4,7 @@ import "../zeppelin/token/ERC20/IERC20.sol";
 import "../zeppelin/math/SafeMath.sol";
 import "../ownership/Ownable.sol";
 import "./ReserveEternalStorage.sol";
+import "./Relayer.sol";
 
 /**
  * @title An interface representing a contract that calculates transaction fees
@@ -32,6 +33,9 @@ contract Reserve is IERC20, Ownable {
     // TX Fee helper contract
     ITXFee public trustedTxFee;
 
+    // Relayer
+    Relayer public trustedRelayer;
+
     // Basic token data
     uint256 public totalSupply;
     uint256 public maxSupply;
@@ -55,6 +59,7 @@ contract Reserve is IERC20, Ownable {
     event MaxSupplyChanged(uint256 indexed newMaxSupply);
     event EternalStorageTransferred(address indexed newReserveAddress);
     event TxFeeHelperChanged(address indexed newTxFeeHelper);
+    event TrustedRelayerChanged(address indexed newTrustedRelayer);
 
     // Pause events
     event Paused(address indexed account);
@@ -75,6 +80,7 @@ contract Reserve is IERC20, Ownable {
         paused = true;
 
         trustedTxFee = ITXFee(address(0));
+        trustedRelayer = Relayer(address(0));
         trustedData = new ReserveEternalStorage();
         trustedData.nominateNewOwner(msg.sender);
     }
@@ -124,6 +130,12 @@ contract Reserve is IERC20, Ownable {
         require(newReserveAddress != address(0), "zero address");
         emit EternalStorageTransferred(newReserveAddress);
         trustedData.updateReserveAddress(newReserveAddress);
+    }
+
+    /// Change the contract that is able to do metatransactions.
+    function changeRelayer(address newTrustedRelayer) external onlyOwner {
+        trustedRelayer = Relayer(newTrustedRelayer);
+        emit TrustedRelayerChanged(newTrustedRelayer);
     }
 
     /// Change the contract that helps with transaction fee calculation.
@@ -275,6 +287,38 @@ contract Reserve is IERC20, Ownable {
     {
         _burn(account, value);
         _approve(account, msg.sender, trustedData.allowed(account, msg.sender).sub(value));
+    }
+
+    /// Relayed functions.
+    function relayTransfer(address from, address to, uint256 value) 
+        external 
+        notPaused
+        only(address(trustedRelayer))
+        returns (bool)
+    {
+        _transfer(from, to, value);
+        return true;
+    }
+
+    function relayTransferFrom(address spender, address holder, address to, uint256 value) 
+        external 
+        notPaused
+        only(address(trustedRelayer))
+        returns (bool)
+    {
+        _transfer(holder, to, value);
+        _approve(holder, spender, trustedData.allowed(holder, spender).sub(value));
+        return true;
+    }
+
+    function relayApprove(address holder, address spender, uint256 value) 
+        external 
+        notPaused
+        only(address(trustedRelayer))
+        returns (bool)
+    {
+        _approve(holder, spender, value);
+        return true;
     }
 
     /// @dev Transfer of `value` attotokens from `from` to `to`.

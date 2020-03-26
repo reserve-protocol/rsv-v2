@@ -5,8 +5,6 @@ pragma solidity 0.5.7;
  *
  * These functions can be used to verify that a message was signed by the holder
  * of the private keys of a given address.
- *
- * Taken from OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/cryptography/ECDSA.sol 
  */
 library ECDSA {
     /**
