@@ -288,7 +288,10 @@ contract Reserve is IERC20, Ownable {
         _approve(account, msg.sender, trustedData.allowed(account, msg.sender).sub(value));
     }
 
-    /// Relayed functions.
+    // ==== Relay functions === //
+    
+    /// Transfer `value` attotokens from `from` to `to`.
+    /// Callable only by the relay contract.
     function relayTransfer(address from, address to, uint256 value) 
         external 
         notPaused
@@ -299,6 +302,8 @@ contract Reserve is IERC20, Ownable {
         return true;
     }
 
+    /// Approve `value` attotokens to be spent by `spender` from `holder`.
+    /// Callable only by the relay contract.
     function relayApprove(address holder, address spender, uint256 value) 
         external 
         notPaused
@@ -309,6 +314,9 @@ contract Reserve is IERC20, Ownable {
         return true;
     }
 
+    /// `spender` transfers `value` attotokens from `holder` to `to`.
+    /// Requires allowance.
+    /// Callable only by the relay contract.
     function relayTransferFrom(address holder, address spender, address to, uint256 value) 
         external 
         notPaused
