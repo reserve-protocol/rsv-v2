@@ -4,7 +4,6 @@ import "../zeppelin/token/ERC20/IERC20.sol";
 import "../zeppelin/math/SafeMath.sol";
 import "../ownership/Ownable.sol";
 import "./ReserveEternalStorage.sol";
-import "./Relayer.sol";
 
 /**
  * @title An interface representing a contract that calculates transaction fees
@@ -34,7 +33,7 @@ contract Reserve is IERC20, Ownable {
     ITXFee public trustedTxFee;
 
     // Relayer
-    Relayer public trustedRelayer;
+    address public trustedRelayer;
 
     // Basic token data
     uint256 public totalSupply;
@@ -80,7 +79,7 @@ contract Reserve is IERC20, Ownable {
         paused = true;
 
         trustedTxFee = ITXFee(address(0));
-        trustedRelayer = Relayer(address(0));
+        trustedRelayer = address(0);
         trustedData = new ReserveEternalStorage();
         trustedData.nominateNewOwner(msg.sender);
     }
