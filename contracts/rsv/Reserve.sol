@@ -133,7 +133,7 @@ contract Reserve is IERC20, Ownable {
 
     /// Change the contract that is able to do metatransactions.
     function changeRelayer(address newTrustedRelayer) external onlyOwner {
-        trustedRelayer = Relayer(newTrustedRelayer);
+        trustedRelayer = newTrustedRelayer;
         emit TrustedRelayerChanged(newTrustedRelayer);
     }
 
