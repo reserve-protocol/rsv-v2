@@ -149,7 +149,6 @@ func (s *RelayerSuite) TestTransfer() {
 	s.assertRSVBalance(sender.address(), amount)
 	s.assertRSVBalance(recipient, bigInt(0))
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
 
 	nonce, err := s.relayer.Nonce(nil, sender.address())
 	s.Require().NoError(err)
@@ -181,7 +180,69 @@ func (s *RelayerSuite) TestTransfer() {
 	s.assertRSVBalance(sender.address(), bigInt(0))
 	s.assertRSVBalance(recipient, amount)
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
+
+}
+
+// TestTransferWithFee checks that someone with RSV can send RSV to a recipient through a relayer.
+func (s *RelayerSuite) TestTransferWithFee() {
+	relayer := s.account[4]
+	sender := s.account[1]
+	recipient := common.BigToAddress(bigInt(1))
+	amount := bigInt(100)
+	fee := bigInt(1)
+	total := bigInt(101)
+
+	// Mint initial amount sender.
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, sender.address(), amount))(
+		mintingTransfer(sender.address(), amount),
+	)
+	s.assertRSVBalance(sender.address(), amount)
+
+	// Try to transfer total amount and fail.
+	nonce, err := s.relayer.Nonce(nil, sender.address())
+	s.Require().NoError(err)
+	hash := s.transferHash(sender.address(), recipient, amount, fee, nonce)
+	sig, err := crypto.Sign(hash, sender.key)
+	s.Require().NoError(err)
+	sig = addToLastByte(sig)
+	s.requireTxFails(s.relayer.ForwardTransfer(signer(relayer), sig, sender.address(), recipient, amount, fee))
+
+	// Give sender enough to pay fee.
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, sender.address(), fee))(
+		mintingTransfer(sender.address(), fee),
+	)
+	s.assertRSVBalance(sender.address(), total)
+
+	// Now transaction should complete
+	s.requireTxWithStrictEvents(s.relayer.ForwardTransfer(signer(relayer), sig, sender.address(), recipient, amount, fee))(
+		abi.RelayerTransferForwarded{
+			Sig:    sig,
+			From:   sender.address(),
+			To:     recipient,
+			Amount: amount,
+			Fee:    fee,
+		},
+		abi.RelayerFeeTaken{
+			From:  sender.address(),
+			To:    relayer.address(),
+			Value: fee,
+		},
+		abi.ReserveTransfer{
+			From:  sender.address(),
+			To:    recipient,
+			Value: amount,
+		},
+		abi.ReserveTransfer{
+			From:  sender.address(),
+			To:    relayer.address(),
+			Value: fee,
+		},
+	)
+
+	// Check that balances are as expected.
+	s.assertRSVBalance(sender.address(), bigInt(0))
+	s.assertRSVBalance(recipient, amount)
+	s.assertRSVBalance(relayer.address(), fee)
 }
 
 // TestTransferFailsFromScammer checks that other accounts cannot
@@ -201,7 +262,6 @@ func (s *RelayerSuite) TestTransferFailsFromScammer() {
 	s.assertRSVBalance(sender.address(), amount)
 	s.assertRSVBalance(recipient, bigInt(0))
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
 
 	nonce, err := s.relayer.Nonce(nil, sender.address())
 	s.Require().NoError(err)
@@ -220,7 +280,6 @@ func (s *RelayerSuite) TestTransferFailsFromScammer() {
 	s.assertRSVBalance(sender.address(), amount)
 	s.assertRSVBalance(recipient, bigInt(0))
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
 }
 
 func (s *RelayerSuite) TestApproveAndTransferFrom() {
@@ -241,7 +300,6 @@ func (s *RelayerSuite) TestApproveAndTransferFrom() {
 	s.assertRSVBalance(recipient, bigInt(0))
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
 	s.assertRSVAllowance(holder.address(), spender.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
 
 	nonce, err := s.relayer.Nonce(nil, holder.address())
 	s.Require().NoError(err)
@@ -312,7 +370,58 @@ func (s *RelayerSuite) TestApproveAndTransferFrom() {
 	s.assertRSVBalance(spender.address(), bigInt(0))
 	s.assertRSVBalance(recipient, amount)
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
+}
+
+// TestApproveWithFee checks that someone can approve RSV while paying a fee to a relayer.
+func (s *RelayerSuite) TestApproveWithFee() {
+	relayer := s.account[4]
+	holder := s.account[1]
+	spender := s.account[2]
+	amount := bigInt(100)
+	fee := bigInt(1)
+
+	// Mint fee to holder.
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, holder.address(), fee))(
+		mintingTransfer(holder.address(), fee),
+	)
+	s.assertRSVBalance(holder.address(), fee)
+
+	// Approve spender and pay fee.
+	nonce, err := s.relayer.Nonce(nil, holder.address())
+	s.Require().NoError(err)
+	hash := s.approveHash(holder.address(), spender.address(), amount, fee, nonce)
+	sig, err := crypto.Sign(hash, holder.key)
+	s.Require().NoError(err)
+	sig = addToLastByte(sig)
+	s.requireTxWithStrictEvents(s.relayer.ForwardApprove(signer(relayer), sig, holder.address(), spender.address(), amount, fee))(
+		abi.RelayerApproveForwarded{
+			Sig:     sig,
+			Holder:  holder.address(),
+			Spender: spender.address(),
+			Amount:  amount,
+			Fee:     fee,
+		},
+		abi.RelayerFeeTaken{
+			From:  holder.address(),
+			To:    relayer.address(),
+			Value: fee,
+		},
+		abi.ReserveApproval{
+			Owner:   holder.address(),
+			Spender: spender.address(),
+			Value:   amount,
+		},
+		abi.ReserveTransfer{
+			From:  holder.address(),
+			To:    relayer.address(),
+			Value: fee,
+		},
+	)
+
+	// Check that balances and allowances are as expected.
+	s.assertRSVBalance(holder.address(), bigInt(0))
+	s.assertRSVBalance(relayer.address(), fee)
+	s.assertRSVAllowance(holder.address(), spender.address(), amount)
 }
 
 func (s *RelayerSuite) TestApproveFailsFromScammer() {
@@ -334,7 +443,6 @@ func (s *RelayerSuite) TestApproveFailsFromScammer() {
 	s.assertRSVBalance(recipient, bigInt(0))
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
 	s.assertRSVAllowance(holder.address(), spender.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
 
 	nonce, err := s.relayer.Nonce(nil, holder.address())
 	s.Require().NoError(err)
@@ -350,6 +458,82 @@ func (s *RelayerSuite) TestApproveFailsFromScammer() {
 	s.requireTxFails(s.relayer.ForwardApprove(signer(relayer), sig, holder.address(), spender.address(), amount, bigInt(0)))
 
 	// Check that the spender did not get allowance.
+	s.assertRSVAllowance(holder.address(), spender.address(), bigInt(0))
+}
+
+// TestTransferFromWithFee checks that a spender pays a fee to the relayer when spending from holder.
+func (s *RelayerSuite) TestTransferFromWithFee() {
+	relayer := s.account[4]
+	holder := s.account[1]
+	spender := s.account[2]
+	recipient := s.account[3]
+	amount := bigInt(100)
+	fee := bigInt(1)
+
+	// Mint amount to holder.
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, holder.address(), amount))(
+		mintingTransfer(holder.address(), amount),
+	)
+	s.assertRSVBalance(holder.address(), amount)
+
+	// Mint fee to spender.
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, spender.address(), fee))(
+		mintingTransfer(spender.address(), fee),
+	)
+	s.assertRSVBalance(spender.address(), fee)
+
+	// Approve spender.
+	nonce, err := s.relayer.Nonce(nil, holder.address())
+	s.Require().NoError(err)
+	hash := s.approveHash(holder.address(), spender.address(), amount, bigInt(0), nonce)
+	sig, err := crypto.Sign(hash, holder.key)
+	s.Require().NoError(err)
+	sig = addToLastByte(sig)
+	s.requireTx(s.relayer.ForwardApprove(signer(relayer), sig, holder.address(), spender.address(), amount, bigInt(0)))
+
+	// Perform transferFrom and pay fee.
+	nonce, err = s.relayer.Nonce(nil, spender.address())
+	s.Require().NoError(err)
+	hash = s.transferFromHash(holder.address(), spender.address(), recipient.address(), amount, fee, nonce)
+	sig, err = crypto.Sign(hash, spender.key)
+	s.Require().NoError(err)
+	sig = addToLastByte(sig)
+	s.requireTxWithStrictEvents(s.relayer.ForwardTransferFrom(signer(relayer), sig, holder.address(), spender.address(), recipient.address(), amount, fee))(
+		abi.RelayerTransferFromForwarded{
+			Sig:     sig,
+			Holder:  holder.address(),
+			Spender: spender.address(),
+			To:      recipient.address(),
+			Amount:  amount,
+			Fee:     fee,
+		},
+		abi.RelayerFeeTaken{
+			From:  spender.address(),
+			To:    relayer.address(),
+			Value: fee,
+		},
+		abi.ReserveTransfer{
+			From:  holder.address(),
+			To:    recipient.address(),
+			Value: amount,
+		},
+		abi.ReserveTransfer{
+			From:  spender.address(),
+			To:    relayer.address(),
+			Value: fee,
+		},
+		abi.ReserveApproval{
+			Owner:   holder.address(),
+			Spender: spender.address(),
+			Value:   bigInt(0),
+		},
+	)
+
+	// Check that balances and allowances are as expected.
+	s.assertRSVBalance(holder.address(), bigInt(0))
+	s.assertRSVBalance(spender.address(), bigInt(0))
+	s.assertRSVBalance(recipient.address(), amount)
+	s.assertRSVBalance(relayer.address(), fee)
 	s.assertRSVAllowance(holder.address(), spender.address(), bigInt(0))
 }
 
@@ -372,7 +556,6 @@ func (s *RelayerSuite) TestTransferFromFailsFromScammer() {
 	s.assertRSVBalance(recipient, bigInt(0))
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
 	s.assertRSVAllowance(holder.address(), spender.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
 
 	nonce, err := s.relayer.Nonce(nil, holder.address())
 	s.Require().NoError(err)
@@ -424,7 +607,7 @@ func (s *RelayerSuite) TestTransferFromFailsFromScammer() {
 	s.assertRSVBalance(spender.address(), bigInt(0))
 	s.assertRSVBalance(recipient, bigInt(0))
 	s.assertRSVBalance(s.owner.address(), bigInt(0))
-	s.assertRSVTotalSupply(amount)
+
 }
 
 func (s *RelayerSuite) TestSetRSVProtected() {
