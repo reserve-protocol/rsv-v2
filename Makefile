@@ -2,7 +2,7 @@ export REPO_DIR = $(shell pwd)
 export SOLC_VERSION = 0.5.7
 
 root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory
-rsv_contracts := Reserve ReserveEternalStorage
+rsv_contracts := Reserve ReserveEternalStorage Relayer
 test_contracts := BasicOwnable ReserveV2 ManagerV2 BasicERC20 VaultV2 BasicTxFee
 contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
 
@@ -82,6 +82,9 @@ evm/WeightProposal.json: contracts/Proposal.sol $(sol)
 evm/Vault.json: contracts/Vault.sol $(sol)
 	$(call solc,100000)
 
+evm/Relayer.json: contracts/rsv/Relayer.sol $(sol)
+	$(call solc,1000000)
+
 evm/Reserve.json: contracts/rsv/Reserve.sol $(sol)
 	$(call solc,1000000)
 
@@ -123,13 +126,13 @@ myth a $<:$1 > $@
 endef
 
 # But, where there's more than one contract in the source file, do.
-analysis/ProposalFactory.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/ProposalFactory.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific ProposalFactory)
 
-analysis/WeightProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/WeightProposal.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific WeightProposal)
 
-analysis/SwapProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/SwapProposal.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific SwapProposal)
 
 
