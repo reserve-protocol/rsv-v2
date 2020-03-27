@@ -295,7 +295,7 @@ contract Reserve is IERC20, Ownable {
     function relayTransfer(address from, address to, uint256 value) 
         external 
         notPaused
-        only(address(trustedRelayer))
+        only(trustedRelayer)
         returns (bool)
     {
         _transfer(from, to, value);
