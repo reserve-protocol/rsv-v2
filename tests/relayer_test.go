@@ -162,17 +162,17 @@ func (s *RelayerSuite) TestTransfer() {
 
 	// Relay transfer tx
 	s.requireTxWithStrictEvents(s.relayer.ForwardTransfer(signer(relayer), sig, sender.address(), recipient, amount, bigInt(0)))(
+		abi.ReserveTransfer{
+			From:  sender.address(),
+			To:    recipient,
+			Value: amount,
+		},
 		abi.RelayerTransferForwarded{
 			Sig:    sig,
 			From:   sender.address(),
 			To:     recipient,
 			Amount: amount,
 			Fee:    bigInt(0),
-		},
-		abi.ReserveTransfer{
-			From:  sender.address(),
-			To:    recipient,
-			Value: amount,
 		},
 	)
 
@@ -215,12 +215,10 @@ func (s *RelayerSuite) TestTransferWithFee() {
 
 	// Now transaction should complete
 	s.requireTxWithStrictEvents(s.relayer.ForwardTransfer(signer(relayer), sig, sender.address(), recipient, amount, fee))(
-		abi.RelayerTransferForwarded{
-			Sig:    sig,
-			From:   sender.address(),
-			To:     recipient,
-			Amount: amount,
-			Fee:    fee,
+		abi.ReserveTransfer{
+			From:  sender.address(),
+			To:    relayer.address(),
+			Value: fee,
 		},
 		abi.RelayerFeeTaken{
 			From:  sender.address(),
@@ -232,10 +230,12 @@ func (s *RelayerSuite) TestTransferWithFee() {
 			To:    recipient,
 			Value: amount,
 		},
-		abi.ReserveTransfer{
-			From:  sender.address(),
-			To:    relayer.address(),
-			Value: fee,
+		abi.RelayerTransferForwarded{
+			Sig:    sig,
+			From:   sender.address(),
+			To:     recipient,
+			Amount: amount,
+			Fee:    fee,
 		},
 	)
 
@@ -313,17 +313,17 @@ func (s *RelayerSuite) TestApproveAndTransferFrom() {
 
 	// Relay approve tx.
 	s.requireTxWithStrictEvents(s.relayer.ForwardApprove(signer(relayer), sig, holder.address(), spender.address(), amount, bigInt(0)))(
+		abi.ReserveApproval{
+			Owner:   holder.address(),
+			Spender: spender.address(),
+			Value:   amount,
+		},
 		abi.RelayerApproveForwarded{
 			Sig:     sig,
 			Holder:  holder.address(),
 			Spender: spender.address(),
 			Amount:  amount,
 			Fee:     bigInt(0),
-		},
-		abi.ReserveApproval{
-			Owner:   holder.address(),
-			Spender: spender.address(),
-			Value:   amount,
 		},
 	)
 
@@ -344,14 +344,6 @@ func (s *RelayerSuite) TestApproveAndTransferFrom() {
 
 	// Relay approve tx.
 	s.requireTxWithStrictEvents(s.relayer.ForwardTransferFrom(signer(relayer), sig, holder.address(), spender.address(), recipient, amount, bigInt(0)))(
-		abi.RelayerTransferFromForwarded{
-			Sig:     sig,
-			Holder:  holder.address(),
-			Spender: spender.address(),
-			To:      recipient,
-			Amount:  amount,
-			Fee:     bigInt(0),
-		},
 		abi.ReserveTransfer{
 			From:  holder.address(),
 			To:    recipient,
@@ -361,6 +353,14 @@ func (s *RelayerSuite) TestApproveAndTransferFrom() {
 			Owner:   holder.address(),
 			Spender: spender.address(),
 			Value:   bigInt(0),
+		},
+		abi.RelayerTransferFromForwarded{
+			Sig:     sig,
+			Holder:  holder.address(),
+			Spender: spender.address(),
+			To:      recipient,
+			Amount:  amount,
+			Fee:     bigInt(0),
 		},
 	)
 
@@ -394,12 +394,10 @@ func (s *RelayerSuite) TestApproveWithFee() {
 	s.Require().NoError(err)
 	sig = addToLastByte(sig)
 	s.requireTxWithStrictEvents(s.relayer.ForwardApprove(signer(relayer), sig, holder.address(), spender.address(), amount, fee))(
-		abi.RelayerApproveForwarded{
-			Sig:     sig,
-			Holder:  holder.address(),
-			Spender: spender.address(),
-			Amount:  amount,
-			Fee:     fee,
+		abi.ReserveTransfer{
+			From:  holder.address(),
+			To:    relayer.address(),
+			Value: fee,
 		},
 		abi.RelayerFeeTaken{
 			From:  holder.address(),
@@ -411,10 +409,12 @@ func (s *RelayerSuite) TestApproveWithFee() {
 			Spender: spender.address(),
 			Value:   amount,
 		},
-		abi.ReserveTransfer{
-			From:  holder.address(),
-			To:    relayer.address(),
-			Value: fee,
+		abi.RelayerApproveForwarded{
+			Sig:     sig,
+			Holder:  holder.address(),
+			Spender: spender.address(),
+			Amount:  amount,
+			Fee:     fee,
 		},
 	)
 
@@ -499,13 +499,10 @@ func (s *RelayerSuite) TestTransferFromWithFee() {
 	s.Require().NoError(err)
 	sig = addToLastByte(sig)
 	s.requireTxWithStrictEvents(s.relayer.ForwardTransferFrom(signer(relayer), sig, holder.address(), spender.address(), recipient.address(), amount, fee))(
-		abi.RelayerTransferFromForwarded{
-			Sig:     sig,
-			Holder:  holder.address(),
-			Spender: spender.address(),
-			To:      recipient.address(),
-			Amount:  amount,
-			Fee:     fee,
+		abi.ReserveTransfer{
+			From:  spender.address(),
+			To:    relayer.address(),
+			Value: fee,
 		},
 		abi.RelayerFeeTaken{
 			From:  spender.address(),
@@ -517,15 +514,18 @@ func (s *RelayerSuite) TestTransferFromWithFee() {
 			To:    recipient.address(),
 			Value: amount,
 		},
-		abi.ReserveTransfer{
-			From:  spender.address(),
-			To:    relayer.address(),
-			Value: fee,
-		},
 		abi.ReserveApproval{
 			Owner:   holder.address(),
 			Spender: spender.address(),
 			Value:   bigInt(0),
+		},
+		abi.RelayerTransferFromForwarded{
+			Sig:     sig,
+			Holder:  holder.address(),
+			Spender: spender.address(),
+			To:      recipient.address(),
+			Amount:  amount,
+			Fee:     fee,
 		},
 	)
 
@@ -569,17 +569,17 @@ func (s *RelayerSuite) TestTransferFromFailsFromScammer() {
 
 	// Relay approve tx.
 	s.requireTxWithStrictEvents(s.relayer.ForwardApprove(signer(relayer), sig, holder.address(), spender.address(), amount, bigInt(0)))(
+		abi.ReserveApproval{
+			Owner:   holder.address(),
+			Spender: spender.address(),
+			Value:   amount,
+		},
 		abi.RelayerApproveForwarded{
 			Sig:     sig,
 			Holder:  holder.address(),
 			Spender: spender.address(),
 			Amount:  amount,
 			Fee:     bigInt(0),
-		},
-		abi.ReserveApproval{
-			Owner:   holder.address(),
-			Spender: spender.address(),
-			Value:   amount,
 		},
 	)
 

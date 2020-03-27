@@ -93,18 +93,14 @@ func (s *TestSuite) requireTxWithStrictEvents(tx *types.Transaction, err error) 
 	// and assert that the transaction generates those events.
 	return func(assertEvent ...fmt.Stringer) {
 		if s.Equal(len(assertEvent), len(receipt.Logs), "did not get the expected number of events") {
-			for _, wantEvent := range assertEvent {
-				found := false
-				for _, log := range receipt.Logs {
-					parser := s.logParsers[log.Address]
-					if s.NotNil(parser, "got an event from an unexpected contract address: "+log.Address.Hex()) {
-						gotEvent, err := parser.ParseLog(log)
-						if err == nil && gotEvent.String() == wantEvent.String() {
-							found = true
-						}
+			for i, wantEvent := range assertEvent {
+				parser := s.logParsers[receipt.Logs[i].Address]
+				if s.NotNil(parser, "got an event from an unexpected contract address: "+receipt.Logs[i].Address.Hex()) {
+					gotEvent, err := parser.ParseLog(receipt.Logs[i])
+					if s.NoErrorf(err, "parsing event %v", i) {
+						s.Equal(wantEvent.String(), gotEvent.String())
 					}
 				}
-				s.Equal(true, found)
 			}
 		}
 	}
