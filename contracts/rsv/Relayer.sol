@@ -15,9 +15,29 @@ contract Relayer is Ownable {
     mapping(address => uint) public nonce;
 
     event RSVChanged(address indexed oldRSVAddr, address indexed newRSVAddr);
-    event TransferForwarded(bytes sig, address indexed from, address indexed to, uint256 indexed amount, uint256 fee);
-    event TransferFromForwarded(bytes sig, address indexed holder, address indexed spender, address indexed to, uint256 amount, uint256 fee);
-    event ApproveForwarded(bytes sig, address indexed holder, address indexed spender, uint256 amount, uint256 fee);
+
+    event TransferForwarded(
+        bytes sig,
+        address indexed from,
+        address indexed to,
+        uint256 indexed amount,
+        uint256 fee
+    );
+    event TransferFromForwarded(
+        bytes sig,
+        address indexed holder,
+        address indexed spender,
+        address indexed to,
+        uint256 amount,
+        uint256 fee
+    );
+    event ApproveForwarded(
+        bytes sig,
+        address indexed holder,
+        address indexed spender,
+        uint256 amount,
+        uint256 fee
+    );
     event FeeTaken(address indexed from, address indexed to, uint256 indexed value);
 
     constructor(address rsvAddress) public {
@@ -30,10 +50,10 @@ contract Relayer is Ownable {
         trustedRSV = IRSV(newTrustedRSV);
     }
 
-    /// Forwards a `transfer` call to the Reserve contract if the signature successfully passes ECDSA verification.
-    /// Note that `fee` is not deducted from `amount`, but separate.
+    /// Forward a signed `transfer` call to the RSV contract if `sig` matches the signature.
+    /// Note that `amount` is not reduced by `fee`; the fee is taken separately.
     function forwardTransfer(
-        bytes calldata sig, 
+        bytes calldata sig,
         address from,
         address to,
         uint256 amount,
@@ -55,18 +75,16 @@ contract Relayer is Ownable {
         address recoveredSigner = _recoverSignerAddress(hash, sig);
         require(recoveredSigner == from, "invalid signature");
 
-        if (fee > 0) {
-            require(trustedRSV.relayTransfer(from, msg.sender, fee), "fee transfer failed");
-            emit FeeTaken(from, msg.sender, fee);
-        }
+        _takeFee(from, fee);
+
         require(trustedRSV.relayTransfer(from, to, amount));
         emit TransferForwarded(sig, from, to, amount, fee);
     }
 
-    /// Forwards an `approve` call to the Reserve contract if the signature successfully passes ECDSA verification.
-    /// Note that `fee` is not deducted from `amount`, but separate.
+    /// Forward a signed `approve` call to the RSV contract if `sig` matches the signature.
+    /// Note that `amount` is not reduced by `fee`; the fee is taken separately.
     function forwardApprove(
-        bytes calldata sig, 
+        bytes calldata sig,
         address holder,
         address spender,
         uint256 amount,
@@ -88,19 +106,17 @@ contract Relayer is Ownable {
         address recoveredSigner = _recoverSignerAddress(hash, sig);
         require(recoveredSigner == holder, "invalid signature");
 
-        if (fee > 0) {
-            require(trustedRSV.relayTransfer(holder, msg.sender, fee), "fee transfer failed");
-            emit FeeTaken(holder, msg.sender, fee);
-        }
+        _takeFee(holder, fee);
+
         require(trustedRSV.relayApprove(holder, spender, amount));
         emit ApproveForwarded(sig, holder, spender, amount, fee);
     }
 
-    /// Forwards a `transferFrom` call to the Reserve contract if the signature successfully passes ECDSA verification.
+    /// Forward a signed `transferFrom` call to the RSV contract if `sig` matches the signature.
     /// Note that `fee` is not deducted from `amount`, but separate.
-    /// Allowance checking is left up to the Reserve contract to do. 
+    /// Allowance checking is left up to the Reserve contract to do.
     function forwardTransferFrom(
-        bytes calldata sig, 
+        bytes calldata sig,
         address holder,
         address spender,
         address to,
@@ -124,17 +140,27 @@ contract Relayer is Ownable {
         address recoveredSigner = _recoverSignerAddress(hash, sig);
         require(recoveredSigner == spender, "invalid signature");
 
-        if (fee > 0) {
-            require(trustedRSV.relayTransfer(spender, msg.sender, fee), "fee transfer failed");
-            emit FeeTaken(spender, msg.sender, fee);
-        }
+        _takeFee(spender, fee);
+
         require(trustedRSV.relayTransferFrom(holder, spender, to, amount));
         emit TransferFromForwarded(sig, holder, spender, to, amount, fee);
     }
 
-    /// Recovers the signer's address from the hash and signature. 
-    function _recoverSignerAddress(bytes32 hash, bytes memory sig) internal pure returns (address) {
-      bytes32 ethMessageHash = ECDSA.toEthSignedMessageHash(hash);
-      return ECDSA.recover(ethMessageHash, sig);
+    /// Recover the signer's address from the hash and signature.
+    function _recoverSignerAddress(bytes32 hash, bytes memory sig)
+        internal pure
+        returns (address)
+    {
+        bytes32 ethMessageHash = ECDSA.toEthSignedMessageHash(hash);
+        return ECDSA.recover(ethMessageHash, sig);
     }
+
+    /// Transfer a fee from payer to sender.
+    function _takeFee(address payer, uint256 fee) internal {
+        if (fee > 0) {
+            require(trustedRSV.relayTransfer(payer, msg.sender, fee), "fee transfer failed");
+            emit FeeTaken(payer, msg.sender, fee);
+        }
+    }
+
 }
