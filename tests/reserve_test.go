@@ -228,6 +228,21 @@ func (s *ReserveSuite) TestChangeFeeRecipient() {
 	s.Equal(s.account[3].address(), feeRecipient)
 }
 
+func (s *ReserveSuite) TestChangeRelayer() {
+	relayer, err := s.reserve.TrustedRelayer(nil)
+	s.Require().NoError(err)
+	s.Equal(zeroAddress(), relayer)
+
+	// Change as owner.
+	s.requireTxWithStrictEvents(s.reserve.ChangeRelayer(s.signer, s.account[2].address()))(
+		abi.ReserveTrustedRelayerChanged{NewTrustedRelayer: s.account[2].address()},
+	)
+
+	relayer, err = s.reserve.TrustedRelayer(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[2].address(), relayer)
+}
+
 func (s *ReserveSuite) TestChangeTxFeeHelper() {
 	txFee, err := s.reserve.TrustedTxFee(nil)
 	s.Require().NoError(err)
@@ -725,6 +740,10 @@ func (s *ReserveSuite) TestChangeFeeRecipientFailsForNonFeeRecipient() {
 	s.requireTxFails(s.reserve.ChangeFeeRecipient(signer(s.account[2]), s.account[1].address()))
 }
 
+func (s *ReserveSuite) TestChangeRelayerFailsForNonOwner() {
+	s.requireTxFails(s.reserve.ChangeRelayer(signer(s.account[2]), s.account[1].address()))
+}
+
 func (s *ReserveSuite) TestChangeTxFeeHelperFailsForNonOwner() {
 	s.requireTxFails(s.reserve.ChangeTxFeeHelper(signer(s.account[2]), s.account[1].address()))
 }
@@ -951,6 +970,44 @@ func (s *ReserveSuite) TestEternalStorageFunctionsAreProtected() {
 
 	// updateReserveAddress
 	s.requireTxFails(s.eternalStorage.UpdateReserveAddress(signer(balanceAcc), balanceAcc.address()))
+}
+
+// TestRelayFunctionsAreProtected makes sure that the relay functions cannot be called by anyone
+// other than the `trustedRelayer` account.
+func (s *ReserveSuite) TestRelayFunctionsAreProtected() {
+	// Set `trustedRelayer`
+	relayer := s.account[4]
+	s.requireTxWithStrictEvents(s.reserve.ChangeRelayer(s.signer, relayer.address()))(
+		abi.ReserveTrustedRelayerChanged{
+			NewTrustedRelayer: relayer.address(),
+		},
+	)
+
+	// Confirm it is set correctly.
+	foundRelayer, err := s.reserve.TrustedRelayer(nil)
+	s.Require().NoError(err)
+	s.Equal(relayer.address().String(), foundRelayer.String())
+
+	// Try to change it from non-auth account and fail.
+	s.requireTxFails(s.reserve.ChangeRelayer(signer(relayer), relayer.address()))
+
+	from := s.account[1]
+	to := s.account[2]
+	amount := bigInt(100)
+
+	// Mint.
+	s.requireTx(s.reserve.Mint(s.signer, from.address(), amount))
+	s.assertRSVBalance(from.address(), amount)
+
+	// relayTransfer
+	s.requireTxFails(s.reserve.RelayTransfer(s.signer, from.address(), to.address(), amount))
+
+	// relayApprove
+	s.requireTxFails(s.reserve.RelayApprove(s.signer, from.address(), to.address(), amount))
+
+	// relayTransferFrom
+	s.requireTx(s.reserve.RelayApprove(signer(relayer), from.address(), to.address(), amount))
+	s.requireTxFails(s.reserve.RelayTransferFrom(s.signer, from.address(), to.address(), to.address(), amount))
 }
 
 //////////////////
