@@ -166,7 +166,7 @@ contract Relayer is Ownable {
 
     /// Transfer a fee from payer to sender.
     function _takeFee(address payer, uint256 fee) internal {
-        if (fee > 0) {
+        if (fee != 0) {
             require(trustedRSV.relayTransfer(payer, msg.sender, fee), "fee transfer failed");
             emit FeeTaken(payer, msg.sender, fee);
         }
