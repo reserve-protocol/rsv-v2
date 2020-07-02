@@ -77,7 +77,10 @@ contract Relayer is Ownable {
 
         _takeFee(from, fee);
 
-        require(trustedRSV.relayTransfer(from, to, amount));
+        require(
+            trustedRSV.relayTransfer(from, to, amount), 
+            "Reserve.sol relayTransfer failed"
+        );
         emit TransferForwarded(sig, from, to, amount, fee);
     }
 
@@ -108,7 +111,10 @@ contract Relayer is Ownable {
 
         _takeFee(holder, fee);
 
-        require(trustedRSV.relayApprove(holder, spender, amount));
+        require(
+            trustedRSV.relayApprove(holder, spender, amount), 
+            "Reserve.sol relayApprove failed"
+        );
         emit ApproveForwarded(sig, holder, spender, amount, fee);
     }
 
@@ -142,7 +148,10 @@ contract Relayer is Ownable {
 
         _takeFee(spender, fee);
 
-        require(trustedRSV.relayTransferFrom(holder, spender, to, amount));
+        require(
+            trustedRSV.relayTransferFrom(holder, spender, to, amount), 
+            "Reserve.sol relayTransfer failed"
+        );
         emit TransferFromForwarded(sig, holder, spender, to, amount, fee);
     }
 
