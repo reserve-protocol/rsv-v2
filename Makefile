@@ -24,6 +24,9 @@ flat: $(flat)
 test: abi
 	go test ./tests -tags all
 
+testRelay: abi
+	go test ./tests/base.go ./tests/relayer_test.go
+
 fuzz: abi
 	go test ./tests -v -tags fuzz -args -decimals=$(decimals) -runs=$(runs)
 
