@@ -407,7 +407,7 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 	s.proposalAddress = proposalAddress
 
 	// Deploy a Reserve instance as well.
-	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
+	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node, zeroAddress())
 
 	s.logParsers[reserveAddress] = reserve
 

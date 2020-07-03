@@ -67,7 +67,7 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 	s.proposer = s.account[5]
 
 	// Deploy Reserve and store a handle to the Go binding and the contract address.
-	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
+	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node, zeroAddress())
 
 	s.logParsers = map[common.Address]logParser{
 		reserveAddress: reserve,
