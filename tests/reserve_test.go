@@ -1080,3 +1080,21 @@ func (s *ReserveSuite) TestTxFees() {
 	// Try a transaction again, this time it should revert
 	s.requireTxFails(s.reserve.Transfer(signer(sender), receiver.address(), amount))
 }
+
+func (s *ReserveSuite) TestConstructorWithEternalStorage() {
+	eternalStorageAddress, err := s.reserve.GetEternalStorageAddress(nil)
+	s.Require().NoError(err)
+
+	// Deploy new contract.
+	newKey := s.account[2]
+	newTokenAddress, tx, newToken, err := abi.DeployReserve(signer(newKey), s.node, eternalStorageAddress)
+	s.logParsers[newTokenAddress] = newToken
+	s.requireTx(tx, err)(
+		abi.ReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: newKey.address()},
+	)
+
+	newEternalStorageAddress, err := newToken.GetEternalStorageAddress(nil)
+	s.Require().NoError(err)
+
+	s.Equal(eternalStorageAddress, newEternalStorageAddress)
+}
