@@ -70,7 +70,7 @@ contract Reserve is IERC20, Ownable {
     uint8 public constant decimals = 18;
 
     /// Initialize critical fields.
-    constructor(address eternalStorageAddr) public {
+    constructor() public {
         pauser = msg.sender;
         feeRecipient = msg.sender;
         // minter defaults to the zero address.
@@ -80,7 +80,8 @@ contract Reserve is IERC20, Ownable {
 
         trustedTxFee = ITXFee(address(0));
         trustedRelayer = address(0);
-        trustedData = ReserveEternalStorage(eternalStorageAddr);
+        trustedData = new ReserveEternalStorage();
+        trustedData.nominateNewOwner(msg.sender);
     }
 
     /// Accessor for eternal storage contract address.
