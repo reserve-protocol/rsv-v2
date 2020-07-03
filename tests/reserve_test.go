@@ -37,7 +37,7 @@ func (s *ReserveSuite) SetupSuite() {
 // BeforeTest runs before each test in the suite.
 func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
 	// Re-deploy Reserve and store a handle to the Go binding and the contract address.
-	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
+	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node, zeroAddress())
 
 	s.logParsers = map[common.Address]logParser{
 		reserveAddress: reserve,
