@@ -1080,3 +1080,53 @@ func (s *ReserveSuite) TestTxFees() {
 	// Try a transaction again, this time it should revert
 	s.requireTxFails(s.reserve.Transfer(signer(sender), receiver.address(), amount))
 }
+
+func (s *ReserveSuite) TestConstructorWithEternalStorage() {
+	eternalStorageAddress, err := s.reserve.GetEternalStorageAddress(nil)
+	s.Require().NoError(err)
+
+	// Deploy new contract.
+	newKey := s.account[2]
+	newTokenAddress, tx, newToken, err := abi.DeployReserve(signer(newKey), s.node, eternalStorageAddress)
+	s.logParsers[newTokenAddress] = newToken
+	s.requireTx(tx, err)(
+		abi.ReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: newKey.address()},
+	)
+
+	newEternalStorageAddress, err := newToken.GetEternalStorageAddress(nil)
+	s.Require().NoError(err)
+
+	s.Equal(eternalStorageAddress, newEternalStorageAddress)
+
+    // Try sending a transaction, to make sure that this really actually works!
+    sender := s.account[3]
+	recipient := s.account[4]
+    amount := bigInt(1337)
+
+	s.assertRSVBalance(sender.address(), bigInt(0))
+	s.assertRSVBalance(recipient.address(), bigInt(0))
+	s.assertRSVTotalSupply(bigInt(0))
+    
+	// Mint to sender.
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, sender.address(), amount))(
+		mintingTransfer(sender.address(), amount),
+	)
+
+	s.assertRSVBalance(sender.address(), amount)
+	s.assertRSVBalance(recipient.address(), bigInt(0))
+	s.assertRSVTotalSupply(amount)
+    
+	// Transfer from sender to recipient.
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(sender), recipient.address(), amount))(
+		abi.ReserveTransfer{
+			From:  sender.address(),
+			To:    recipient.address(),
+			Value: amount,
+		},
+	)
+	// Check that balances are as expected.
+	s.assertRSVBalance(sender.address(), bigInt(0))
+	s.assertRSVBalance(recipient.address(), amount)
+	s.assertRSVBalance(s.owner.address(), bigInt(0))
+	s.assertRSVTotalSupply(amount)
+}
