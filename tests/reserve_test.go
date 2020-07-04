@@ -1097,4 +1097,36 @@ func (s *ReserveSuite) TestConstructorWithEternalStorage() {
 	s.Require().NoError(err)
 
 	s.Equal(eternalStorageAddress, newEternalStorageAddress)
+
+    // Try sending a transaction, to make sure that this really actually works!
+    sender := s.account[3]
+	recipient := s.account[4]
+    amount := bigInt(1337)
+
+	s.assertRSVBalance(sender.address(), bigInt(0))
+	s.assertRSVBalance(recipient.address(), bigInt(0))
+	s.assertRSVTotalSupply(bigInt(0))
+    
+	// Mint to sender.
+	s.requireTxWithStrictEvents(s.reserve.Mint(s.signer, sender.address(), amount))(
+		mintingTransfer(sender.address(), amount),
+	)
+
+	s.assertRSVBalance(sender.address(), amount)
+	s.assertRSVBalance(recipient.address(), bigInt(0))
+	s.assertRSVTotalSupply(amount)
+    
+	// Transfer from sender to recipient.
+	s.requireTxWithStrictEvents(s.reserve.Transfer(signer(sender), recipient.address(), amount))(
+		abi.ReserveTransfer{
+			From:  sender.address(),
+			To:    recipient.address(),
+			Value: amount,
+		},
+	)
+	// Check that balances are as expected.
+	s.assertRSVBalance(sender.address(), bigInt(0))
+	s.assertRSVBalance(recipient.address(), amount)
+	s.assertRSVBalance(s.owner.address(), bigInt(0))
+	s.assertRSVTotalSupply(amount)
 }
