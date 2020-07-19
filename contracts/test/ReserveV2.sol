@@ -8,8 +8,6 @@ import "../rsv/ReserveEternalStorage.sol";
  */
 contract ReserveV2 is Reserve {
 
-    constructor() Reserve(address(0)) public {}
-
     function completeHandoff(address previousImplementation) external onlyOwner {
         Reserve previous = Reserve(previousImplementation);
         trustedData = ReserveEternalStorage(previous.getEternalStorageAddress());

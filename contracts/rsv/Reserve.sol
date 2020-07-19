@@ -80,13 +80,7 @@ contract Reserve is IERC20, Ownable {
 
         trustedTxFee = ITXFee(address(0));
         trustedRelayer = address(0);
-
-        if (eternalStorageAddr == address(0)) {
-            trustedData = new ReserveEternalStorage();
-            trustedData.nominateNewOwner(msg.sender);
-        } else {
-            trustedData = ReserveEternalStorage(eternalStorageAddr);
-        }
+        trustedData = ReserveEternalStorage(eternalStorageAddr);
     }
 
     /// Accessor for eternal storage contract address.
