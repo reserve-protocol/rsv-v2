@@ -1,0 +1,32 @@
+
+
+# Variables required
+export GAS_PRICE=
+export RELAYER=
+export NEW_RSV=
+export NEW_MANAGER=
+
+
+# GET OUT KAYLEE
+
+SOLC_VERSION=0.5.7 poke Manager.json setEmergency True --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=0x5BA9d812f5533F7Cf2854963f7A9d212f8f28673 --gasprice=$GAS_PRICE
+
+# GET OUT MALCOLM
+
+SOLC_VERSION=0.5.7 poke Reserve.json acceptOwnership --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=$NEW_RSV --gasprice=$GAS_PRICE
+
+SOLC_VERSION=0.5.7 poke Relayer.json acceptOwnership --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=$RELAYER --gasprice=$GAS_PRICE
+
+SOLC_VERSION=0.5.7 poke Manager.json acceptOwnership --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=$NEW_MANAGER --gasprice=$GAS_PRICE
+
+SOLC_VERSION=0.5.7 poke Vault.json changeManager $NEW_MANAGER --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=0xAeDCFcdD80573c2a312d15d6Bb9d921a01E4FB0f --gasprice=$GAS_PRICE
+
+SOLC_VERSION=0.5.7 poke Reserve.json nominateNewOwner $NEW_RSV --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=0x1C5857e110CD8411054660F60B5De6a6958CfAE2 --gasprice=$GAS_PRICE
+
+SOLC_VERSION=0.5.7 poke Reserve.json acceptUpgrade 0x1C5857e110CD8411054660F60B5De6a6958CfAE2 --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=$NEW_RSV --gasprice=$GAS_PRICE
+
+SOLC_VERSION=0.5.7 poke Manager.json setEmergency False --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=$NEW_MANAGER --gasprice=$GAS_PRICE
+
+# GET OUT KAYLEE
+
+SOLC_VERSION=0.5.7 poke Manager.json setEmergency False --from=hardware -n  https://mainnet.infura.io/v3/a5df6a93ae4f460e972e04fa5398d157 --derivation-path="m/44'/60'/0'/0/3" --address=$NEW_MANAGER --gasprice=$GAS_PRICE
