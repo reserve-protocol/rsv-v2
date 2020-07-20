@@ -11,6 +11,11 @@ contract ReserveV2 is Reserve {
     function completeHandoff(address previousImplementation) external onlyOwner {
         Reserve previous = Reserve(previousImplementation);
         trustedData = ReserveEternalStorage(previous.getEternalStorageAddress());
+
+        // Copy values from old contract
+        maxSupply = previous.maxSupply();
+        totalSupply = previous.totalSupply();
+        
         // Unpause.
         paused = false;
         emit Unpaused(pauser);
