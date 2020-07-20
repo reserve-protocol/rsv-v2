@@ -96,6 +96,8 @@ def first_half_of_fork(ctx):
 
 
 def second_half_of_fork(ctx):
+    # Pause the old manager
+    ctx.manager.setEmergency(True, daily_signer)
 
     # Transfer all owners to the permanent owner key
     ctx.rsv_2.acceptOwnership(owner_signer)
@@ -103,12 +105,13 @@ def second_half_of_fork(ctx):
     ctx.manager_2.acceptOwnership(owner_signer)
 
     # Set the vault to point to the new manager
-    ctx.manager.setEmergency(True, daily_signer)
     ctx.vault.changeManager(ctx.manager_2.address, owner_signer)
 
     # Finalize the fork
     ctx.rsv.nominateNewOwner(ctx.rsv_2.address, owner_signer)
     ctx.rsv_2.acceptUpgrade(ctx.rsv.address, owner_signer)
+
+    # Unpause the new manager
     ctx.manager_2.setEmergency(False, daily_signer)
 
 
