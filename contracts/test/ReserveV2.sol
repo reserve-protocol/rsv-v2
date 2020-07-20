@@ -8,7 +8,16 @@ import "../rsv/ReserveEternalStorage.sol";
  */
 contract ReserveV2 is Reserve {
 
-    function completeHandoff(address previousImplementation) external onlyOwner {
+    string public constant version = "2";
+
+    constructor() Reserve() public {
+        trustedData = ReserveEternalStorage(address(0));
+    }
+
+
+    /// Accept upgrade from previous RSV instance. Can only be called once. 
+    function acceptUpgrade(address previousImplementation) external onlyOwner {
+        require(address(trustedData) == address(0), "can only be run once");
         Reserve previous = Reserve(previousImplementation);
         trustedData = ReserveEternalStorage(previous.getEternalStorageAddress());
 
@@ -32,4 +41,5 @@ contract ReserveV2 is Reserve {
         previous.changePauser(address(0));
         previous.renounceOwnership("I hereby renounce ownership of this contract forever.");
     }
+
 }

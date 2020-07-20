@@ -797,7 +797,7 @@ func (s *ReserveSuite) TestUpgrade() {
 	s.requireTxWithStrictEvents(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
 		PreviousOwner: s.owner.address(), Nominee: newTokenAddress,
 	})
-	s.requireTx(newToken.CompleteHandoff(signer(newKey), s.reserveAddress))(
+	s.requireTx(newToken.AcceptUpgrade(signer(newKey), s.reserveAddress))(
 		abi.ReserveEternalStorageTransferred{NewReserveAddress: newTokenAddress},
 	)
 
