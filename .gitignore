@@ -11,3 +11,5 @@ reports
 .history
 .hypothesis/
 scripts/__pycache__
+
+flattened

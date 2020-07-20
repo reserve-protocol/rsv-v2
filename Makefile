@@ -36,6 +36,11 @@ clean:
 sizes: json
 	scripts/sizes $(json)
 
+flatten:
+	scripts/flatten.pl --contractsdir=contracts --mainsol=rsv/Reserve.sol --outputsol=flattened/Reserve.sol_flattened.sol --verbose
+	scripts/flatten.pl --contractsdir=contracts --mainsol=Manager.sol --outputsol=flattened/Manager.sol_flattened.sol --verbose
+	scripts/flatten.pl --contractsdir=contracts --mainsol=rsv/Relayer.sol --outputsol=flattened/Relayer.sol_flattened.sol --verbose
+
 check: $(sol)
 	slither contracts
 triage-check: $(sol)
