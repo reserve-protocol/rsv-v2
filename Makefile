@@ -2,7 +2,7 @@ export REPO_DIR = $(shell pwd)
 export SOLC_VERSION = 0.5.7
 
 root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory
-rsv_contracts := Reserve ReserveEternalStorage Relayer
+rsv_contracts := PreviousReserve Reserve ReserveEternalStorage Relayer
 test_contracts := BasicOwnable ReserveV2 ManagerV2 BasicERC20 VaultV2 BasicTxFee
 contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
 
@@ -35,6 +35,11 @@ clean:
 
 sizes: json
 	scripts/sizes $(json)
+
+flatten:
+	scripts/flatten.pl --contractsdir=contracts --mainsol=rsv/Reserve.sol --outputsol=flattened/Reserve.sol_flattened.sol --verbose
+	scripts/flatten.pl --contractsdir=contracts --mainsol=Manager.sol --outputsol=flattened/Manager.sol_flattened.sol --verbose
+	scripts/flatten.pl --contractsdir=contracts --mainsol=rsv/Relayer.sol --outputsol=flattened/Relayer.sol_flattened.sol --verbose
 
 check: $(sol)
 	slither contracts
@@ -86,6 +91,9 @@ evm/Vault.json: contracts/Vault.sol $(sol)
 	$(call solc,100000)
 
 evm/Relayer.json: contracts/rsv/Relayer.sol $(sol)
+	$(call solc,1000000)
+
+evm/PreviousReserve.json: contracts/rsv/PreviousReserve.sol $(sol)
 	$(call solc,1000000)
 
 evm/Reserve.json: contracts/rsv/Reserve.sol $(sol)

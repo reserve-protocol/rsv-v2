@@ -1,25 +1,17 @@
+/**
+ * This represents our first RSV deployment, which can be found here: 
+ *     https://etherscan.io/token/0x1C5857e110CD8411054660F60B5De6a6958CfAE2
+*/
+
 pragma solidity 0.5.7;
 
 import "../zeppelin/token/ERC20/IERC20.sol";
 import "../zeppelin/math/SafeMath.sol";
 import "../ownership/Ownable.sol";
 import "./ReserveEternalStorage.sol";
+import "./Reserve.sol";
 
-/**
- * @title An interface representing a contract that calculates transaction fees
- */
- interface ITXFee {
-     function calculateFee(address from, address to, uint256 amount) external returns (uint256);
- }
-
-/**
- * @title The Reserve Token
- * @dev An ERC-20 token with minting, burning, pausing, and user freezing.
- * Based on OpenZeppelin's [implementation](https://github.com/OpenZeppelin/openzeppelin-solidity/blob/41aa39afbc13f0585634061701c883fe512a5469/contracts/token/ERC20/ERC20.sol).
- *
- * Non-constant-sized data is held in ReserveEternalStorage, to facilitate potential future upgrades.
- */
-contract Reserve is IERC20, Ownable {
+contract PreviousReserve is IERC20, Ownable {
     using SafeMath for uint256;
 
 
@@ -31,9 +23,6 @@ contract Reserve is IERC20, Ownable {
 
     // TX Fee helper contract
     ITXFee public trustedTxFee;
-
-    // Relayer
-    address public trustedRelayer;
 
     // Basic token data
     uint256 public totalSupply;
@@ -58,7 +47,6 @@ contract Reserve is IERC20, Ownable {
     event MaxSupplyChanged(uint256 indexed newMaxSupply);
     event EternalStorageTransferred(address indexed newReserveAddress);
     event TxFeeHelperChanged(address indexed newTxFeeHelper);
-    event TrustedRelayerChanged(address indexed newTrustedRelayer);
 
     // Pause events
     event Paused(address indexed account);
@@ -67,7 +55,6 @@ contract Reserve is IERC20, Ownable {
     // Basic information as constants
     string public constant name = "Reserve";
     string public constant symbol = "RSV";
-    string public constant version = "2.1";
     uint8 public constant decimals = 18;
 
     /// Initialize critical fields.
@@ -80,8 +67,8 @@ contract Reserve is IERC20, Ownable {
         paused = true;
 
         trustedTxFee = ITXFee(address(0));
-        trustedRelayer = address(0);
-        trustedData = ReserveEternalStorage(address(0));
+        trustedData = new ReserveEternalStorage();
+        trustedData.nominateNewOwner(msg.sender);
     }
 
     /// Accessor for eternal storage contract address.
@@ -129,12 +116,6 @@ contract Reserve is IERC20, Ownable {
         require(newReserveAddress != address(0), "zero address");
         emit EternalStorageTransferred(newReserveAddress);
         trustedData.updateReserveAddress(newReserveAddress);
-    }
-
-    /// Change the contract that is able to do metatransactions.
-    function changeRelayer(address newTrustedRelayer) external onlyOwner {
-        trustedRelayer = newTrustedRelayer;
-        emit TrustedRelayerChanged(newTrustedRelayer);
     }
 
     /// Change the contract that helps with transaction fee calculation.
@@ -288,46 +269,6 @@ contract Reserve is IERC20, Ownable {
         _approve(account, msg.sender, trustedData.allowed(account, msg.sender).sub(value));
     }
 
-    // ==== Relay functions === //
-    
-    /// Transfer `value` attotokens from `from` to `to`.
-    /// Callable only by the relay contract.
-    function relayTransfer(address from, address to, uint256 value) 
-        external 
-        notPaused
-        only(trustedRelayer)
-        returns (bool)
-    {
-        _transfer(from, to, value);
-        return true;
-    }
-
-    /// Approve `value` attotokens to be spent by `spender` from `holder`.
-    /// Callable only by the relay contract.
-    function relayApprove(address holder, address spender, uint256 value) 
-        external 
-        notPaused
-        only(trustedRelayer)
-        returns (bool)
-    {
-        _approve(holder, spender, value);
-        return true;
-    }
-
-    /// `spender` transfers `value` attotokens from `holder` to `to`.
-    /// Requires allowance.
-    /// Callable only by the relay contract.
-    function relayTransferFrom(address holder, address spender, address to, uint256 value) 
-        external 
-        notPaused
-        only(trustedRelayer)
-        returns (bool)
-    {
-        _transfer(holder, to, value);
-        _approve(holder, spender, trustedData.allowed(holder, spender).sub(value));
-        return true;
-    }
-
     /// @dev Transfer of `value` attotokens from `from` to `to`.
     /// Internal; doesn't check permissions.
     function _transfer(address from, address to, uint256 value) internal {
@@ -365,35 +306,5 @@ contract Reserve is IERC20, Ownable {
 
         trustedData.setAllowed(holder, spender, value);
         emit Approval(holder, spender, value);
-    }
-
-// ===========================  Upgradeability   =====================================
-
-    /// Accept upgrade from previous RSV instance. Can only be called once. 
-    function acceptUpgrade(address previousImplementation) external onlyOwner {
-        require(address(trustedData) == address(0), "can only be run once");
-        Reserve previous = Reserve(previousImplementation);
-        trustedData = ReserveEternalStorage(previous.getEternalStorageAddress());
-
-        // Copy values from old contract
-        totalSupply = previous.totalSupply();
-        maxSupply = previous.maxSupply();
-        emit MaxSupplyChanged(maxSupply);
-        
-        // Unpause.
-        paused = false;
-        emit Unpaused(pauser);
-
-        previous.acceptOwnership();
-
-        // Take control of Eternal Storage.
-        previous.changePauser(address(this));
-        previous.pause();
-        previous.transferEternalStorage(address(this));
-
-        // Burn the bridge behind us.
-        previous.changeMinter(address(0));
-        previous.changePauser(address(0));
-        previous.renounceOwnership("I hereby renounce ownership of this contract forever.");
     }
 }

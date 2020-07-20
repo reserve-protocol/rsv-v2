@@ -6,3 +6,10 @@ evm
 sol-coverage-evm
 analysis
 flat
+
+reports
+.history
+.hypothesis/
+scripts/__pycache__
+
+flattened

@@ -66,34 +66,72 @@ func (s *ManagerFuzzSuite) BeforeTest(suiteName, testName string) {
 	s.operator = s.account[1]
 	s.proposer = s.account[5]
 
-	// Deploy Reserve and store a handle to the Go binding and the contract address.
-	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node, zeroAddress())
+	// Deploy PreviousReserve to set up for upgrade.
+	oldReserveAddress, tx, oldReserve, err := abi.DeployPreviousReserve(s.signer, s.node)
 
 	s.logParsers = map[common.Address]logParser{
-		reserveAddress: reserve,
+		oldReserveAddress: oldReserve,
 	}
 
-	s.requireTx(tx, err)
-	s.reserve = reserve
-	s.reserveAddress = reserveAddress
-
-	// Unpause Reserve.
-	s.requireTxWithStrictEvents(s.reserve.Unpause(s.signer))(
-		abi.ReserveUnpaused{Account: s.owner.address()},
+	s.requireTx(tx, err)(
+		abi.PreviousReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.owner.address()},
 	)
 
+	oldMaxSupply, err := oldReserve.MaxSupply(nil)
+	s.Require().NoError(err)
+
 	// Get the Go binding and contract address for the new ReserveEternalStorage contract.
-	s.eternalStorageAddress, err = s.reserve.GetEternalStorageAddress(nil)
+	s.eternalStorageAddress, err = oldReserve.GetEternalStorageAddress(nil)
 	s.Require().NoError(err)
 	s.eternalStorage, err = abi.NewReserveEternalStorage(s.eternalStorageAddress, s.node)
 	s.Require().NoError(err)
 
 	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
 
-	// Accept ownership of eternal storage.
+	// Deploy Reserve and store a handle to the Go binding and the contract address.
+	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
+
+	s.logParsers[reserveAddress] = reserve
+
+	s.requireTx(tx, err)
+	s.reserve = reserve
+	s.reserveAddress = reserveAddress
+
+	// Confirm it begins paused.
+	paused, err := reserve.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
+
+	// Upgrade PreviousReserve to Reserve.
+	s.requireTxWithStrictEvents(oldReserve.NominateNewOwner(s.signer, reserveAddress))(
+		abi.PreviousReserveNewOwnerNominated{
+			PreviousOwner: s.owner.address(), Nominee: reserveAddress,
+		},
+	)
+	s.requireTxWithStrictEvents(s.reserve.AcceptUpgrade(s.signer, oldReserveAddress))(
+		abi.ReserveMaxSupplyChanged{NewMaxSupply: oldMaxSupply},
+		abi.ReserveUnpaused{Account: s.owner.address()},
+		abi.PreviousReserveOwnershipTransferred{
+			PreviousOwner: s.owner.address(), NewOwner: reserveAddress,
+		},
+		abi.PreviousReservePauserChanged{NewPauser: reserveAddress},
+		abi.PreviousReservePaused{Account: reserveAddress},
+		abi.PreviousReserveEternalStorageTransferred{NewReserveAddress: reserveAddress},
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: oldReserveAddress,
+			NewReserveAddress: reserveAddress,
+		},
+		abi.PreviousReserveMinterChanged{NewMinter: zeroAddress()},
+		abi.PreviousReservePauserChanged{NewPauser: zeroAddress()},
+		abi.PreviousReserveOwnershipTransferred{
+			PreviousOwner: reserveAddress, NewOwner: zeroAddress(),
+		},
+	)
+
+	// Accept ownership.
 	s.requireTxWithStrictEvents(s.eternalStorage.AcceptOwnership(s.signer))(
 		abi.ReserveEternalStorageOwnershipTransferred{
-			PreviousOwner: s.reserveAddress, NewOwner: s.account[0].address(),
+			PreviousOwner: oldReserveAddress, NewOwner: s.owner.address(),
 		},
 	)
 

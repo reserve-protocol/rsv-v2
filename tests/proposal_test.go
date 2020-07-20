@@ -406,8 +406,28 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 	s.proposal = proposal
 	s.proposalAddress = proposalAddress
 
-	// Deploy a Reserve instance as well.
-	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node, zeroAddress())
+	// Deploy PreviousReserve to set up for upgrade.
+	oldReserveAddress, tx, oldReserve, err := abi.DeployPreviousReserve(s.signer, s.node)
+
+	s.logParsers[oldReserveAddress] = oldReserve
+
+	s.requireTx(tx, err)(
+		abi.PreviousReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.owner.address()},
+	)
+
+	oldMaxSupply, err := oldReserve.MaxSupply(nil)
+	s.Require().NoError(err)
+
+	// Get the Go binding and contract address for the new ReserveEternalStorage contract.
+	s.eternalStorageAddress, err = oldReserve.GetEternalStorageAddress(nil)
+	s.Require().NoError(err)
+	s.eternalStorage, err = abi.NewReserveEternalStorage(s.eternalStorageAddress, s.node)
+	s.Require().NoError(err)
+
+	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
+
+	// Deploy Reserve and store a handle to the Go binding and the contract address.
+	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
 
 	s.logParsers[reserveAddress] = reserve
 
@@ -415,9 +435,42 @@ func (s *SwapProposalSuite) BeforeTest(suiteName, testName string) {
 	s.reserve = reserve
 	s.reserveAddress = reserveAddress
 
-	// Unpause.
-	s.requireTxWithStrictEvents(s.reserve.Unpause(s.signer))(
+	// Confirm it begins paused.
+	paused, err := reserve.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
+
+	// Upgrade PreviousReserve to Reserve.
+	s.requireTxWithStrictEvents(oldReserve.NominateNewOwner(s.signer, reserveAddress))(
+		abi.PreviousReserveNewOwnerNominated{
+			PreviousOwner: s.owner.address(), Nominee: reserveAddress,
+		},
+	)
+	s.requireTxWithStrictEvents(s.reserve.AcceptUpgrade(s.signer, oldReserveAddress))(
+		abi.ReserveMaxSupplyChanged{NewMaxSupply: oldMaxSupply},
 		abi.ReserveUnpaused{Account: s.owner.address()},
+		abi.PreviousReserveOwnershipTransferred{
+			PreviousOwner: s.owner.address(), NewOwner: reserveAddress,
+		},
+		abi.PreviousReservePauserChanged{NewPauser: reserveAddress},
+		abi.PreviousReservePaused{Account: reserveAddress},
+		abi.PreviousReserveEternalStorageTransferred{NewReserveAddress: reserveAddress},
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: oldReserveAddress,
+			NewReserveAddress: reserveAddress,
+		},
+		abi.PreviousReserveMinterChanged{NewMinter: zeroAddress()},
+		abi.PreviousReservePauserChanged{NewPauser: zeroAddress()},
+		abi.PreviousReserveOwnershipTransferred{
+			PreviousOwner: reserveAddress, NewOwner: zeroAddress(),
+		},
+	)
+
+	// Accept ownership.
+	s.requireTxWithStrictEvents(s.eternalStorage.AcceptOwnership(s.signer))(
+		abi.ReserveEternalStorageOwnershipTransferred{
+			PreviousOwner: oldReserveAddress, NewOwner: s.owner.address(),
+		},
 	)
 
 	// Make RSV supply nonzero so weights can be calculated.
