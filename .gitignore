@@ -6,3 +6,7 @@ evm
 sol-coverage-evm
 analysis
 flat
+
+reports
+.history
+.hypothesis/
