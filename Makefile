@@ -93,7 +93,7 @@ evm/Vault.json: contracts/Vault.sol $(sol)
 evm/Relayer.json: contracts/rsv/Relayer.sol $(sol)
 	$(call solc,1000000)
 
-evm/PreviousReserve.json: contracts/rsv/PreviousReserve.sol $(sol)
+evm/PreviousReserve.json: contracts/test/PreviousReserve.sol $(sol)
 	$(call solc,1000000)
 
 evm/Reserve.json: contracts/rsv/Reserve.sol $(sol)
