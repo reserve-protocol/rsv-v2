@@ -812,15 +812,22 @@ func (s *ReserveSuite) TestUpgrade() {
 	s.requireTxFails(s.reserve.Pause(s.signer))
 	s.requireTxFails(s.reserve.Unpause(s.signer))
 
-	// assertion function for new token
+	// assertion functions for new token
 	assertRSVBalance := func(address common.Address, amount *big.Int) {
 		balance, err := newToken.BalanceOf(nil, address)
 		s.NoError(err)
 		s.Equal(amount.String(), balance.String()) // assert.Equal can mis-compare big.Ints, so compare strings instead
 	}
+	assertRSVTotalSupply := func(amount *big.Int) {
+		supply, err := newToken.TotalSupply(nil)
+		s.NoError(err)
+		s.Equal(amount.String(), supply.String()) // assert.Equal can mis-compare big.Ints, so compare strings instead
+	}
 
 	// New token should be functional.
 	assertRSVBalance(recipient.address(), amount)
+	// Check the total supply! This was broken at one point in the code.
+	assertRSVTotalSupply(amount)
 	s.requireTxWithStrictEvents(newToken.ChangeMinter(signer(newKey), newKey.address()))(
 		abi.ReserveV2MinterChanged{NewMinter: newKey.address()},
 	)
@@ -841,6 +848,7 @@ func (s *ReserveSuite) TestUpgrade() {
 	)
 	assertRSVBalance(recipient.address(), big.NewInt(100+1500-10))
 	assertRSVBalance(s.account[3].address(), big.NewInt(10))
+
 }
 
 // TestEternalStorageOwner tests that we can use the owner in ReserveEternalStorage.
