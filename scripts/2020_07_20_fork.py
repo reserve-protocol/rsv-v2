@@ -23,7 +23,7 @@ def initial_rsv_deployment(ctx):
 
     # Now begin our contracts
     ctx.vault = Vault.deploy(owner_signer)
-    ctx.rsv = DeployedReserve.deploy(owner_signer)
+    ctx.rsv = PreviousReserve.deploy(owner_signer)
 
     # This contract has a namespace conflict when instantiated with `brownie`.
     # I've talked to them about it. They have a solution that will go in `brownie-v2`.

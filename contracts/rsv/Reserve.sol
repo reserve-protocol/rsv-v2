@@ -376,8 +376,9 @@ contract Reserve is IERC20, Ownable {
         trustedData = ReserveEternalStorage(previous.getEternalStorageAddress());
 
         // Copy values from old contract
-        maxSupply = previous.maxSupply();
         totalSupply = previous.totalSupply();
+        maxSupply = previous.maxSupply();
+        emit MaxSupplyChanged(maxSupply);
         
         // Unpause.
         paused = false;

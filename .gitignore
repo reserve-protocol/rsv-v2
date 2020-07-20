@@ -10,3 +10,4 @@ flat
 reports
 .history
 .hypothesis/
+scripts/__pycache__

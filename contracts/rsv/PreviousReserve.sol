@@ -11,7 +11,7 @@ import "../ownership/Ownable.sol";
 import "./ReserveEternalStorage.sol";
 import "./Reserve.sol";
 
-contract DeployedReserve is IERC20, Ownable {
+contract PreviousReserve is IERC20, Ownable {
     using SafeMath for uint256;
 
 
