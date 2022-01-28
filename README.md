@@ -2,13 +2,19 @@
 
 The RSV v2 is a stable token, implemented as a series of [Ethereum][] smart contracts, designed to maintain a stable price on the open market.
 
+
 Links:
 
 -   Our announcement [blog post][] describes the system at some length, in relatively friendly terms. This readme will be terser.
 -   This system is now deployed on Ethereum! Some key addresses are:
+    -   Reserve token: [0x196f4727526eA7FB1e17b2071B3d8eAA38486988](https://etherscan.io/token/0x196f4727526eA7FB1e17b2071B3d8eAA38486988)
+    -   Manager: [0x4B481872f31bab47C6780D5488c84D309b1B8Bb6](https://etherscan.io/address/0x4B481872f31bab47C6780D5488c84D309b1B8Bb6)
+    -   Vault: [0xAeDCFcdD80573c2a312d15d6Bb9d921a01E4FB0f](https://etherscan.io/address/0xAeDCFcdD80573c2a312d15d6Bb9d921a01E4FB0f)
+
+
+Stale V1 Addresses:
     -   Reserve token: [0x1C5857e110CD8411054660F60B5De6a6958CfAE2](https://etherscan.io/address/0x1c5857e110cd8411054660f60b5de6a6958cfae2)
     -   Manager: [0x5BA9d812f5533F7Cf2854963f7A9d212f8f28673](https://etherscan.io/address/0x5BA9d812f5533F7Cf2854963f7A9d212f8f28673)
-    -   Vault: [0xAeDCFcdD80573c2a312d15d6Bb9d921a01E4FB0f](https://etherscan.io/address/0xAeDCFcdD80573c2a312d15d6Bb9d921a01E4FB0f)
 
 ## What does it do?
 
