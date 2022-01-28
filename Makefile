@@ -2,7 +2,7 @@ export REPO_DIR = $(shell pwd)
 export SOLC_VERSION = 0.5.7
 
 root_contracts := Basket Manager SwapProposal WeightProposal Vault ProposalFactory
-rsv_contracts := Reserve ReserveEternalStorage
+rsv_contracts := PreviousReserve Reserve ReserveEternalStorage Relayer
 test_contracts := BasicOwnable ReserveV2 ManagerV2 BasicERC20 VaultV2 BasicTxFee
 contracts := $(root_contracts) $(rsv_contracts) $(test_contracts) ## All contract names
 
@@ -24,6 +24,9 @@ flat: $(flat)
 test: abi
 	go test ./tests -tags all
 
+testRelay: abi
+	go test ./tests/base.go ./tests/relayer_test.go
+
 fuzz: abi
 	go test ./tests -v -tags fuzz -args -decimals=$(decimals) -runs=$(runs)
 
@@ -32,6 +35,11 @@ clean:
 
 sizes: json
 	scripts/sizes $(json)
+
+flatten:
+	scripts/flatten.pl --contractsdir=contracts --mainsol=rsv/Reserve.sol --outputsol=flattened/Reserve.sol_flattened.sol --verbose
+	scripts/flatten.pl --contractsdir=contracts --mainsol=Manager.sol --outputsol=flattened/Manager.sol_flattened.sol --verbose
+	scripts/flatten.pl --contractsdir=contracts --mainsol=rsv/Relayer.sol --outputsol=flattened/Relayer.sol_flattened.sol --verbose
 
 check: $(sol)
 	slither contracts
@@ -82,6 +90,12 @@ evm/WeightProposal.json: contracts/Proposal.sol $(sol)
 evm/Vault.json: contracts/Vault.sol $(sol)
 	$(call solc,100000)
 
+evm/Relayer.json: contracts/rsv/Relayer.sol $(sol)
+	$(call solc,1000000)
+
+evm/PreviousReserve.json: contracts/test/PreviousReserve.sol $(sol)
+	$(call solc,1000000)
+
 evm/Reserve.json: contracts/rsv/Reserve.sol $(sol)
 	$(call solc,1000000)
 
@@ -123,13 +137,13 @@ myth a $<:$1 > $@
 endef
 
 # But, where there's more than one contract in the source file, do.
-analysis/ProposalFactory.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/ProposalFactory.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific ProposalFactory)
 
-analysis/WeightProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/WeightProposal.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific WeightProposal)
 
-analysis/SwapProposal.myth.md: contracts/rsv/Proposal.sol $(sol)
+analysis/SwapProposal.myth.md: contracts/Proposal.sol $(sol)
 	$(call myth_specific SwapProposal)
 
 

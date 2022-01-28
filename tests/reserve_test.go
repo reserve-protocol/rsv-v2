@@ -36,42 +36,72 @@ func (s *ReserveSuite) SetupSuite() {
 
 // BeforeTest runs before each test in the suite.
 func (s *ReserveSuite) BeforeTest(suiteName, testName string) {
-	// Re-deploy Reserve and store a handle to the Go binding and the contract address.
-	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
+	// Deploy PreviousReserve to set up for upgrade.
+	oldReserveAddress, tx, oldReserve, err := abi.DeployPreviousReserve(s.signer, s.node)
 
 	s.logParsers = map[common.Address]logParser{
-		reserveAddress: reserve,
+		oldReserveAddress: oldReserve,
 	}
 
 	s.requireTx(tx, err)(
-		abi.ReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.owner.address()},
+		abi.PreviousReserveOwnershipTransferred{PreviousOwner: zeroAddress(), NewOwner: s.owner.address()},
 	)
 
-	// Confirm it begins paused.
-	paused, err := reserve.Paused(nil)
+	oldMaxSupply, err := oldReserve.MaxSupply(nil)
 	s.Require().NoError(err)
-	s.Equal(true, paused)
-
-	// Unpause.
-	s.requireTxWithStrictEvents(reserve.Unpause(s.signer))(
-		abi.ReserveUnpaused{Account: s.owner.address()},
-	)
-
-	s.reserve = reserve
-	s.reserveAddress = reserveAddress
 
 	// Get the Go binding and contract address for the new ReserveEternalStorage contract.
-	s.eternalStorageAddress, err = s.reserve.GetEternalStorageAddress(nil)
+	s.eternalStorageAddress, err = oldReserve.GetEternalStorageAddress(nil)
 	s.Require().NoError(err)
 	s.eternalStorage, err = abi.NewReserveEternalStorage(s.eternalStorageAddress, s.node)
 	s.Require().NoError(err)
 
 	s.logParsers[s.eternalStorageAddress] = s.eternalStorage
 
+	// Deploy Reserve and store a handle to the Go binding and the contract address.
+	reserveAddress, tx, reserve, err := abi.DeployReserve(s.signer, s.node)
+
+	s.logParsers[reserveAddress] = reserve
+
+	s.requireTx(tx, err)
+	s.reserve = reserve
+	s.reserveAddress = reserveAddress
+
+	// Confirm it begins paused.
+	paused, err := reserve.Paused(nil)
+	s.Require().NoError(err)
+	s.Equal(true, paused)
+
+	// Upgrade PreviousReserve to Reserve.
+	s.requireTxWithStrictEvents(oldReserve.NominateNewOwner(s.signer, reserveAddress))(
+		abi.PreviousReserveNewOwnerNominated{
+			PreviousOwner: s.owner.address(), Nominee: reserveAddress,
+		},
+	)
+	s.requireTxWithStrictEvents(s.reserve.AcceptUpgrade(s.signer, oldReserveAddress))(
+		abi.ReserveMaxSupplyChanged{NewMaxSupply: oldMaxSupply},
+		abi.ReserveUnpaused{Account: s.owner.address()},
+		abi.PreviousReserveOwnershipTransferred{
+			PreviousOwner: s.owner.address(), NewOwner: reserveAddress,
+		},
+		abi.PreviousReservePauserChanged{NewPauser: reserveAddress},
+		abi.PreviousReservePaused{Account: reserveAddress},
+		abi.PreviousReserveEternalStorageTransferred{NewReserveAddress: reserveAddress},
+		abi.ReserveEternalStorageReserveAddressTransferred{
+			OldReserveAddress: oldReserveAddress,
+			NewReserveAddress: reserveAddress,
+		},
+		abi.PreviousReserveMinterChanged{NewMinter: zeroAddress()},
+		abi.PreviousReservePauserChanged{NewPauser: zeroAddress()},
+		abi.PreviousReserveOwnershipTransferred{
+			PreviousOwner: reserveAddress, NewOwner: zeroAddress(),
+		},
+	)
+
 	// Accept ownership.
 	s.requireTxWithStrictEvents(s.eternalStorage.AcceptOwnership(s.signer))(
 		abi.ReserveEternalStorageOwnershipTransferred{
-			PreviousOwner: s.reserveAddress, NewOwner: s.owner.address(),
+			PreviousOwner: oldReserveAddress, NewOwner: s.owner.address(),
 		},
 	)
 
@@ -226,6 +256,21 @@ func (s *ReserveSuite) TestChangeFeeRecipient() {
 	feeRecipient, err = s.reserve.FeeRecipient(nil)
 	s.Require().NoError(err)
 	s.Equal(s.account[3].address(), feeRecipient)
+}
+
+func (s *ReserveSuite) TestChangeRelayer() {
+	relayer, err := s.reserve.TrustedRelayer(nil)
+	s.Require().NoError(err)
+	s.Equal(zeroAddress(), relayer)
+
+	// Change as owner.
+	s.requireTxWithStrictEvents(s.reserve.ChangeRelayer(s.signer, s.account[2].address()))(
+		abi.ReserveTrustedRelayerChanged{NewTrustedRelayer: s.account[2].address()},
+	)
+
+	relayer, err = s.reserve.TrustedRelayer(nil)
+	s.Require().NoError(err)
+	s.Equal(s.account[2].address(), relayer)
 }
 
 func (s *ReserveSuite) TestChangeTxFeeHelper() {
@@ -725,6 +770,10 @@ func (s *ReserveSuite) TestChangeFeeRecipientFailsForNonFeeRecipient() {
 	s.requireTxFails(s.reserve.ChangeFeeRecipient(signer(s.account[2]), s.account[1].address()))
 }
 
+func (s *ReserveSuite) TestChangeRelayerFailsForNonOwner() {
+	s.requireTxFails(s.reserve.ChangeRelayer(signer(s.account[2]), s.account[1].address()))
+}
+
 func (s *ReserveSuite) TestChangeTxFeeHelperFailsForNonOwner() {
 	s.requireTxFails(s.reserve.ChangeTxFeeHelper(signer(s.account[2]), s.account[1].address()))
 }
@@ -778,7 +827,7 @@ func (s *ReserveSuite) TestUpgrade() {
 	s.requireTxWithStrictEvents(s.reserve.NominateNewOwner(s.signer, newTokenAddress))(abi.ReserveNewOwnerNominated{
 		PreviousOwner: s.owner.address(), Nominee: newTokenAddress,
 	})
-	s.requireTx(newToken.CompleteHandoff(signer(newKey), s.reserveAddress))(
+	s.requireTx(newToken.AcceptUpgrade(signer(newKey), s.reserveAddress))(
 		abi.ReserveEternalStorageTransferred{NewReserveAddress: newTokenAddress},
 	)
 
@@ -793,15 +842,22 @@ func (s *ReserveSuite) TestUpgrade() {
 	s.requireTxFails(s.reserve.Pause(s.signer))
 	s.requireTxFails(s.reserve.Unpause(s.signer))
 
-	// assertion function for new token
+	// assertion functions for new token
 	assertRSVBalance := func(address common.Address, amount *big.Int) {
 		balance, err := newToken.BalanceOf(nil, address)
 		s.NoError(err)
 		s.Equal(amount.String(), balance.String()) // assert.Equal can mis-compare big.Ints, so compare strings instead
 	}
+	assertRSVTotalSupply := func(amount *big.Int) {
+		supply, err := newToken.TotalSupply(nil)
+		s.NoError(err)
+		s.Equal(amount.String(), supply.String()) // assert.Equal can mis-compare big.Ints, so compare strings instead
+	}
 
 	// New token should be functional.
 	assertRSVBalance(recipient.address(), amount)
+	// Check the total supply! This was broken at one point in the code.
+	assertRSVTotalSupply(amount)
 	s.requireTxWithStrictEvents(newToken.ChangeMinter(signer(newKey), newKey.address()))(
 		abi.ReserveV2MinterChanged{NewMinter: newKey.address()},
 	)
@@ -822,6 +878,7 @@ func (s *ReserveSuite) TestUpgrade() {
 	)
 	assertRSVBalance(recipient.address(), big.NewInt(100+1500-10))
 	assertRSVBalance(s.account[3].address(), big.NewInt(10))
+
 }
 
 // TestEternalStorageOwner tests that we can use the owner in ReserveEternalStorage.
@@ -951,6 +1008,44 @@ func (s *ReserveSuite) TestEternalStorageFunctionsAreProtected() {
 
 	// updateReserveAddress
 	s.requireTxFails(s.eternalStorage.UpdateReserveAddress(signer(balanceAcc), balanceAcc.address()))
+}
+
+// TestRelayFunctionsAreProtected makes sure that the relay functions cannot be called by anyone
+// other than the `trustedRelayer` account.
+func (s *ReserveSuite) TestRelayFunctionsAreProtected() {
+	// Set `trustedRelayer`
+	relayer := s.account[4]
+	s.requireTxWithStrictEvents(s.reserve.ChangeRelayer(s.signer, relayer.address()))(
+		abi.ReserveTrustedRelayerChanged{
+			NewTrustedRelayer: relayer.address(),
+		},
+	)
+
+	// Confirm it is set correctly.
+	foundRelayer, err := s.reserve.TrustedRelayer(nil)
+	s.Require().NoError(err)
+	s.Equal(relayer.address().String(), foundRelayer.String())
+
+	// Try to change it from non-auth account and fail.
+	s.requireTxFails(s.reserve.ChangeRelayer(signer(relayer), relayer.address()))
+
+	from := s.account[1]
+	to := s.account[2]
+	amount := bigInt(100)
+
+	// Mint.
+	s.requireTx(s.reserve.Mint(s.signer, from.address(), amount))
+	s.assertRSVBalance(from.address(), amount)
+
+	// relayTransfer
+	s.requireTxFails(s.reserve.RelayTransfer(s.signer, from.address(), to.address(), amount))
+
+	// relayApprove
+	s.requireTxFails(s.reserve.RelayApprove(s.signer, from.address(), to.address(), amount))
+
+	// relayTransferFrom
+	s.requireTx(s.reserve.RelayApprove(signer(relayer), from.address(), to.address(), amount))
+	s.requireTxFails(s.reserve.RelayTransferFrom(s.signer, from.address(), to.address(), to.address(), amount))
 }
 
 //////////////////

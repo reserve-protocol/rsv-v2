@@ -15,4 +15,7 @@ interface IRSV {
     function decimals() external view returns(uint8);
     function mint(address, uint256) external;
     function burnFrom(address, uint256) external;
+    function relayTransfer(address, address, uint256) external returns(bool);
+    function relayTransferFrom(address, address, address, uint256) external returns(bool);
+    function relayApprove(address, address, uint256) external returns(bool);
 }
